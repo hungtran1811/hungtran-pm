@@ -1,0 +1,274 @@
+:root {
+  --app-bg: #f4f7fb;
+  --app-panel: #ffffff;
+  --app-border: #d8e0eb;
+  --app-text: #152033;
+  --app-muted: #6b7585;
+  --app-brand: #0f4c81;
+  --app-brand-dark: #0a2342;
+  --app-accent: #f0b429;
+  --bs-body-bg: var(--app-bg);
+  --bs-body-color: var(--app-text);
+  --bs-primary: var(--app-brand);
+  --bs-primary-rgb: 15, 76, 129;
+  --bs-font-sans-serif: "IBM Plex Sans", "Segoe UI", sans-serif;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(240, 180, 41, 0.18), transparent 30%),
+    linear-gradient(180deg, #f8fbff 0%, var(--app-bg) 50%, #edf2f8 100%);
+}
+
+.student-layout,
+.login-layout {
+  min-height: 100vh;
+}
+
+.student-hero {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+}
+
+.student-hero-card {
+  overflow: hidden;
+  border-radius: 1.5rem;
+  background: var(--app-panel);
+}
+
+.student-hero-panel {
+  background:
+    linear-gradient(180deg, rgba(10, 35, 66, 0.94), rgba(15, 76, 129, 0.92)),
+    linear-gradient(120deg, rgba(240, 180, 41, 0.2), transparent 40%);
+  color: white;
+  padding: 3rem;
+}
+
+.brand-lockup {
+  --brand-mark-surface: rgba(255, 255, 255, 0.12);
+  --brand-mark-border: rgba(255, 255, 255, 0.22);
+  --brand-mark-primary: rgba(255, 255, 255, 0.92);
+  --brand-mark-accent: #d4a34f;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.9rem;
+  max-width: 100%;
+  user-select: none;
+}
+
+.brand-lockup__mark {
+  width: 3.5rem;
+  height: 3.5rem;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 10px 20px rgba(5, 17, 35, 0.22));
+}
+
+.brand-lockup__text {
+  min-width: 0;
+}
+
+.brand-lockup__title {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.08em;
+  text-transform: none;
+}
+
+.brand-lockup__subtitle {
+  margin-top: 0.2rem;
+  font-size: 0.85rem;
+  line-height: 1.35;
+  color: var(--brand-subtitle-color);
+}
+
+.brand-lockup--light {
+  --brand-mark-surface: rgba(255, 255, 255, 0.12);
+  --brand-mark-border: rgba(255, 255, 255, 0.24);
+  --brand-mark-primary: rgba(255, 255, 255, 0.94);
+  --brand-mark-accent: #f2c676;
+  color: #ffffff;
+  --brand-subtitle-color: rgba(255, 255, 255, 0.72);
+}
+
+.brand-lockup--dark {
+  --brand-mark-surface: #f4f7fb;
+  --brand-mark-border: #cbd7e6;
+  --brand-mark-primary: #0a2342;
+  --brand-mark-accent: #d4a34f;
+  color: #152033;
+  --brand-subtitle-color: #6b7585;
+}
+
+.brand-lockup--compact {
+  gap: 0.75rem;
+}
+
+.brand-lockup--compact .brand-lockup__mark {
+  width: 2.9rem;
+  height: 2.9rem;
+  filter: none;
+}
+
+.brand-lockup--compact .brand-lockup__title {
+  font-size: 0.95rem;
+}
+
+.student-brand-lockup {
+  padding: 0.35rem 0.15rem 0.35rem 0;
+  min-height: 4.5rem;
+  cursor: pointer;
+}
+
+.sidebar-brand-lockup .brand-lockup__title,
+.topbar-brand-lockup .brand-lockup__title,
+.login-brand-lockup .brand-lockup__title {
+  font-weight: 600;
+}
+
+.topbar-brand-lockup {
+  margin-top: 0.15rem;
+}
+
+.admin-shell {
+  min-height: 100vh;
+  display: flex;
+}
+
+.sidebar {
+  width: 272px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #0a2342 0%, #102d52 100%) !important;
+}
+
+.sidebar .nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: rgba(255, 255, 255, 0.8);
+  border-radius: 0.9rem;
+  padding: 0.85rem 1rem;
+  transition: all 0.2s ease;
+}
+
+.sidebar .nav-link:hover,
+.sidebar .nav-link.active {
+  color: white;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.admin-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.admin-content {
+  max-width: 1480px;
+}
+
+.stat-card {
+  border-radius: 1.25rem;
+}
+
+.stat-icon {
+  width: 3.25rem;
+  height: 3.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  font-size: 1.25rem;
+}
+
+.card,
+.modal-content {
+  border-radius: 1.25rem !important;
+}
+
+.table > :not(caption) > * > * {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+.parent-preview-table td,
+.parent-preview-table th {
+  white-space: nowrap;
+}
+
+.parent-preview-table .preview-difficulties {
+  max-width: 320px;
+  white-space: normal;
+}
+
+@media (max-width: 991.98px) {
+  .admin-shell {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    min-height: auto;
+  }
+
+  .sidebar .nav {
+    flex-direction: row !important;
+    overflow-x: auto;
+    padding-bottom: 1rem;
+  }
+
+  .sidebar .nav-link {
+    white-space: nowrap;
+  }
+
+  .student-hero {
+    align-items: flex-start;
+  }
+
+  .student-hero-panel {
+    padding: 2rem;
+  }
+
+  .brand-lockup__mark {
+    width: 3rem;
+    height: 3rem;
+  }
+
+  .brand-lockup__title {
+    font-size: 0.95rem;
+  }
+
+  .brand-lockup__subtitle {
+    font-size: 0.8rem;
+  }
+
+  .topbar-brand-lockup {
+    margin-top: 0;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .student-hero-card {
+    border-radius: 1rem;
+  }
+
+  .sidebar-brand,
+  .topbar .container-fluid {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  .admin-content {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+}
