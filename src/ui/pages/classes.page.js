@@ -1,6 +1,8 @@
 import { CLASS_STATUS_BADGES, CLASS_STATUS_LABELS, CLASS_STATUSES } from '../../constants/class-statuses.js';
 import { createClass, subscribeClasses, updateClass } from '../../services/classes.service.js';
+import { subscribeStudents } from '../../services/students.service.js';
 import { getAuthState } from '../../state/auth.store.js';
+import { getClassCompletionStats } from '../../utils/class-completion.js';
 import { formatDate } from '../../utils/date.js';
 import { mapFirebaseError } from '../../utils/firebase-error.js';
 import { escapeHtml, optionList } from '../../utils/html.js';
@@ -43,7 +45,37 @@ function renderClassFilters(filters) {
   `;
 }
 
-function renderClassesTable(classes) {
+function renderClassActions(classItem, completion) {
+  const actions = [];
+
+  if (classItem.status === 'active') {
+    actions.push(
+      `<button
+        class="btn btn-sm ${completion.completionReady ? 'btn-success' : 'btn-outline-warning'}"
+        data-action="mark-completed"
+        data-class-id="${escapeHtml(classItem.id)}"
+        title="${
+          completion.completionReady
+            ? 'Đánh dấu hoàn thành'
+            : 'Lớp này chưa đủ điều kiện, nhưng admin vẫn có thể chốt thủ công'
+        }"
+      >Hoàn thành lớp</button>`,
+    );
+  }
+
+  actions.push(
+    `<button class="btn btn-sm btn-outline-secondary" data-action="toggle-hidden" data-class-id="${escapeHtml(classItem.id)}">${
+      classItem.hidden ? 'Bỏ ẩn' : 'Ẩn'
+    }</button>`,
+  );
+  actions.push(
+    `<button class="btn btn-sm btn-outline-primary" data-action="edit-class" data-class-id="${escapeHtml(classItem.id)}">Sửa</button>`,
+  );
+
+  return `<div class="d-flex flex-wrap gap-2 justify-content-end">${actions.join('')}</div>`;
+}
+
+function renderClassesTable(classes, completionMap) {
   if (classes.length === 0) {
     return renderEmptyState({
       icon: 'collection',
@@ -53,17 +85,31 @@ function renderClassesTable(classes) {
   }
 
   const rows = classes
-    .map(
-      (classItem) => `
+    .map((classItem) => {
+      const completion = completionMap[classItem.classCode] ?? {
+        activeStudentCount: 0,
+        completedStudentCount: 0,
+        completionReady: false,
+      };
+
+      return `
         <tr>
           <td>
             <div class="fw-semibold">${escapeHtml(classItem.classCode)}</div>
             <div class="small text-secondary">${escapeHtml(classItem.className)}</div>
+            <div class="small text-secondary mt-1">
+              Hoàn thành: ${completion.completedStudentCount}/${completion.activeStudentCount} học sinh
+            </div>
           </td>
           <td>
             <span class="badge text-bg-${CLASS_STATUS_BADGES[classItem.status] || 'secondary'}">
               ${escapeHtml(CLASS_STATUS_LABELS[classItem.status] || classItem.status)}
             </span>
+            ${
+              classItem.status === 'active' && completion.completionReady
+                ? '<div class="mt-2"><span class="badge text-bg-success">Đủ điều kiện hoàn thành</span></div>'
+                : ''
+            }
           </td>
           <td>
             ${
@@ -75,12 +121,10 @@ function renderClassesTable(classes) {
           <td>${classItem.studentCount}</td>
           <td>${escapeHtml(formatDate(classItem.startDate))}</td>
           <td>${escapeHtml(formatDate(classItem.endDate))}</td>
-          <td class="text-end">
-            <button class="btn btn-sm btn-outline-primary" data-action="edit-class" data-class-id="${escapeHtml(classItem.id)}">Sửa</button>
-          </td>
+          <td class="text-end">${renderClassActions(classItem, completion)}</td>
         </tr>
-      `,
-    )
+      `;
+    })
     .join('');
 
   return `
@@ -138,11 +182,19 @@ export const classesPage = {
     const modal = new window.bootstrap.Modal(modalEl);
     const createButton = document.getElementById('create-class-button');
     let classes = [];
+    let students = [];
     let editingClass = null;
     let filters = {
       statusFilter: '',
       visibilityFilter: '',
     };
+
+    function getCompletionMap() {
+      return classes.reduce((accumulator, classItem) => {
+        accumulator[classItem.classCode] = getClassCompletionStats(classItem.classCode, students);
+        return accumulator;
+      }, {});
+    }
 
     function getFilteredClasses() {
       return classes.filter((classItem) => {
@@ -170,7 +222,32 @@ export const classesPage = {
 
     function renderView() {
       filterSlot.innerHTML = renderClassFilters(filters);
-      tableSlot.innerHTML = renderClassesTable(getFilteredClasses());
+      tableSlot.innerHTML = renderClassesTable(getFilteredClasses(), getCompletionMap());
+    }
+
+    async function saveClassQuick(classItem, overrides, successTitle, successMessage, errorMessage) {
+      try {
+        await updateClass(classItem.id, {
+          className: classItem.className,
+          status: classItem.status,
+          hidden: classItem.hidden,
+          startDate: classItem.startDate,
+          endDate: classItem.endDate,
+          ...overrides,
+        });
+
+        showToast({
+          title: successTitle,
+          message: successMessage,
+          variant: 'success',
+        });
+      } catch (error) {
+        showToast({
+          title: 'Không thể cập nhật',
+          message: mapFirebaseError(error, errorMessage),
+          variant: 'danger',
+        });
+      }
     }
 
     createButton.addEventListener('click', () => {
@@ -206,20 +283,59 @@ export const classesPage = {
     });
 
     tableSlot.addEventListener('click', (event) => {
-      const button = event.target.closest('[data-action="edit-class"]');
+      const button = event.target.closest('[data-action]');
 
       if (!button) {
         return;
       }
 
-      editingClass = classes.find((item) => item.id === button.dataset.classId) || null;
+      const classItem = classes.find((item) => item.id === button.dataset.classId) || null;
 
-      if (!editingClass) {
+      if (!classItem) {
         return;
       }
 
-      fillForm(editingClass, true);
-      modal.show();
+      if (button.dataset.action === 'edit-class') {
+        editingClass = classItem;
+        fillForm(editingClass, true);
+        modal.show();
+        return;
+      }
+
+      if (button.dataset.action === 'mark-completed') {
+        const completion = getClassCompletionStats(classItem.classCode, students);
+
+        if (!completion.completionReady) {
+          const confirmed = window.confirm(
+            `Lớp ${classItem.classCode} chưa đủ điều kiện hoàn thành (${completion.completedStudentCount}/${completion.activeStudentCount} học sinh đã hoàn thành). Bạn vẫn muốn đánh dấu hoàn thành?`,
+          );
+
+          if (!confirmed) {
+            return;
+          }
+        }
+
+        saveClassQuick(
+          classItem,
+          { status: 'completed' },
+          'Đã cập nhật lớp',
+          `Lớp ${classItem.classCode} đã được đánh dấu hoàn thành.`,
+          'Không thể đánh dấu hoàn thành cho lớp này.',
+        );
+        return;
+      }
+
+      if (button.dataset.action === 'toggle-hidden') {
+        saveClassQuick(
+          classItem,
+          { hidden: !classItem.hidden },
+          'Đã cập nhật hiển thị',
+          classItem.hidden
+            ? `Lớp ${classItem.classCode} đã được hiển thị lại.`
+            : `Lớp ${classItem.classCode} đã được ẩn khỏi danh sách chính.`,
+          'Không thể đổi trạng thái hiển thị của lớp này.',
+        );
+      }
     });
 
     form.addEventListener('submit', async (event) => {
@@ -269,18 +385,33 @@ export const classesPage = {
       }
     });
 
-    const unsubscribe = subscribeClasses(
-      (items) => {
-        classes = items;
-        renderView();
-      },
-      (error) => {
-        tableSlot.innerHTML = renderAlert(mapFirebaseError(error, 'Không tải được dữ liệu lớp.'), 'danger');
-      },
-    );
+    const unsubscribers = [
+      subscribeClasses(
+        (items) => {
+          classes = items;
+          renderView();
+        },
+        (error) => {
+          tableSlot.innerHTML = renderAlert(mapFirebaseError(error, 'Không tải được dữ liệu lớp.'), 'danger');
+        },
+      ),
+      subscribeStudents(
+        (items) => {
+          students = items;
+          renderView();
+        },
+        (error) => {
+          showToast({
+            title: 'Lỗi dữ liệu',
+            message: mapFirebaseError(error, 'Không tải được dữ liệu học sinh để tính tiến độ lớp.'),
+            variant: 'danger',
+          });
+        },
+      ),
+    ];
 
     renderView();
 
-    return () => unsubscribe();
+    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
   },
 };

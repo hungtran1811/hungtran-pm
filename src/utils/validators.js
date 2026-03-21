@@ -24,11 +24,11 @@ export function validateReportForm(values) {
   }
 
   if (doneToday.length < 10) {
-    errors.doneToday = VALIDATION_MESSAGES.minLength10;
+    errors.doneToday = VALIDATION_MESSAGES.doneTodayMinLength;
   }
 
   if (nextGoal.length < 10) {
-    errors.nextGoal = VALIDATION_MESSAGES.minLength10;
+    errors.nextGoal = VALIDATION_MESSAGES.nextGoalMinLength;
   }
 
   if (!STAGES.includes(stage)) {

@@ -3,7 +3,7 @@ import { escapeHtml } from '../../utils/html.js';
 import { renderStageBadge } from './StageBadge.js';
 import { renderStatusBadge } from './StatusBadge.js';
 
-export function renderReportsTable(reports) {
+export function renderReportsTable(reports, { showDeleteAction = false } = {}) {
   const rows = reports
     .map(
       (report) => `
@@ -18,9 +18,31 @@ export function renderReportsTable(reports) {
           <td>${renderStageBadge(report.stage)}</td>
           <td>${escapeHtml(formatDateTime(report.submittedAt))}</td>
           <td class="text-end">
-            <button class="btn btn-sm btn-outline-secondary" data-action="view-history" data-student-id="${escapeHtml(report.studentId)}" data-student-name="${escapeHtml(report.studentName)}">
-              Lịch sử
-            </button>
+            <div class="d-flex flex-wrap gap-2 justify-content-end">
+              <button
+                class="btn btn-sm btn-outline-secondary"
+                data-action="view-history"
+                data-student-id="${escapeHtml(report.studentId)}"
+                data-student-name="${escapeHtml(report.studentName)}"
+              >
+                Lịch sử
+              </button>
+              ${
+                showDeleteAction
+                  ? `
+                    <button
+                      class="btn btn-sm btn-outline-danger"
+                      data-action="delete-report"
+                      data-report-id="${escapeHtml(report.id)}"
+                      data-student-id="${escapeHtml(report.studentId)}"
+                      data-student-name="${escapeHtml(report.studentName)}"
+                    >
+                      Xóa
+                    </button>
+                  `
+                  : ''
+              }
+            </div>
           </td>
         </tr>
       `,

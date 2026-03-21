@@ -3,6 +3,7 @@ import { subscribeTodayReports } from '../../services/reports.service.js';
 import { subscribeStudents } from '../../services/students.service.js';
 import { getAuthState } from '../../state/auth.store.js';
 import { createFilterStore } from '../../state/filter.store.js';
+import { getClassCompletionStats } from '../../utils/class-completion.js';
 import { daysSince, formatDateTime } from '../../utils/date.js';
 import { mapFirebaseError } from '../../utils/firebase-error.js';
 import { escapeHtml } from '../../utils/html.js';
@@ -24,7 +25,7 @@ function renderClassHealthTable(classSummaries) {
     return renderEmptyState({
       icon: 'collection',
       title: 'Chưa có lớp phù hợp',
-      description: 'Hãy tạo lớp hoặc điều chỉnh bộ lọc để xem sức khỏe lớp học.',
+      description: 'Hãy tạo lớp hoặc điều chỉnh bộ lọc để xem dữ liệu.',
     });
   }
 
@@ -41,6 +42,13 @@ function renderClassHealthTable(classSummaries) {
           <td>${summary.stalledCount}</td>
           <td>${summary.nearDoneCount}</td>
           <td>${summary.completedCount}</td>
+          <td>
+            ${
+              summary.completionReady
+                ? '<span class="badge text-bg-success">Đủ điều kiện</span>'
+                : '<span class="badge text-bg-light text-dark border">Chưa đủ</span>'
+            }
+          </td>
         </tr>
       `,
     )
@@ -49,7 +57,7 @@ function renderClassHealthTable(classSummaries) {
   return `
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white border-0">
-        <h2 class="h5 mb-0">Sức khỏe theo lớp</h2>
+        <h2 class="h5 mb-0">Theo lớp</h2>
       </div>
       <div class="table-responsive">
         <table class="table align-middle mb-0">
@@ -61,6 +69,7 @@ function renderClassHealthTable(classSummaries) {
               <th>Chậm tiến độ</th>
               <th>Gần xong</th>
               <th>Hoàn thành</th>
+              <th>Điều kiện</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
@@ -75,7 +84,7 @@ function renderAttentionList(students) {
     return renderEmptyState({
       icon: 'emoji-smile',
       title: 'Không có học sinh cần chú ý',
-      description: 'Tất cả học sinh đang ở trạng thái ổn theo bộ lọc hiện tại.',
+      description: 'Tất cả học sinh đang ổn theo bộ lọc hiện tại.',
     });
   }
 
@@ -103,7 +112,7 @@ function renderAttentionList(students) {
   return `
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white border-0">
-        <h2 class="h5 mb-0">Học sinh cần chú ý</h2>
+        <h2 class="h5 mb-0">Cần chú ý</h2>
       </div>
       <div class="list-group list-group-flush">${items}</div>
     </div>
@@ -156,6 +165,7 @@ export const adminDashboardPage = {
       const completedStudents = filteredStudents.filter((student) => student.currentStatus === 'Hoàn thành');
       const classSummaries = visibleClasses.map((classItem) => {
         const classStudents = filteredStudents.filter((student) => student.classId === classItem.classCode);
+        const classCompletion = getClassCompletionStats(classItem.classCode, state.students);
 
         return {
           classCode: classItem.classCode,
@@ -164,9 +174,13 @@ export const adminDashboardPage = {
           needSupportCount: classStudents.filter((student) => student.currentStatus === 'Cần hỗ trợ').length,
           stalledCount: classStudents.filter(isStudentStalled).length,
           nearDoneCount: classStudents.filter((student) => student.currentStatus === 'Gần hoàn thành').length,
-          completedCount: classStudents.filter((student) => student.currentStatus === 'Hoàn thành').length,
+          completedCount: classCompletion.completedStudentCount,
+          completionReady: classCompletion.completionReady,
         };
       });
+      const readyToCompleteClasses = activeClasses.filter(
+        (classItem) => getClassCompletionStats(classItem.classCode, state.students).completionReady,
+      );
       const attentionList = [
         ...supportStudents,
         ...stalledStudents.filter((student) => student.currentStatus !== 'Cần hỗ trợ'),
@@ -185,6 +199,7 @@ export const adminDashboardPage = {
           ${renderStatCard({ label: 'Báo cáo hôm nay', value: String(state.todayReports.filter((report) => !filters.classId || report.classId === filters.classId).length), icon: 'calendar-check', tone: 'success' })}
           ${renderStatCard({ label: 'Cần hỗ trợ', value: String(supportStudents.length), icon: 'life-preserver', tone: 'danger' })}
           ${renderStatCard({ label: 'Gần hoàn thành', value: String(nearDoneStudents.length), icon: 'flag', tone: 'warning' })}
+          ${renderStatCard({ label: 'Lớp đủ điều kiện', value: String(readyToCompleteClasses.length), icon: 'check2-square', tone: 'success' })}
           ${renderStatCard({ label: 'Hoàn thành', value: String(completedStudents.length), icon: 'check-circle', tone: 'success' })}
         </div>
         <div class="row g-4">

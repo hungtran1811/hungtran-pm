@@ -94,3 +94,12 @@ npm run seed:demo
 - `reports` là append-only từ Cloud Functions, client không được ghi trực tiếp.
 - Dashboard phụ huynh ở v1 là `admin-only preview`.
 - Timezone mặc định: `Asia/Ho_Chi_Minh`.
+
+## Ghi chú release Netlify
+
+- V1 hiện dùng hướng `Firestore direct fallback` nếu Cloud Functions chưa deploy được trên gói Firebase hiện tại.
+- Trên Netlify, đặt:
+  - `VITE_USE_EMULATORS=false`
+  - `VITE_FIREBASE_FUNCTIONS_REGION=asia-southeast1`
+  - `VITE_ENABLE_ADMIN_DEBUG_ACTIONS=false`
+- Nếu cần test thao tác xóa báo cáo ở local, đặt `VITE_ENABLE_ADMIN_DEBUG_ACTIONS=true`. Không bật biến này trên production.

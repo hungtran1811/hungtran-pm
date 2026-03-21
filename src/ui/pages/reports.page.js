@@ -1,5 +1,6 @@
+import { APP_CONFIG } from '../../config/app-config.js';
 import { subscribeClasses } from '../../services/classes.service.js';
-import { getStudentReportHistory, subscribeReports } from '../../services/reports.service.js';
+import { deleteReport, getStudentReportHistory, subscribeReports } from '../../services/reports.service.js';
 import { subscribeStudents } from '../../services/students.service.js';
 import { getAuthState } from '../../state/auth.store.js';
 import { createFilterStore } from '../../state/filter.store.js';
@@ -48,7 +49,7 @@ function renderHistoryPanel(history, studentName = '') {
   return `
     <div class="card border-0 shadow-sm h-100">
       <div class="card-header bg-white border-0">
-        <h2 class="h5 mb-1">Lịch sử báo cáo</h2>
+        <h2 class="h5 mb-1">Lịch sử</h2>
         <p class="text-secondary mb-0">${escapeHtml(studentName)}</p>
       </div>
       <div class="card-body">${items}</div>
@@ -92,6 +93,7 @@ export const reportsPage = {
       students: [],
       reports: [],
       history: [],
+      historyStudentId: '',
       historyStudentName: '',
     };
 
@@ -119,13 +121,22 @@ export const reportsPage = {
 
       tableSlot.innerHTML =
         filteredReports.length > 0
-          ? renderReportsTable(filteredReports)
+          ? renderReportsTable(filteredReports, { showDeleteAction: APP_CONFIG.enableAdminDebugActions })
           : renderEmptyState({
               icon: 'file-earmark-text',
               title: 'Không có báo cáo phù hợp',
-              description: 'Hãy điều chỉnh bộ lọc hoặc chờ học sinh gửi thêm report mới.',
+              description: 'Hãy điều chỉnh bộ lọc hoặc chờ học sinh gửi thêm báo cáo mới.',
             });
+
       historySlot.innerHTML = renderHistoryPanel(state.history, state.historyStudentName);
+    }
+
+    async function loadHistory(studentId, studentName) {
+      historySlot.innerHTML = renderLoadingOverlay('Đang tải lịch sử...');
+      state.history = await getStudentReportHistory(studentId);
+      state.historyStudentId = studentId;
+      state.historyStudentName = studentName || '';
+      renderView();
     }
 
     filterSlot.addEventListener('change', (event) => {
@@ -147,23 +158,72 @@ export const reportsPage = {
     });
 
     tableSlot.addEventListener('click', async (event) => {
-      const button = event.target.closest('[data-action="view-history"]');
+      const button = event.target.closest('[data-action]');
 
       if (!button) {
         return;
       }
 
-      try {
-        historySlot.innerHTML = renderLoadingOverlay('Đang tải lịch sử báo cáo...');
-        state.history = await getStudentReportHistory(button.dataset.studentId);
-        state.historyStudentName = button.dataset.studentName || '';
-        renderView();
-      } catch (error) {
-        showToast({
-          title: 'Lỗi tải lịch sử',
-          message: mapFirebaseError(error, 'Không tải được lịch sử báo cáo.'),
-          variant: 'danger',
-        });
+      if (button.dataset.action === 'view-history') {
+        try {
+          await loadHistory(button.dataset.studentId, button.dataset.studentName || '');
+        } catch (error) {
+          showToast({
+            title: 'Lỗi tải lịch sử',
+            message: mapFirebaseError(error, 'Không tải được lịch sử báo cáo.'),
+            variant: 'danger',
+          });
+        }
+
+        return;
+      }
+
+      if (button.dataset.action === 'delete-report') {
+        if (!APP_CONFIG.enableAdminDebugActions) {
+          showToast({
+            title: 'Đã tắt thao tác thử nghiệm',
+            message: 'Tính năng xóa báo cáo hiện chỉ dùng khi bật chế độ debug.',
+            variant: 'warning',
+          });
+          return;
+        }
+
+        const report = state.reports.find((item) => item.id === button.dataset.reportId);
+
+        if (!report) {
+          return;
+        }
+
+        const confirmed = window.confirm(
+          `Xóa báo cáo của ${report.studentName} lúc ${formatDateTime(report.submittedAt)}?`,
+        );
+
+        if (!confirmed) {
+          return;
+        }
+
+        try {
+          await deleteReport(report.id);
+
+          if (state.historyStudentId === report.studentId) {
+            state.history = await getStudentReportHistory(report.studentId);
+            state.historyStudentName = report.studentName;
+          }
+
+          showToast({
+            title: 'Đã xóa báo cáo',
+            message: `Báo cáo của ${report.studentName} đã được xóa.`,
+            variant: 'success',
+          });
+
+          renderView();
+        } catch (error) {
+          showToast({
+            title: 'Không thể xóa báo cáo',
+            message: mapFirebaseError(error, 'Không thể xóa báo cáo lúc này.'),
+            variant: 'danger',
+          });
+        }
       }
     });
 

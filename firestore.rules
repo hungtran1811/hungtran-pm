@@ -6,7 +6,7 @@ service cloud.firestore {
     }
 
     function normalizedEmail() {
-      return lower(request.auth.token.email);
+      return request.auth.token.email.lower();
     }
 
     function adminDoc() {
@@ -20,22 +20,155 @@ service cloud.firestore {
         && adminDoc().data.active == true;
     }
 
+    function isValidStage(stage) {
+      return stage == 'Ý tưởng'
+        || stage == 'Lên kế hoạch'
+        || stage == 'Thiết kế'
+        || stage == 'Xây dựng chức năng'
+        || stage == 'Kiểm thử'
+        || stage == 'Hoàn thiện'
+        || stage == 'Thuyết trình / Nộp sản phẩm';
+    }
+
+    function isValidStatus(status) {
+      return status == 'Chưa bắt đầu'
+        || status == 'Đang làm'
+        || status == 'Cần hỗ trợ'
+        || status == 'Gần hoàn thành'
+        || status == 'Hoàn thành';
+    }
+
+    function isValidProgress(progress) {
+      return progress is int && progress >= 0 && progress <= 100;
+    }
+
+    function isOpenClass(classId) {
+      return classId is string
+        && exists(/databases/$(database)/documents/classes/$(classId))
+        && get(/databases/$(database)/documents/classes/$(classId)).data.status == 'active'
+        && get(/databases/$(database)/documents/classes/$(classId)).data.hidden == false;
+    }
+
+    function isValidPublicReportCreate() {
+      return request.resource.data.keys().hasOnly([
+          'classId',
+          'classCode',
+          'studentId',
+          'studentName',
+          'projectName',
+          'progressPercent',
+          'stage',
+          'status',
+          'doneToday',
+          'nextGoal',
+          'difficulties',
+          'submittedAt',
+          'submittedDateKey',
+          'source',
+          'createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'classId',
+          'classCode',
+          'studentId',
+          'studentName',
+          'projectName',
+          'progressPercent',
+          'stage',
+          'status',
+          'doneToday',
+          'nextGoal',
+          'difficulties',
+          'submittedAt',
+          'submittedDateKey',
+          'source',
+          'createdAt'
+        ])
+        && request.resource.data.classId == request.resource.data.classCode
+        && isOpenClass(request.resource.data.classCode)
+        && exists(/databases/$(database)/documents/students/$(request.resource.data.studentId))
+        && get(/databases/$(database)/documents/students/$(request.resource.data.studentId)).data.active == true
+        && get(/databases/$(database)/documents/students/$(request.resource.data.studentId)).data.classId == request.resource.data.classCode
+        && get(/databases/$(database)/documents/students/$(request.resource.data.studentId)).data.fullName == request.resource.data.studentName
+        && get(/databases/$(database)/documents/students/$(request.resource.data.studentId)).data.projectName == request.resource.data.projectName
+        && isValidProgress(request.resource.data.progressPercent)
+        && isValidStage(request.resource.data.stage)
+        && isValidStatus(request.resource.data.status)
+        && request.resource.data.doneToday is string
+        && request.resource.data.doneToday.size() >= 10
+        && request.resource.data.doneToday.size() <= 2000
+        && request.resource.data.nextGoal is string
+        && request.resource.data.nextGoal.size() >= 10
+        && request.resource.data.nextGoal.size() <= 2000
+        && request.resource.data.difficulties is string
+        && request.resource.data.difficulties.size() <= 2000
+        && (request.resource.data.status != 'Cần hỗ trợ' || request.resource.data.difficulties.size() >= 15)
+        && (request.resource.data.status != 'Hoàn thành' || request.resource.data.progressPercent == 100)
+        && request.resource.data.submittedAt == request.time
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.submittedDateKey is string
+        && request.resource.data.submittedDateKey.size() == 10
+        && request.resource.data.source == 'student-form';
+    }
+
+    function isValidPublicStudentSnapshotUpdate(studentId) {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'currentProgressPercent',
+          'currentStage',
+          'currentStatus',
+          'currentDifficulties',
+          'lastReportedAt',
+          'latestReportId',
+          'progressStalledCount',
+          'updatedAt'
+        ])
+        && resource.data.active == true
+        && resource.data.progressStalledCount is int
+        && isOpenClass(resource.data.classId)
+        && isValidProgress(request.resource.data.currentProgressPercent)
+        && isValidStage(request.resource.data.currentStage)
+        && isValidStatus(request.resource.data.currentStatus)
+        && request.resource.data.currentDifficulties is string
+        && request.resource.data.currentDifficulties.size() <= 2000
+        && request.resource.data.lastReportedAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.latestReportId is string
+        && request.resource.data.latestReportId.size() > 0
+        && request.resource.data.progressStalledCount is int
+        && request.resource.data.progressStalledCount >= 0
+        && request.resource.data.progressStalledCount <= resource.data.progressStalledCount + 1
+        && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data != null
+        && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.studentId == studentId
+        && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.classCode == resource.data.classId
+        && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.status == request.resource.data.currentStatus
+        && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.stage == request.resource.data.currentStage
+        && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.progressPercent == request.resource.data.currentProgressPercent
+        && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.difficulties == request.resource.data.currentDifficulties
+        && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.submittedAt == request.resource.data.lastReportedAt;
+    }
+
     match /admins/{adminId} {
       allow read: if isSignedIn() && adminId == normalizedEmail();
       allow write: if false;
     }
 
     match /classes/{classId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin() || (resource.data.status == 'active' && resource.data.hidden == false);
+      allow write: if isAdmin();
     }
 
     match /students/{studentId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin() || resource.data.active == true;
+      allow create: if isAdmin();
+      allow update: if isAdmin() || isValidPublicStudentSnapshotUpdate(studentId);
+      allow delete: if isAdmin();
     }
 
     match /reports/{reportId} {
       allow read: if isAdmin();
-      allow write: if false;
+      allow create: if isAdmin() || isValidPublicReportCreate();
+      allow update: if false;
+      allow delete: if isAdmin();
     }
   }
 }
