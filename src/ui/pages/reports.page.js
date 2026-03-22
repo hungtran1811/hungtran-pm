@@ -16,43 +16,117 @@ import { renderStageBadge } from '../components/StageBadge.js';
 import { renderStatusBadge } from '../components/StatusBadge.js';
 import { showToast } from '../components/ToastStack.js';
 
-function renderHistoryPanel(history, studentName = '') {
+function getLatestReportsByStudent(reports) {
+  const latestByStudent = new Map();
+
+  for (const report of reports) {
+    if (!latestByStudent.has(report.studentId)) {
+      latestByStudent.set(report.studentId, report);
+    }
+  }
+
+  return Array.from(latestByStudent.values());
+}
+
+function renderDetailPanel(history, studentName = '') {
   if (!history || history.length === 0) {
     return renderEmptyState({
-      icon: 'clock-history',
-      title: 'Chọn một học sinh để xem lịch sử',
-      description: 'Nhấn vào nút "Lịch sử" ở bảng bên trái để xem chuỗi báo cáo gần nhất.',
+      icon: 'file-earmark-text',
+      title: 'Chọn một học sinh để xem báo cáo',
+      description: 'Bấm vào tên học sinh hoặc nút "Xem" ở bảng bên trái để xem nội dung báo cáo rõ hơn.',
     });
   }
 
-  const items = history
-    .map(
-      (report) => `
-        <div class="border rounded-4 p-3 mb-3 bg-light">
-          <div class="d-flex flex-wrap justify-content-between gap-2 mb-2">
-            <strong>${escapeHtml(formatDateTime(report.submittedAt))}</strong>
-            <div class="d-flex flex-wrap gap-2">
-              ${renderStatusBadge(report.status)}
-              ${renderStageBadge(report.stage)}
-              <span class="badge bg-white text-dark border">${report.progressPercent}%</span>
-            </div>
-          </div>
-          <div class="small text-secondary mb-2">${escapeHtml(report.projectName)}</div>
-          <div class="mb-2"><strong>Đã làm được:</strong><br>${nl2br(report.doneToday)}</div>
-          <div class="mb-2"><strong>Mục tiêu tiếp theo:</strong><br>${nl2br(report.nextGoal)}</div>
-          <div><strong>Khó khăn:</strong><br>${nl2br(report.difficulties || 'Không có')}</div>
-        </div>
-      `,
-    )
-    .join('');
+  const latestReport = history[0];
+  const previousReports = history.slice(1);
+  const difficulties = latestReport.difficulties?.trim() ? latestReport.difficulties : 'Không có';
 
   return `
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-header bg-white border-0">
-        <h2 class="h5 mb-1">Lịch sử</h2>
+    <div class="card border-0 shadow-sm h-100 report-detail-card">
+      <div class="card-header bg-white border-0 pb-0">
+        <h2 class="h5 mb-1">Chi tiết báo cáo</h2>
         <p class="text-secondary mb-0">${escapeHtml(studentName)}</p>
       </div>
-      <div class="card-body">${items}</div>
+      <div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
+          <div>
+            <div class="fw-semibold">${escapeHtml(latestReport.projectName)}</div>
+            <div class="small text-secondary">${escapeHtml(latestReport.classCode)}</div>
+          </div>
+          <div class="text-end">
+            <div class="small text-secondary">${escapeHtml(formatDateTime(latestReport.submittedAt))}</div>
+            <div class="d-flex flex-wrap gap-2 justify-content-end mt-2">
+              ${renderStatusBadge(latestReport.status)}
+              ${renderStageBadge(latestReport.stage)}
+              <span class="badge bg-white text-dark border">${latestReport.progressPercent}%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="report-detail-section">
+          <div class="report-detail-label">Đã làm được</div>
+          <div class="report-detail-content">${nl2br(latestReport.doneToday)}</div>
+        </div>
+
+        <div class="report-detail-section">
+          <div class="report-detail-label">Mục tiêu buổi tiếp theo</div>
+          <div class="report-detail-content">${nl2br(latestReport.nextGoal)}</div>
+        </div>
+
+        <div class="report-detail-section">
+          <div class="report-detail-label">Khó khăn gặp phải</div>
+          <div class="report-detail-content">${nl2br(difficulties)}</div>
+        </div>
+
+        <hr class="my-4">
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h3 class="h6 mb-0">Lịch sử gần đây</h3>
+          <span class="small text-secondary">${history.length} báo cáo</span>
+        </div>
+
+        ${
+          previousReports.length > 0
+            ? `
+              <div class="report-history-list">
+                ${previousReports
+                  .map(
+                    (report) => `
+                      <details class="report-history-item">
+                        <summary class="report-history-summary">
+                          <div class="report-history-summary__main">
+                            <strong>${escapeHtml(formatDateTime(report.submittedAt))}</strong>
+                            <div class="small text-secondary">${escapeHtml(report.projectName)}</div>
+                          </div>
+                          <div class="d-flex flex-wrap gap-2 justify-content-end">
+                            ${renderStatusBadge(report.status)}
+                            ${renderStageBadge(report.stage)}
+                            <span class="badge bg-white text-dark border">${report.progressPercent}%</span>
+                          </div>
+                        </summary>
+                        <div class="report-history-body">
+                          <div class="report-detail-section">
+                            <div class="report-detail-label">Đã làm được</div>
+                            <div class="report-detail-content">${nl2br(report.doneToday)}</div>
+                          </div>
+                          <div class="report-detail-section">
+                            <div class="report-detail-label">Mục tiêu buổi tiếp theo</div>
+                            <div class="report-detail-content">${nl2br(report.nextGoal)}</div>
+                          </div>
+                          <div class="report-detail-section">
+                            <div class="report-detail-label">Khó khăn gặp phải</div>
+                            <div class="report-detail-content">${nl2br(report.difficulties?.trim() ? report.difficulties : 'Không có')}</div>
+                          </div>
+                        </div>
+                      </details>
+                    `,
+                  )
+                  .join('')}
+              </div>
+            `
+            : '<p class="text-secondary small mb-0">Chưa có báo cáo cũ hơn cho học sinh này.</p>'
+        }
+      </div>
     </div>
   `;
 }
@@ -71,7 +145,7 @@ export const reportsPage = {
         <div id="reports-filter-slot"></div>
         <div class="row g-4">
           <div class="col-12 col-xl-8" id="reports-table-slot">${renderLoadingOverlay()}</div>
-          <div class="col-12 col-xl-4" id="reports-history-slot">${renderHistoryPanel([])}</div>
+          <div class="col-12 col-xl-4" id="reports-history-slot">${renderDetailPanel([])}</div>
         </div>
       `,
     });
@@ -93,13 +167,15 @@ export const reportsPage = {
       students: [],
       reports: [],
       history: [],
-      historyStudentId: '',
-      historyStudentName: '',
+      selectedStudentId: '',
+      selectedStudentName: '',
     };
 
-    function renderView() {
+    function getFilteredReports() {
       const filters = filterStore.getState();
-      const filteredReports = state.reports.filter((report) => {
+      const latestReports = getLatestReportsByStudent(state.reports);
+
+      return latestReports.filter((report) => {
         const reportDateKey = toDateKey(report.submittedAt);
         const byClass = !filters.classId || report.classId === filters.classId;
         const byStudent = !filters.studentId || report.studentId === filters.studentId;
@@ -109,6 +185,17 @@ export const reportsPage = {
         const byTo = !filters.dateTo || reportDateKey <= filters.dateTo;
         return byClass && byStudent && byStatus && byStage && byFrom && byTo;
       });
+    }
+
+    function renderView() {
+      const filters = filterStore.getState();
+      const filteredReports = getFilteredReports();
+
+      if (state.selectedStudentId && !filteredReports.some((report) => report.studentId === state.selectedStudentId)) {
+        state.selectedStudentId = '';
+        state.selectedStudentName = '';
+        state.history = [];
+      }
 
       filterSlot.innerHTML = renderFilterBar({
         id: 'reports-filter-form',
@@ -121,21 +208,26 @@ export const reportsPage = {
 
       tableSlot.innerHTML =
         filteredReports.length > 0
-          ? renderReportsTable(filteredReports, { showDeleteAction: APP_CONFIG.enableAdminDebugActions })
+          ? renderReportsTable(filteredReports, {
+              selectedStudentId: state.selectedStudentId,
+              showDeleteAction: APP_CONFIG.enableAdminDebugActions,
+            })
           : renderEmptyState({
               icon: 'file-earmark-text',
               title: 'Không có báo cáo phù hợp',
               description: 'Hãy điều chỉnh bộ lọc hoặc chờ học sinh gửi thêm báo cáo mới.',
             });
 
-      historySlot.innerHTML = renderHistoryPanel(state.history, state.historyStudentName);
+      historySlot.innerHTML = renderDetailPanel(state.history, state.selectedStudentName);
     }
 
-    async function loadHistory(studentId, studentName) {
-      historySlot.innerHTML = renderLoadingOverlay('Đang tải lịch sử...');
-      state.history = await getStudentReportHistory(studentId);
-      state.historyStudentId = studentId;
-      state.historyStudentName = studentName || '';
+    async function loadStudentDetails(studentId, studentName) {
+      state.selectedStudentId = studentId;
+      state.selectedStudentName = studentName || '';
+      historySlot.innerHTML = renderLoadingOverlay('Đang tải báo cáo...');
+
+      const history = await getStudentReportHistory(studentId);
+      state.history = history;
       renderView();
     }
 
@@ -164,13 +256,13 @@ export const reportsPage = {
         return;
       }
 
-      if (button.dataset.action === 'view-history') {
+      if (button.dataset.action === 'select-student') {
         try {
-          await loadHistory(button.dataset.studentId, button.dataset.studentName || '');
+          await loadStudentDetails(button.dataset.studentId, button.dataset.studentName || '');
         } catch (error) {
           showToast({
-            title: 'Lỗi tải lịch sử',
-            message: mapFirebaseError(error, 'Không tải được lịch sử báo cáo.'),
+            title: 'Lỗi tải báo cáo',
+            message: mapFirebaseError(error, 'Không tải được chi tiết báo cáo của học sinh này.'),
             variant: 'danger',
           });
         }
@@ -205,9 +297,9 @@ export const reportsPage = {
         try {
           await deleteReport(report.id);
 
-          if (state.historyStudentId === report.studentId) {
+          if (state.selectedStudentId === report.studentId) {
             state.history = await getStudentReportHistory(report.studentId);
-            state.historyStudentName = report.studentName;
+            state.selectedStudentName = report.studentName;
           }
 
           showToast({

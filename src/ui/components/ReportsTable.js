@@ -3,14 +3,22 @@ import { escapeHtml } from '../../utils/html.js';
 import { renderStageBadge } from './StageBadge.js';
 import { renderStatusBadge } from './StatusBadge.js';
 
-export function renderReportsTable(reports, { showDeleteAction = false } = {}) {
+export function renderReportsTable(reports, { selectedStudentId = '', showDeleteAction = false } = {}) {
   const rows = reports
     .map(
       (report) => `
-        <tr>
+        <tr class="${selectedStudentId === report.studentId ? 'table-active' : ''}">
           <td>
-            <div class="fw-semibold">${escapeHtml(report.studentName)}</div>
-            <div class="small text-secondary">${escapeHtml(report.projectName)}</div>
+            <button
+              type="button"
+              class="btn btn-link p-0 text-start text-decoration-none report-student-button"
+              data-action="select-student"
+              data-student-id="${escapeHtml(report.studentId)}"
+              data-student-name="${escapeHtml(report.studentName)}"
+            >
+              <div class="fw-semibold">${escapeHtml(report.studentName)}</div>
+              <div class="small text-secondary">${escapeHtml(report.projectName)}</div>
+            </button>
           </td>
           <td>${escapeHtml(report.classCode)}</td>
           <td>${report.progressPercent}%</td>
@@ -21,11 +29,11 @@ export function renderReportsTable(reports, { showDeleteAction = false } = {}) {
             <div class="d-flex flex-wrap gap-2 justify-content-end">
               <button
                 class="btn btn-sm btn-outline-secondary"
-                data-action="view-history"
+                data-action="select-student"
                 data-student-id="${escapeHtml(report.studentId)}"
                 data-student-name="${escapeHtml(report.studentName)}"
               >
-                Lịch sử
+                Xem
               </button>
               ${
                 showDeleteAction
@@ -52,7 +60,7 @@ export function renderReportsTable(reports, { showDeleteAction = false } = {}) {
   return `
     <div class="card border-0 shadow-sm">
       <div class="table-responsive">
-        <table class="table align-middle mb-0">
+        <table class="table align-middle mb-0 reports-table">
           <thead class="table-light">
             <tr>
               <th>Học sinh / Dự án</th>
