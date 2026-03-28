@@ -28,15 +28,17 @@ function getFormDefaults(student) {
 }
 
 function renderLockedClassField(classInfo) {
-  const classLabel = classInfo?.className
-    ? `${classInfo.classCode} - ${classInfo.className}`
-    : classInfo?.classCode || 'Chưa xác định';
+  const classCode = classInfo?.classCode || 'Chưa xác định';
+  const className = classInfo?.className || 'Lớp này đang được mở theo đường dẫn riêng.';
 
   return `
     <label class="form-label">Mã lớp</label>
     <div class="form-control locked-class-field bg-body-tertiary">
-      <span>${classLabel}</span>
-      <span class="badge text-bg-light text-dark border">Đã khóa theo đường dẫn</span>
+      <div class="locked-class-field__content">
+        <div class="locked-class-field__code">${classCode}</div>
+        <div class="locked-class-field__name">${className}</div>
+      </div>
+      <span class="badge text-bg-light text-dark border locked-class-field__badge">Đã khóa theo đường dẫn</span>
     </div>
   `;
 }
@@ -249,15 +251,17 @@ export const studentReportPage = {
       event.preventDefault();
 
       const formData = new FormData(form);
+      const rawDifficulties = String(formData.get('difficulties') ?? '').trim();
+      const status = formData.get('status');
       const payload = {
         classCode: selectedClassCode,
         studentId: selectedStudentId,
         doneToday: formData.get('doneToday'),
         nextGoal: formData.get('nextGoal'),
-        difficulties: formData.get('difficulties'),
+        difficulties: rawDifficulties || (status === 'Cần hỗ trợ' ? '' : 'Không có khó khăn'),
         progressPercent: Number(formData.get('progressPercent')),
         stage: formData.get('stage'),
-        status: formData.get('status'),
+        status,
       };
       const validation = validateReportForm(payload);
       const alertSlot = document.getElementById('student-report-alert');

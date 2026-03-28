@@ -16,15 +16,15 @@ export function renderReportForm(values = {}, { disabled = false } = {}) {
         <div class="row g-3">
           <div class="col-12 col-lg-6">
             <label class="form-label">Đã làm được gì</label>
-            <textarea class="form-control" name="doneToday" rows="4" placeholder="Ví dụ: Hoàn thành giao diện trang đăng nhập, kết nối dữ liệu lớp..." required ${disabledAttr}>${escapeHtml(values.doneToday || '')}</textarea>
+            <textarea class="form-control" name="doneToday" rows="4" placeholder="Ví dụ: Em đã hoàn thành phần mở đầu, làm xong poster và viết được nội dung cho 2 ý chính." required ${disabledAttr}>${escapeHtml(values.doneToday || '')}</textarea>
           </div>
           <div class="col-12 col-lg-6">
             <label class="form-label">Mục tiêu buổi tiếp theo</label>
-            <textarea class="form-control" name="nextGoal" rows="4" placeholder="Ví dụ: Hoàn thiện form báo cáo và kiểm thử trên điện thoại..." required ${disabledAttr}>${escapeHtml(values.nextGoal || '')}</textarea>
+            <textarea class="form-control" name="nextGoal" rows="4" placeholder="Ví dụ: Buổi sau em sẽ hoàn thiện phần trình bày, sửa lại hình ảnh và luyện nói rõ hơn." required ${disabledAttr}>${escapeHtml(values.nextGoal || '')}</textarea>
           </div>
           <div class="col-12">
             <label class="form-label">Khó khăn gặp phải</label>
-            <textarea class="form-control" name="difficulties" rows="3" placeholder="Ví dụ: Em chưa kết nối được dữ liệu Firestore, đã thử kiểm tra file config và tên collection nhưng khi bấm gửi vẫn báo lỗi." ${disabledAttr}>${escapeHtml(values.difficulties || '')}</textarea>
+            <textarea class="form-control" name="difficulties" rows="3" placeholder="Ví dụ: Em chưa biết chọn ý nào quan trọng nhất nên phần trình bày còn dài và hơi khó hiểu." ${disabledAttr}>${escapeHtml(values.difficulties || '')}</textarea>
           </div>
           <div class="col-12 col-md-4">
             <label class="form-label">% tiến độ sản phẩm</label>
