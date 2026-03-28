@@ -12,7 +12,8 @@ export function renderReportsTable(reports, { selectedStudentId = '', showDelete
             <button
               type="button"
               class="btn btn-link p-0 text-start text-decoration-none report-student-button"
-              data-action="select-student"
+              data-action="copy-student-report"
+              data-report-id="${escapeHtml(report.id)}"
               data-student-id="${escapeHtml(report.studentId)}"
               data-student-name="${escapeHtml(report.studentName)}"
             >

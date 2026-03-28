@@ -218,6 +218,18 @@ body {
   color: var(--app-brand);
 }
 
+.locked-class-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 2.875rem;
+}
+
+.reports-toolbar .btn {
+  white-space: nowrap;
+}
+
 .report-detail-card .report-detail-section + .report-detail-section {
   margin-top: 1rem;
 }

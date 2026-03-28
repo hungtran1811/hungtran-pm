@@ -1,6 +1,7 @@
 import { getClassRoster, listActiveClasses, submitStudentReport } from '../../services/public-api.service.js';
 import { isToday } from '../../utils/date.js';
 import { attachHiddenAdminShortcut } from '../../utils/admin-shortcut.js';
+import { getLockedReportClassCode } from '../../utils/route.js';
 import { validateReportForm } from '../../utils/validators.js';
 import { renderAlert } from '../components/Alert.js';
 import { renderBrandLogo } from '../components/BrandLogo.js';
@@ -26,6 +27,20 @@ function getFormDefaults(student) {
   };
 }
 
+function renderLockedClassField(classInfo) {
+  const classLabel = classInfo?.className
+    ? `${classInfo.classCode} - ${classInfo.className}`
+    : classInfo?.classCode || 'Chưa xác định';
+
+  return `
+    <label class="form-label">Mã lớp</label>
+    <div class="form-control locked-class-field bg-body-tertiary">
+      <span>${classLabel}</span>
+      <span class="badge text-bg-light text-dark border">Đã khóa theo đường dẫn</span>
+    </div>
+  `;
+}
+
 export const studentReportPage = {
   title: 'Gửi báo cáo tiến độ',
   async render() {
@@ -46,14 +61,14 @@ export const studentReportPage = {
                       })}
                       <h1 class="display-6 fw-semibold mb-3">Báo cáo tiến độ sản phẩm học sinh</h1>
                       <p class="mb-0 text-white-50">
-                        Chọn đúng lớp, đúng tên của mình và điền thật rõ để giáo viên nắm tiến độ và hỗ trợ bạn nhanh hơn.
+                        Chọn đúng tên của mình và điền thật rõ để giáo viên nắm tiến độ và hỗ trợ bạn nhanh hơn.
                       </p>
                     </div>
                     <div class="col-12 col-lg-7 p-4 p-lg-5 bg-white">
                       <div id="student-page-alert"></div>
                       <div class="row g-3 mb-3">
                         <div class="col-12 col-md-6">
-                          <div id="class-select-slot">${renderLoadingOverlay('Đang tải danh sách lớp...')}</div>
+                          <div id="class-select-slot">${renderLoadingOverlay('Đang tải thông tin lớp...')}</div>
                         </div>
                         <div class="col-12 col-md-6">
                           <div id="student-select-slot">${renderStudentSelect([])}</div>
@@ -79,18 +94,23 @@ export const studentReportPage = {
     const summarySlot = document.getElementById('project-summary-slot');
     const formSlot = document.getElementById('student-report-form-slot');
     const brandTrigger = document.getElementById('student-brand-trigger');
+    const lockedClassCode = getLockedReportClassCode();
 
     let classes = [];
     let students = [];
-    let selectedClassCode = '';
+    let selectedClassCode = lockedClassCode || '';
     let selectedStudentId = '';
+    let lockedClass = null;
+    let lockedClassError = '';
 
     function getSelectedStudent() {
       return students.find((student) => student.studentId === selectedStudentId) || null;
     }
 
     function renderSelections() {
-      classSlot.innerHTML = renderClassSelect(classes, selectedClassCode);
+      classSlot.innerHTML = lockedClassCode
+        ? renderLockedClassField(lockedClass || { classCode: selectedClassCode || lockedClassCode, className: '' })
+        : renderClassSelect(classes, selectedClassCode);
       studentSlot.innerHTML = renderStudentSelect(students, selectedStudentId);
       summarySlot.innerHTML = renderProjectSummary(getSelectedStudent());
       formSlot.innerHTML = renderReportForm(getFormDefaults(getSelectedStudent()), {
@@ -99,6 +119,11 @@ export const studentReportPage = {
     }
 
     function renderPageAlertState() {
+      if (lockedClassError) {
+        pageAlert.innerHTML = renderAlert(lockedClassError, 'danger');
+        return;
+      }
+
       if (!selectedClassCode) {
         pageAlert.innerHTML = '';
         return;
@@ -127,19 +152,6 @@ export const studentReportPage = {
       pageAlert.innerHTML = '';
     }
 
-    async function loadClasses() {
-      try {
-        classes = await listActiveClasses();
-        classSlot.innerHTML = renderClassSelect(classes, selectedClassCode);
-
-        if (classes.length === 0) {
-          pageAlert.innerHTML = renderAlert('Hiện chưa có lớp đang mở để học sinh gửi báo cáo.', 'warning');
-        }
-      } catch (error) {
-        pageAlert.innerHTML = renderAlert(getErrorMessage(error, 'Không tải được danh sách lớp.'), 'danger');
-      }
-    }
-
     async function loadRoster() {
       if (!selectedClassCode) {
         students = [];
@@ -150,6 +162,7 @@ export const studentReportPage = {
       }
 
       try {
+        lockedClassError = '';
         studentSlot.innerHTML = renderLoadingOverlay('Đang tải danh sách học sinh...');
         students = await getClassRoster(selectedClassCode);
 
@@ -162,10 +175,47 @@ export const studentReportPage = {
       } catch (error) {
         students = [];
         selectedStudentId = '';
-        studentSlot.innerHTML = renderStudentSelect([]);
-        formSlot.innerHTML = renderReportForm({}, { disabled: true });
-        summarySlot.innerHTML = renderProjectSummary(null);
+        renderSelections();
+
+        if (lockedClassCode) {
+          lockedClassError = getErrorMessage(error, 'Link lớp này hiện không thể sử dụng để gửi báo cáo.');
+          renderPageAlertState();
+          return;
+        }
+
         pageAlert.innerHTML = renderAlert(getErrorMessage(error, 'Không tải được danh sách học sinh.'), 'danger');
+      }
+    }
+
+    async function loadClasses() {
+      try {
+        classes = await listActiveClasses();
+
+        if (lockedClassCode) {
+          lockedClass = classes.find((item) => item.classCode === lockedClassCode) || null;
+          selectedClassCode = lockedClassCode;
+          renderSelections();
+
+          if (!lockedClass) {
+            lockedClassError = 'Link lớp này không hợp lệ hoặc lớp hiện không mở để gửi báo cáo.';
+            renderPageAlertState();
+            return;
+          }
+
+          await loadRoster();
+          return;
+        }
+
+        renderSelections();
+
+        if (classes.length === 0) {
+          pageAlert.innerHTML = renderAlert('Hiện chưa có lớp đang mở để học sinh gửi báo cáo.', 'warning');
+        }
+      } catch (error) {
+        const fallback = lockedClassCode
+          ? 'Không tải được thông tin lớp từ đường dẫn này.'
+          : 'Không tải được danh sách lớp.';
+        pageAlert.innerHTML = renderAlert(getErrorMessage(error, fallback), 'danger');
       }
     }
 
@@ -246,9 +296,9 @@ export const studentReportPage = {
       onTrigger: () => navigate('/admin/login'),
     });
 
-    await loadClasses();
     renderSelections();
     renderPageAlertState();
+    await loadClasses();
 
     return () => {
       cleanupShortcut?.();

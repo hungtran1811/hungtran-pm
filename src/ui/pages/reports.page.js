@@ -4,6 +4,7 @@ import { deleteReport, getStudentReportHistory, subscribeReports } from '../../s
 import { subscribeStudents } from '../../services/students.service.js';
 import { getAuthState } from '../../state/auth.store.js';
 import { createFilterStore } from '../../state/filter.store.js';
+import { copyTextToClipboard } from '../../utils/clipboard.js';
 import { formatDateTime, toDateKey } from '../../utils/date.js';
 import { mapFirebaseError } from '../../utils/firebase-error.js';
 import { escapeHtml, nl2br } from '../../utils/html.js';
@@ -28,12 +29,73 @@ function getLatestReportsByStudent(reports) {
   return Array.from(latestByStudent.values());
 }
 
+function getLatestReportsMap(reports) {
+  return new Map(getLatestReportsByStudent(reports).map((report) => [report.studentId, report]));
+}
+
+function getCopyValue(value, fallback = 'Chưa có báo cáo') {
+  const normalizedValue = String(value ?? '').trim();
+  return normalizedValue || fallback;
+}
+
+function buildReportCopyData({ report = null, student = null }) {
+  return {
+    studentName: report?.studentName || student?.fullName || 'Chưa có thông tin',
+    projectName: report?.projectName || student?.projectName || 'Chưa gán chủ đề',
+    progressText: report ? `${report.progressPercent}%` : 'Chưa có báo cáo',
+    doneToday: report ? getCopyValue(report.doneToday) : 'Chưa có báo cáo',
+    nextGoal: report ? getCopyValue(report.nextGoal) : 'Chưa có báo cáo',
+    difficulties: report ? getCopyValue(report.difficulties, 'Không có') : 'Chưa có báo cáo',
+    stage: report ? getCopyValue(report.stage) : 'Chưa có báo cáo',
+    status: report ? getCopyValue(report.status) : 'Chưa có báo cáo',
+  };
+}
+
+function formatStudentReportCopyText(data, index = null) {
+  const prefix = index ? `${index}. ` : '';
+
+  return [
+    `${prefix}Họ tên: ${data.studentName}`,
+    `Chủ đề: ${data.projectName}`,
+    `Tiến độ sản phẩm: ${data.progressText}`,
+    `Đã làm: ${data.doneToday}`,
+    `Mục tiêu: ${data.nextGoal}`,
+    `Khó khăn: ${data.difficulties}`,
+    `Giai đoạn: ${data.stage}`,
+    `Trạng thái: ${data.status}`,
+  ].join('\n');
+}
+
+function buildClassReportCopyText(classItem, students, reports) {
+  const latestReportsMap = getLatestReportsMap(reports.filter((report) => report.classCode === classItem.classCode));
+  const classStudents = students
+    .filter((student) => student.active && student.classId === classItem.classCode)
+    .sort((left, right) => left.fullName.localeCompare(right.fullName, 'vi'));
+
+  const blocks = classStudents.map((student, index) =>
+    formatStudentReportCopyText(
+      buildReportCopyData({
+        report: latestReportsMap.get(student.id) || null,
+        student,
+      }),
+      index + 1,
+    ),
+  );
+
+  return [
+    `Lớp: ${classItem.classCode} - ${classItem.className}`,
+    `Số học sinh hoạt động: ${classStudents.length}`,
+    '',
+    blocks.join('\n\n'),
+  ].join('\n');
+}
+
 function renderDetailPanel(history, studentName = '') {
   if (!history || history.length === 0) {
     return renderEmptyState({
       icon: 'file-earmark-text',
       title: 'Chọn một học sinh để xem báo cáo',
-      description: 'Bấm vào tên học sinh hoặc nút "Xem" ở bảng bên trái để xem nội dung báo cáo rõ hơn.',
+      description: 'Bấm vào tên học sinh để copy nhanh, hoặc bấm "Xem" để mở chi tiết báo cáo và lịch sử.',
     });
   }
 
@@ -190,6 +252,7 @@ export const reportsPage = {
     function renderView() {
       const filters = filterStore.getState();
       const filteredReports = getFilteredReports();
+      const selectedClass = state.classes.find((item) => item.classCode === filters.classId) || null;
 
       if (state.selectedStudentId && !filteredReports.some((report) => report.studentId === state.selectedStudentId)) {
         state.selectedStudentId = '';
@@ -197,14 +260,27 @@ export const reportsPage = {
         state.history = [];
       }
 
-      filterSlot.innerHTML = renderFilterBar({
-        id: 'reports-filter-form',
-        classes: state.classes,
-        students: state.students.filter((student) => !filters.classId || student.classId === filters.classId),
-        values: filters,
-        showStudent: true,
-        showDateRange: true,
-      });
+      filterSlot.innerHTML = `
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3 reports-toolbar">
+          <p class="text-secondary small mb-0">Bấm vào tên học sinh để copy nhanh báo cáo mới nhất.</p>
+          <button
+            type="button"
+            class="btn btn-outline-primary"
+            data-action="copy-class-report"
+            ${selectedClass ? '' : 'disabled'}
+          >
+            <i class="bi bi-clipboard-check me-2"></i>Copy báo cáo lớp
+          </button>
+        </div>
+        ${renderFilterBar({
+          id: 'reports-filter-form',
+          classes: state.classes,
+          students: state.students.filter((student) => !filters.classId || student.classId === filters.classId),
+          values: filters,
+          showStudent: true,
+          showDateRange: true,
+        })}
+      `;
 
       tableSlot.innerHTML =
         filteredReports.length > 0
@@ -239,20 +315,90 @@ export const reportsPage = {
       filterStore.set({ [event.target.name]: event.target.value });
     });
 
-    filterSlot.addEventListener('click', (event) => {
-      const button = event.target.closest('[data-action="reset-filters"]');
+    filterSlot.addEventListener('click', async (event) => {
+      const button = event.target.closest('[data-action]');
 
       if (!button) {
         return;
       }
 
-      filterStore.reset();
+      if (button.dataset.action === 'reset-filters') {
+        filterStore.reset();
+        return;
+      }
+
+      if (button.dataset.action === 'copy-class-report') {
+        const filters = filterStore.getState();
+        const selectedClass = state.classes.find((item) => item.classCode === filters.classId) || null;
+
+        if (!selectedClass) {
+          showToast({
+            title: 'Chưa chọn lớp',
+            message: 'Hãy chọn đúng một lớp trước khi copy báo cáo tổng hợp.',
+            variant: 'warning',
+          });
+          return;
+        }
+
+        const activeClassStudents = state.students.filter(
+          (student) => student.active && student.classId === selectedClass.classCode,
+        );
+
+        if (activeClassStudents.length === 0) {
+          showToast({
+            title: 'Chưa có học sinh',
+            message: `Lớp ${selectedClass.classCode} hiện chưa có học sinh hoạt động để tổng hợp.`,
+            variant: 'warning',
+          });
+          return;
+        }
+
+        try {
+          await copyTextToClipboard(buildClassReportCopyText(selectedClass, state.students, state.reports));
+          showToast({
+            title: 'Đã copy báo cáo lớp',
+            message: `Nội dung tổng hợp của lớp ${selectedClass.classCode} đã được sao chép.`,
+            variant: 'success',
+          });
+        } catch (error) {
+          showToast({
+            title: 'Không thể copy báo cáo lớp',
+            message: mapFirebaseError(error, 'Trình duyệt hiện không cho phép sao chép tự động.'),
+            variant: 'danger',
+          });
+        }
+      }
     });
 
     tableSlot.addEventListener('click', async (event) => {
       const button = event.target.closest('[data-action]');
 
       if (!button) {
+        return;
+      }
+
+      if (button.dataset.action === 'copy-student-report') {
+        const report = state.reports.find((item) => item.id === button.dataset.reportId);
+
+        if (!report) {
+          return;
+        }
+
+        try {
+          await copyTextToClipboard(formatStudentReportCopyText(buildReportCopyData({ report })));
+          showToast({
+            title: 'Đã copy báo cáo',
+            message: `Báo cáo của ${report.studentName} đã được sao chép.`,
+            variant: 'success',
+          });
+        } catch (error) {
+          showToast({
+            title: 'Không thể copy báo cáo',
+            message: mapFirebaseError(error, 'Trình duyệt hiện không cho phép sao chép tự động.'),
+            variant: 'danger',
+          });
+        }
+
         return;
       }
 
