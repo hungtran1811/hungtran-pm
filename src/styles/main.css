@@ -219,30 +219,34 @@ body {
 }
 
 .locked-class-field {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  min-height: 5.25rem;
+  display: grid;
+  gap: 0.6rem;
+  min-height: 4.75rem;
   padding-top: 0.85rem;
   padding-bottom: 0.85rem;
 }
 
-.locked-class-field__content {
+.locked-class-field__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
   min-width: 0;
-  flex: 1 1 auto;
 }
 
 .locked-class-field__code {
+  min-width: 0;
   font-size: 1rem;
   font-weight: 700;
   line-height: 1.3;
   color: var(--app-text);
-  word-break: break-word;
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 
 .locked-class-field__name {
-  margin-top: 0.3rem;
   font-size: 0.92rem;
   line-height: 1.45;
   color: var(--app-muted);
@@ -251,7 +255,6 @@ body {
 
 .locked-class-field__badge {
   flex: 0 0 auto;
-  margin-top: 0.1rem;
 }
 
 .reports-toolbar .btn {
@@ -388,12 +391,11 @@ body {
   }
 
   .locked-class-field {
-    flex-direction: column;
-    align-items: stretch;
+    min-height: auto;
   }
 
-  .locked-class-field__badge {
-    align-self: flex-start;
-    margin-top: 0;
+  .locked-class-field__header {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }

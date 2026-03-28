@@ -34,11 +34,11 @@ function renderLockedClassField(classInfo) {
   return `
     <label class="form-label">Mã lớp</label>
     <div class="form-control locked-class-field bg-body-tertiary">
-      <div class="locked-class-field__content">
-        <div class="locked-class-field__code">${classCode}</div>
-        <div class="locked-class-field__name">${className}</div>
+      <div class="locked-class-field__header">
+        <div class="locked-class-field__code" title="${classCode}">${classCode}</div>
+        <span class="badge text-bg-light text-dark border locked-class-field__badge">Đã khóa theo đường dẫn</span>
       </div>
-      <span class="badge text-bg-light text-dark border locked-class-field__badge">Đã khóa theo đường dẫn</span>
+      <div class="locked-class-field__name">${className}</div>
     </div>
   `;
 }

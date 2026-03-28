@@ -16,15 +16,15 @@ export function renderReportForm(values = {}, { disabled = false } = {}) {
         <div class="row g-3">
           <div class="col-12 col-lg-6">
             <label class="form-label">Đã làm được gì</label>
-            <textarea class="form-control" name="doneToday" rows="4" placeholder="Ví dụ: Em đã hoàn thành phần mở đầu, làm xong poster và viết được nội dung cho 2 ý chính." required ${disabledAttr}>${escapeHtml(values.doneToday || '')}</textarea>
+            <textarea class="form-control" name="doneToday" rows="4" placeholder="Ví dụ: Đã làm được giao diện, hoàn thành nhân vật 1, 2, 3 và thêm chức năng abc." required ${disabledAttr}>${escapeHtml(values.doneToday || '')}</textarea>
           </div>
           <div class="col-12 col-lg-6">
             <label class="form-label">Mục tiêu buổi tiếp theo</label>
-            <textarea class="form-control" name="nextGoal" rows="4" placeholder="Ví dụ: Buổi sau em sẽ hoàn thiện phần trình bày, sửa lại hình ảnh và luyện nói rõ hơn." required ${disabledAttr}>${escapeHtml(values.nextGoal || '')}</textarea>
+            <textarea class="form-control" name="nextGoal" rows="4" placeholder="Ví dụ: Cải thiện giao diện trang chủ và thêm chức năng tìm kiếm, đăng nhập hoặc lưu dữ liệu." required ${disabledAttr}>${escapeHtml(values.nextGoal || '')}</textarea>
           </div>
           <div class="col-12">
             <label class="form-label">Khó khăn gặp phải</label>
-            <textarea class="form-control" name="difficulties" rows="3" placeholder="Ví dụ: Em chưa biết chọn ý nào quan trọng nhất nên phần trình bày còn dài và hơi khó hiểu." ${disabledAttr}>${escapeHtml(values.difficulties || '')}</textarea>
+            <textarea class="form-control" name="difficulties" rows="3" placeholder="Ví dụ: Em đang gặp khó khăn ở phần đăng ký, đăng nhập hoặc chưa rõ cú pháp chỗ nào nên cần ghi cụ thể để giáo viên hướng dẫn dễ hơn." ${disabledAttr}>${escapeHtml(values.difficulties || '')}</textarea>
           </div>
           <div class="col-12 col-md-4">
             <label class="form-label">% tiến độ sản phẩm</label>
