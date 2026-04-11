@@ -1,5 +1,5 @@
-import { getClassRoster, listActiveClasses, submitStudentReport } from '../../services/public-api.service.js';
-import { isToday } from '../../utils/date.js';
+import { getClassRoster, getLatestStudentReport, listActiveClasses, submitStudentReport } from '../../services/public-api.service.js';
+import { formatDateTime, isToday } from '../../utils/date.js';
 import { attachHiddenAdminShortcut } from '../../utils/admin-shortcut.js';
 import { getLockedReportClassCode } from '../../utils/route.js';
 import { validateReportForm } from '../../utils/validators.js';
@@ -24,6 +24,23 @@ function getFormDefaults(student) {
     progressPercent: student?.currentProgressPercent ?? '',
     stage: student?.currentStage ?? '',
     status: student?.currentStatus ?? '',
+  };
+}
+
+function getFormValues(student, latestReport) {
+  const defaults = getFormDefaults(student);
+
+  if (!latestReport) {
+    return defaults;
+  }
+
+  return {
+    doneToday: latestReport.doneToday ?? '',
+    nextGoal: latestReport.nextGoal ?? '',
+    difficulties: latestReport.difficulties ?? '',
+    progressPercent: latestReport.progressPercent ?? defaults.progressPercent,
+    stage: latestReport.stage ?? defaults.stage,
+    status: latestReport.status ?? defaults.status,
   };
 }
 
@@ -101,19 +118,53 @@ export const studentReportPage = {
     let selectedStudentId = '';
     let lockedClass = null;
     let lockedClassError = '';
+    let latestReport = null;
+    let latestReportStatus = 'idle';
+    let latestReportRequestId = 0;
 
     function getSelectedStudent() {
       return students.find((student) => student.studentId === selectedStudentId) || null;
     }
 
+    function resetLatestReportState() {
+      latestReport = null;
+      latestReportStatus = 'idle';
+      latestReportRequestId += 1;
+    }
+
+    function getReportHelperText(selectedStudent) {
+      if (!selectedStudent) {
+        return '';
+      }
+
+      if (latestReportStatus === 'error') {
+        return 'Không tải được báo cáo gần nhất, bạn vẫn có thể nhập mới.';
+      }
+
+      if (latestReport) {
+        return `Đang nạp từ báo cáo gần nhất lúc ${formatDateTime(latestReport.submittedAt)}.`;
+      }
+
+      return 'Bạn chưa có báo cáo trước đó, hãy nhập mới.';
+    }
+
     function renderSelections() {
+      const selectedStudent = getSelectedStudent();
+
       classSlot.innerHTML = lockedClassCode
         ? renderLockedClassField(lockedClass || { classCode: selectedClassCode || lockedClassCode, className: '' })
         : renderClassSelect(classes, selectedClassCode);
       studentSlot.innerHTML = renderStudentSelect(students, selectedStudentId);
-      summarySlot.innerHTML = renderProjectSummary(getSelectedStudent());
-      formSlot.innerHTML = renderReportForm(getFormDefaults(getSelectedStudent()), {
-        disabled: !getSelectedStudent(),
+      summarySlot.innerHTML = renderProjectSummary(selectedStudent);
+
+      if (selectedStudent && latestReportStatus === 'loading') {
+        formSlot.innerHTML = renderLoadingOverlay('Đang tải báo cáo gần nhất...');
+        return;
+      }
+
+      formSlot.innerHTML = renderReportForm(getFormValues(selectedStudent, latestReport), {
+        disabled: !selectedStudent,
+        helperText: getReportHelperText(selectedStudent),
       });
     }
 
@@ -151,7 +202,60 @@ export const studentReportPage = {
       pageAlert.innerHTML = '';
     }
 
+    async function loadLatestReportForSelection() {
+      const selectedStudent = getSelectedStudent();
+
+      if (!selectedClassCode || !selectedStudent) {
+        resetLatestReportState();
+        renderSelections();
+        renderPageAlertState();
+        return;
+      }
+
+      const requestId = latestReportRequestId + 1;
+      const requestClassCode = selectedClassCode;
+      const requestStudentId = selectedStudent.studentId;
+
+      latestReportRequestId = requestId;
+      latestReport = null;
+      latestReportStatus = 'loading';
+      renderSelections();
+      renderPageAlertState();
+
+      try {
+        const report = await getLatestStudentReport(requestClassCode, requestStudentId);
+
+        if (
+          latestReportRequestId !== requestId ||
+          selectedClassCode !== requestClassCode ||
+          selectedStudentId !== requestStudentId
+        ) {
+          return;
+        }
+
+        latestReport = report;
+        latestReportStatus = 'ready';
+        renderSelections();
+        renderPageAlertState();
+      } catch (error) {
+        if (
+          latestReportRequestId !== requestId ||
+          selectedClassCode !== requestClassCode ||
+          selectedStudentId !== requestStudentId
+        ) {
+          return;
+        }
+
+        latestReport = null;
+        latestReportStatus = 'error';
+        renderSelections();
+        renderPageAlertState();
+      }
+    }
+
     async function loadRoster() {
+      resetLatestReportState();
+
       if (!selectedClassCode) {
         students = [];
         selectedStudentId = '';
@@ -167,6 +271,10 @@ export const studentReportPage = {
 
         if (!students.some((student) => student.studentId === selectedStudentId)) {
           selectedStudentId = '';
+        }
+
+        if (selectedStudentId) {
+          latestReportStatus = 'loading';
         }
 
         renderSelections();
@@ -228,14 +336,13 @@ export const studentReportPage = {
       await loadRoster();
     });
 
-    studentSlot.addEventListener('change', (event) => {
+    studentSlot.addEventListener('change', async (event) => {
       if (event.target.id !== 'student-name-select') {
         return;
       }
 
       selectedStudentId = event.target.value;
-      renderSelections();
-      renderPageAlertState();
+      await loadLatestReportForSelection();
     });
 
     formSlot.addEventListener('submit', async (event) => {
@@ -282,8 +389,7 @@ export const studentReportPage = {
         });
 
         await loadRoster();
-        renderSelections();
-        renderPageAlertState();
+        await loadLatestReportForSelection();
       } catch (error) {
         alertSlot.innerHTML = renderAlert(getErrorMessage(error, 'Không thể gửi báo cáo lúc này.'), 'danger');
       } finally {

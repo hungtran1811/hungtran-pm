@@ -2,16 +2,18 @@ import { STAGES } from '../../constants/stages.js';
 import { STATUSES } from '../../constants/statuses.js';
 import { escapeHtml, optionList } from '../../utils/html.js';
 
-export function renderReportForm(values = {}, { disabled = false } = {}) {
+export function renderReportForm(values = {}, { disabled = false, helperText = '' } = {}) {
   const disabledAttr = disabled ? 'disabled' : '';
   const disabledHint = disabled
     ? '<p class="text-secondary small mb-3">Chọn đúng lớp và đúng tên của bạn trước khi gửi báo cáo.</p>'
     : '';
+  const helperMarkup = helperText ? `<p class="text-secondary small mb-3">${escapeHtml(helperText)}</p>` : '';
 
   return `
     <form id="student-report-form" class="card border-0 shadow-sm">
       <div class="card-body">
         <div id="student-report-alert"></div>
+        ${helperMarkup}
         ${disabledHint}
         <div class="row g-3">
           <div class="col-12 col-lg-6">

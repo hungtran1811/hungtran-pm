@@ -47,6 +47,20 @@ function buildStudentRosterItem(doc) {
   };
 }
 
+function buildLatestStudentReportItem(doc) {
+  const data = doc.data();
+
+  return {
+    doneToday: data.doneToday ?? '',
+    nextGoal: data.nextGoal ?? '',
+    difficulties: data.difficulties ?? '',
+    progressPercent: data.progressPercent ?? 0,
+    stage: data.stage ?? 'Ý tưởng',
+    status: data.status ?? 'Chưa bắt đầu',
+    submittedAt: data.submittedAt?.toDate ? data.submittedAt.toDate().toISOString() : null,
+  };
+}
+
 async function getValidatedActiveClass(classCode) {
   const classRef = db.collection('classes').doc(classCode);
   const classSnap = await classRef.get();
@@ -105,6 +119,80 @@ exports.getClassRoster = onCall({ region: REGION, cors: true }, async (request) 
     students: studentsSnap.docs
       .map(buildStudentRosterItem)
       .sort((left, right) => left.fullName.localeCompare(right.fullName, 'vi')),
+  };
+});
+
+exports.getLatestStudentReport = onCall({ region: REGION, cors: true }, async (request) => {
+  const classCode = String(request.data?.classCode ?? '').trim().toUpperCase();
+  const studentId = String(request.data?.studentId ?? '').trim();
+
+  if (!classCode) {
+    throw new HttpsError('invalid-argument', 'classCode là bắt buộc.');
+  }
+
+  if (!studentId) {
+    throw new HttpsError('invalid-argument', 'studentId là bắt buộc.');
+  }
+
+  await getValidatedActiveClass(classCode);
+
+  const studentRef = db.collection('students').doc(studentId);
+  const studentSnap = await studentRef.get();
+
+  if (!studentSnap.exists) {
+    throw new HttpsError('not-found', 'Không tìm thấy học sinh.');
+  }
+
+  const studentData = studentSnap.data();
+
+  if (!studentData.active || studentData.classId !== classCode) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Học sinh hiện không thuộc lớp được chọn hoặc đã bị khóa.',
+    );
+  }
+
+  const latestReportId = String(studentData.latestReportId ?? '').trim();
+
+  if (!latestReportId) {
+    return {
+      latestReport: null,
+    };
+  }
+
+  const latestReportRef = db.collection('reports').doc(latestReportId);
+  const latestReportSnap = await latestReportRef.get();
+
+  if (!latestReportSnap.exists) {
+    logger.warn('Latest report reference is missing', {
+      classCode,
+      studentId,
+      latestReportId,
+    });
+
+    return {
+      latestReport: null,
+    };
+  }
+
+  const latestReportData = latestReportSnap.data();
+
+  if (latestReportData.studentId !== studentId || latestReportData.classCode !== classCode) {
+    logger.warn('Latest report reference does not match student or class', {
+      classCode,
+      studentId,
+      latestReportId,
+      reportStudentId: latestReportData.studentId ?? '',
+      reportClassCode: latestReportData.classCode ?? '',
+    });
+
+    return {
+      latestReport: null,
+    };
+  }
+
+  return {
+    latestReport: buildLatestStudentReportItem(latestReportSnap),
   };
 });
 

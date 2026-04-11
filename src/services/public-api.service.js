@@ -55,6 +55,22 @@ function mapRosterStudent(snapshot) {
   };
 }
 
+function mapLatestStudentReport(data) {
+  if (!data) {
+    return null;
+  }
+
+  return {
+    doneToday: data.doneToday ?? '',
+    nextGoal: data.nextGoal ?? '',
+    difficulties: data.difficulties ?? '',
+    progressPercent: Number(data.progressPercent ?? 0),
+    stage: data.stage ?? 'Ý tưởng',
+    status: data.status ?? 'Chưa bắt đầu',
+    submittedAt: data.submittedAt ?? null,
+  };
+}
+
 async function listActiveClassesFromFirestore() {
   const { db } = getFirebaseServices();
   const classesQuery = query(collection(db, 'classes'), where('status', '==', 'active'), where('hidden', '==', false));
@@ -206,6 +222,19 @@ export async function getClassRoster(classCode) {
     }
 
     throw toAppError(error, 'Không tải được danh sách học sinh của lớp này.');
+  }
+}
+
+export async function getLatestStudentReport(classCode, studentId) {
+  try {
+    const response = await callable('getLatestStudentReport')({
+      classCode: normalizeClassCode(classCode),
+      studentId: normalizeText(studentId),
+    });
+
+    return mapLatestStudentReport(response.data?.latestReport ?? null);
+  } catch (error) {
+    throw toAppError(error, 'Không tải được báo cáo gần nhất của học sinh này.');
   }
 }
 
