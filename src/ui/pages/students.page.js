@@ -15,8 +15,52 @@ import { renderStatusBadge } from '../components/StatusBadge.js';
 import { renderStudentFormModal } from '../components/StudentFormModal.js';
 import { showToast } from '../components/ToastStack.js';
 
-function renderStudentFilters({ filters, classes }) {
+function isOperationalClass(classItem) {
+  return classItem?.status === 'active' && !classItem?.hidden;
+}
+
+function isArchivedStudentClass(classItem) {
+  return !isOperationalClass(classItem);
+}
+
+function renderStudentLifecycleBadge(student, classItem) {
+  if (classItem?.status === 'completed' || classItem?.status === 'archived') {
+    return '<span class="badge text-bg-primary">Đã hoàn thành khóa</span>';
+  }
+
+  if (!student.active) {
+    return '<span class="badge text-bg-secondary">Đang tắt</span>';
+  }
+
+  if (classItem?.hidden) {
+    return '<span class="badge bg-dark-subtle text-dark">Đang ẩn</span>';
+  }
+
+  return '<span class="badge text-bg-success">Đang hoạt động</span>';
+}
+
+function renderStudentFilters({ filters, classes, isArchiveView }) {
   return `
+    <div class="d-flex flex-wrap justify-content-end align-items-center gap-3 mb-3">
+      <div class="btn-group" role="group" aria-label="Chế độ học sinh">
+        <button
+          type="button"
+          class="btn ${isArchiveView ? 'btn-outline-secondary' : 'btn-primary'}"
+          data-action="set-student-scope"
+          data-scope="active"
+        >
+          Đang theo dõi
+        </button>
+        <button
+          type="button"
+          class="btn ${isArchiveView ? 'btn-primary' : 'btn-outline-secondary'}"
+          data-action="set-student-scope"
+          data-scope="archive"
+        >
+          Lưu trữ
+        </button>
+      </div>
+    </div>
     <div class="card border-0 shadow-sm mb-4">
       <div class="card-body">
         <div class="row g-3 align-items-end">
@@ -53,7 +97,7 @@ function renderStudentFilters({ filters, classes }) {
   `;
 }
 
-function renderStudentsTable(students) {
+function renderStudentsTable(students, classMap) {
   if (students.length === 0) {
     return renderEmptyState({
       icon: 'people',
@@ -63,8 +107,10 @@ function renderStudentsTable(students) {
   }
 
   const rows = students
-    .map(
-      (student) => `
+    .map((student) => {
+      const classItem = classMap.get(student.classId) || null;
+
+      return `
         <tr>
           <td>
             <div class="fw-semibold">${escapeHtml(student.fullName)}</div>
@@ -75,13 +121,13 @@ function renderStudentsTable(students) {
           <td>${renderStatusBadge(student.currentStatus)}</td>
           <td>${renderStageBadge(student.currentStage)}</td>
           <td>${escapeHtml(formatDateTime(student.lastReportedAt))}</td>
-          <td>${student.active ? '<span class="badge text-bg-success">Đang hoạt động</span>' : '<span class="badge text-bg-secondary">Đang tắt</span>'}</td>
+          <td>${renderStudentLifecycleBadge(student, classItem)}</td>
           <td class="text-end">
             <button class="btn btn-sm btn-outline-primary" data-action="edit-student" data-student-id="${escapeHtml(student.id)}">Sửa</button>
           </td>
         </tr>
-      `,
-    )
+      `;
+    })
     .join('');
 
   return `
@@ -141,13 +187,24 @@ export const studentsPage = {
     let students = [];
     let currentStudent = null;
     let filters = {
+      viewScope: 'active',
       classFilter: '',
       activityFilter: '',
       statusFilter: '',
     };
 
-    function getFilteredStudents() {
-      return students.filter((student) => {
+    function getScopedClasses(viewScope) {
+      return classes.filter(viewScope === 'archive' ? isArchivedStudentClass : isOperationalClass);
+    }
+
+    function getScopedStudents(viewScope) {
+      const allowedClassCodes = new Set(getScopedClasses(viewScope).map((item) => item.classCode));
+
+      return students.filter((student) => allowedClassCodes.has(student.classId));
+    }
+
+    function getFilteredStudents(viewScope) {
+      return getScopedStudents(viewScope).filter((student) => {
         const byClass = !filters.classFilter || student.classId === filters.classFilter;
         const byActivity =
           !filters.activityFilter ||
@@ -159,9 +216,25 @@ export const studentsPage = {
       });
     }
 
+    function getModalClasses(student = null) {
+      const operationalClasses = getScopedClasses('active');
+
+      if (!student?.classId) {
+        return operationalClasses;
+      }
+
+      const currentClass = classes.find((item) => item.classCode === student.classId);
+
+      if (!currentClass || operationalClasses.some((item) => item.classCode === currentClass.classCode)) {
+        return operationalClasses;
+      }
+
+      return [...operationalClasses, currentClass].sort((left, right) => left.className.localeCompare(right.className, 'vi'));
+    }
+
     function openModal(student = null) {
       currentStudent = student;
-      modalSlot.innerHTML = renderStudentFormModal(classes, student || {});
+      modalSlot.innerHTML = renderStudentFormModal(getModalClasses(student), student || {});
       const modalEl = document.getElementById('student-form-modal');
       const modal = new window.bootstrap.Modal(modalEl);
       const form = document.getElementById('student-form');
@@ -215,15 +288,26 @@ export const studentsPage = {
     }
 
     function renderView() {
-      filterSlot.innerHTML = renderStudentFilters({ filters, classes });
-      tableSlot.innerHTML = renderStudentsTable(getFilteredStudents());
+      const availableClasses = getScopedClasses(filters.viewScope);
+      const isArchiveView = filters.viewScope === 'archive';
+      const classMap = new Map(classes.map((item) => [item.classCode, item]));
+
+      if (filters.classFilter && !availableClasses.some((item) => item.classCode === filters.classFilter)) {
+        filters = {
+          ...filters,
+          classFilter: '',
+        };
+      }
+
+      filterSlot.innerHTML = renderStudentFilters({ filters, classes: availableClasses, isArchiveView });
+      tableSlot.innerHTML = renderStudentsTable(getFilteredStudents(filters.viewScope), classMap);
     }
 
     createButton.addEventListener('click', () => {
-      if (classes.length === 0) {
+      if (getScopedClasses('active').length === 0) {
         showToast({
           title: 'Cần tạo lớp trước',
-          message: 'Hãy tạo ít nhất một lớp trước khi thêm học sinh.',
+          message: 'Hãy tạo ít nhất một lớp đang vận hành trước khi thêm học sinh.',
           variant: 'warning',
         });
         return;
@@ -245,13 +329,28 @@ export const studentsPage = {
     });
 
     filterSlot.addEventListener('click', (event) => {
-      const button = event.target.closest('[data-action="reset-student-filters"]');
+      const button = event.target.closest('[data-action]');
 
       if (!button) {
         return;
       }
 
+      if (button.dataset.action === 'set-student-scope') {
+        filters = {
+          ...filters,
+          viewScope: button.dataset.scope === 'archive' ? 'archive' : 'active',
+          classFilter: '',
+        };
+        renderView();
+        return;
+      }
+
+      if (button.dataset.action !== 'reset-student-filters') {
+        return;
+      }
+
       filters = {
+        viewScope: filters.viewScope,
         classFilter: '',
         activityFilter: '',
         statusFilter: '',

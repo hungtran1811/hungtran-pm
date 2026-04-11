@@ -20,6 +20,51 @@ function normalizeHash(hash) {
   return `#/${hash.replace(/^#+/, '')}`;
 }
 
+function splitHashRoute(hash = '') {
+  const normalizedHash = normalizeHash(hash);
+
+  if (!normalizedHash) {
+    return {
+      path: '',
+      search: '',
+    };
+  }
+
+  const rawRoute = normalizedHash.slice(1);
+  const questionMarkIndex = rawRoute.indexOf('?');
+
+  if (questionMarkIndex === -1) {
+    return {
+      path: rawRoute,
+      search: '',
+    };
+  }
+
+  return {
+    path: rawRoute.slice(0, questionMarkIndex),
+    search: rawRoute.slice(questionMarkIndex),
+  };
+}
+
+export function getHashRouteState(hash = window.location.hash) {
+  const { path, search } = splitHashRoute(hash);
+  const reportPathMatch = path.match(/^\/student\/report\/([^/?#]+)\/?$/i);
+
+  if (reportPathMatch) {
+    return {
+      path: '/student/report',
+      classCode: normalizeClassCode(reportPathMatch[1]),
+    };
+  }
+
+  const params = new URLSearchParams(search);
+
+  return {
+    path,
+    classCode: normalizeClassCode(params.get('classCode')),
+  };
+}
+
 function buildSearchWithClassCode(search = '', classCode = '') {
   const params = new URLSearchParams(search);
 
@@ -55,6 +100,12 @@ export function getLockedReportClassCode(search = window.location.search, pathna
 
   if (publicReportMatch) {
     return normalizeClassCode(publicReportMatch[1]);
+  }
+
+  const hashRouteState = getHashRouteState();
+
+  if (hashRouteState.classCode) {
+    return hashRouteState.classCode;
   }
 
   const params = new URLSearchParams(search);

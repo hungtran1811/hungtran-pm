@@ -26,21 +26,6 @@ function normalizeText(value) {
   return String(value ?? '').trim();
 }
 
-function shouldUseFirestoreFallback(error) {
-  const code = String(error?.code ?? '').trim().toLowerCase();
-  const message = String(error?.message ?? '').trim().toLowerCase();
-
-  return (
-    code === 'internal' ||
-    code === 'unavailable' ||
-    code.startsWith('functions/') ||
-    message === 'internal' ||
-    message.includes('404') ||
-    message.includes('not found') ||
-    message.includes('failed to fetch')
-  );
-}
-
 function mapRosterStudent(snapshot) {
   const data = snapshot.data();
 
@@ -49,25 +34,10 @@ function mapRosterStudent(snapshot) {
     fullName: data.fullName ?? '',
     projectName: data.projectName ?? '',
     lastReportedAt: data.lastReportedAt ?? null,
+    latestReportId: data.latestReportId ?? '',
     currentProgressPercent: Number(data.currentProgressPercent ?? 0),
     currentStage: data.currentStage ?? 'Ý tưởng',
     currentStatus: data.currentStatus ?? 'Chưa bắt đầu',
-  };
-}
-
-function mapLatestStudentReport(data) {
-  if (!data) {
-    return null;
-  }
-
-  return {
-    doneToday: data.doneToday ?? '',
-    nextGoal: data.nextGoal ?? '',
-    difficulties: data.difficulties ?? '',
-    progressPercent: Number(data.progressPercent ?? 0),
-    stage: data.stage ?? 'Ý tưởng',
-    status: data.status ?? 'Chưa bắt đầu',
-    submittedAt: data.submittedAt ?? null,
   };
 }
 
@@ -193,64 +163,39 @@ async function submitStudentReportViaFirestore(payload) {
 
 export async function listActiveClasses() {
   try {
-    const response = await callable('listActiveClasses')({});
-    return response.data.classes ?? [];
-  } catch (error) {
-    if (shouldUseFirestoreFallback(error)) {
-      try {
-        return await listActiveClassesFromFirestore();
-      } catch (fallbackError) {
-        throw toAppError(fallbackError, 'Không tải được danh sách lớp đang mở.');
-      }
+    return await listActiveClassesFromFirestore();
+  } catch (directError) {
+    try {
+      const response = await callable('listActiveClasses')({});
+      return response.data.classes ?? [];
+    } catch {
+      throw toAppError(directError, 'Không tải được danh sách lớp đang mở.');
     }
-
-    throw toAppError(error, 'Không tải được danh sách lớp đang mở.');
   }
 }
 
 export async function getClassRoster(classCode) {
   try {
-    const response = await callable('getClassRoster')({ classCode });
-    return response.data.students ?? [];
-  } catch (error) {
-    if (shouldUseFirestoreFallback(error)) {
-      try {
-        return await getClassRosterFromFirestore(classCode);
-      } catch (fallbackError) {
-        throw toAppError(fallbackError, 'Không tải được danh sách học sinh của lớp này.');
-      }
+    return await getClassRosterFromFirestore(classCode);
+  } catch (directError) {
+    try {
+      const response = await callable('getClassRoster')({ classCode });
+      return response.data.students ?? [];
+    } catch {
+      throw toAppError(directError, 'Không tải được danh sách học sinh của lớp này.');
     }
-
-    throw toAppError(error, 'Không tải được danh sách học sinh của lớp này.');
-  }
-}
-
-export async function getLatestStudentReport(classCode, studentId) {
-  try {
-    const response = await callable('getLatestStudentReport')({
-      classCode: normalizeClassCode(classCode),
-      studentId: normalizeText(studentId),
-    });
-
-    return mapLatestStudentReport(response.data?.latestReport ?? null);
-  } catch (error) {
-    throw toAppError(error, 'Không tải được báo cáo gần nhất của học sinh này.');
   }
 }
 
 export async function submitStudentReport(payload) {
   try {
-    const response = await callable('submitStudentReport')(payload);
-    return response.data;
-  } catch (error) {
-    if (shouldUseFirestoreFallback(error)) {
-      try {
-        return await submitStudentReportViaFirestore(payload);
-      } catch (fallbackError) {
-        throw toAppError(fallbackError, 'Không thể gửi báo cáo lúc này.');
-      }
+    return await submitStudentReportViaFirestore(payload);
+  } catch (directError) {
+    try {
+      const response = await callable('submitStudentReport')(payload);
+      return response.data;
+    } catch {
+      throw toAppError(directError, 'Không thể gửi báo cáo lúc này.');
     }
-
-    throw toAppError(error, 'Không thể gửi báo cáo lúc này.');
   }
 }

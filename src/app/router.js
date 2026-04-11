@@ -4,11 +4,10 @@ import { adminLoginPage } from '../ui/pages/admin-login.page.js';
 import { classesPage } from '../ui/pages/classes.page.js';
 import { forbiddenPage } from '../ui/pages/forbidden.page.js';
 import { notFoundPage } from '../ui/pages/not-found.page.js';
-import { parentPreviewPage } from '../ui/pages/parent-preview.page.js';
 import { reportsPage } from '../ui/pages/reports.page.js';
 import { studentReportPage } from '../ui/pages/student-report.page.js';
 import { studentsPage } from '../ui/pages/students.page.js';
-import { DEFAULT_HASH_ROUTE } from '../utils/route.js';
+import { DEFAULT_HASH_ROUTE, getHashRouteState } from '../utils/route.js';
 
 const ROUTES = {
   '/student/report': { page: studentReportPage },
@@ -17,14 +16,13 @@ const ROUTES = {
   '/admin/classes': { page: classesPage, requiresAdmin: true },
   '/admin/students': { page: studentsPage, requiresAdmin: true },
   '/admin/reports': { page: reportsPage, requiresAdmin: true },
-  '/admin/parent-preview': { page: parentPreviewPage, requiresAdmin: true },
   '/403': { page: forbiddenPage },
   '/404': { page: notFoundPage },
 };
 
 function normalizePath() {
-  const hash = window.location.hash || DEFAULT_HASH_ROUTE;
-  const path = hash.replace(/^#/, '');
+  const hashState = window.location.hash ? getHashRouteState(window.location.hash) : null;
+  const path = hashState?.path || DEFAULT_HASH_ROUTE.replace(/^#/, '');
   return ROUTES[path] ? path : '/404';
 }
 

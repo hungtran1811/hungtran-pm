@@ -1,11 +1,11 @@
-import { CLASS_STATUS_BADGES, CLASS_STATUS_LABELS, CLASS_STATUSES } from '../../constants/class-statuses.js';
-import { createClass, subscribeClasses, updateClass } from '../../services/classes.service.js';
+import { CLASS_STATUS_BADGES, CLASS_STATUS_LABELS } from '../../constants/class-statuses.js';
+import { completeClass, createClass, subscribeClasses, updateClass } from '../../services/classes.service.js';
 import { subscribeStudents } from '../../services/students.service.js';
 import { getAuthState } from '../../state/auth.store.js';
 import { getClassCompletionStats } from '../../utils/class-completion.js';
 import { formatDate } from '../../utils/date.js';
 import { mapFirebaseError } from '../../utils/firebase-error.js';
-import { escapeHtml, optionList } from '../../utils/html.js';
+import { escapeHtml } from '../../utils/html.js';
 import { validateClassForm } from '../../utils/validators.js';
 import { renderAlert } from '../components/Alert.js';
 import { renderAppShell } from '../components/AppShell.js';
@@ -19,13 +19,6 @@ function renderClassFilters(filters) {
     <div class="card border-0 shadow-sm mb-4">
       <div class="card-body">
         <div class="row g-3 align-items-end">
-          <div class="col-12 col-md-4">
-            <label class="form-label">Trạng thái</label>
-            <select class="form-select" name="statusFilter">
-              <option value="">Tất cả trạng thái</option>
-              ${optionList(CLASS_STATUSES, (item) => item, (item) => CLASS_STATUS_LABELS[item], filters.statusFilter)}
-            </select>
-          </div>
           <div class="col-12 col-md-4">
             <label class="form-label">Hiển thị</label>
             <select class="form-select" name="visibilityFilter">
@@ -60,6 +53,18 @@ function renderClassActions(classItem, completion) {
             : 'Lớp này chưa đủ điều kiện, nhưng admin vẫn có thể chốt thủ công'
         }"
       >Hoàn thành lớp</button>`,
+    );
+  }
+
+  if (classItem.status === 'completed') {
+    actions.push(
+      `<button class="btn btn-sm btn-outline-dark" data-action="archive-class" data-class-id="${escapeHtml(classItem.id)}">Lưu trữ</button>`,
+    );
+  }
+
+  if (classItem.status === 'archived') {
+    actions.push(
+      `<button class="btn btn-sm btn-outline-success" data-action="restore-class" data-class-id="${escapeHtml(classItem.id)}">Khôi phục</button>`,
     );
   }
 
@@ -149,6 +154,18 @@ function renderClassesTable(classes, completionMap) {
   `;
 }
 
+function renderClassSection({ title, classes, completionMap }) {
+  return `
+    <section class="mb-4">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h3 class="h5 mb-0">${escapeHtml(title)}</h3>
+        <span class="badge text-bg-light text-dark border">${classes.length} lớp</span>
+      </div>
+      ${renderClassesTable(classes, completionMap)}
+    </section>
+  `;
+}
+
 export const classesPage = {
   title: 'Quản lý lớp',
   async render() {
@@ -185,7 +202,6 @@ export const classesPage = {
     let students = [];
     let editingClass = null;
     let filters = {
-      statusFilter: '',
       visibilityFilter: '',
     };
 
@@ -196,16 +212,20 @@ export const classesPage = {
       }, {});
     }
 
-    function getFilteredClasses() {
-      return classes.filter((classItem) => {
-        const byStatus = !filters.statusFilter || classItem.status === filters.statusFilter;
-        const byVisibility =
-          !filters.visibilityFilter ||
-          (filters.visibilityFilter === 'hidden' && classItem.hidden) ||
-          (filters.visibilityFilter === 'visible' && !classItem.hidden);
+    function matchesVisibilityFilter(classItem) {
+      return (
+        !filters.visibilityFilter ||
+        (filters.visibilityFilter === 'hidden' && classItem.hidden) ||
+        (filters.visibilityFilter === 'visible' && !classItem.hidden)
+      );
+    }
 
-        return byStatus && byVisibility;
-      });
+    function getOperationalClasses() {
+      return classes.filter((classItem) => classItem.status === 'active' && matchesVisibilityFilter(classItem));
+    }
+
+    function getArchivedClasses() {
+      return classes.filter((classItem) => classItem.status !== 'active' && matchesVisibilityFilter(classItem));
     }
 
     function fillForm(values = {}, isEditing = false) {
@@ -221,8 +241,23 @@ export const classesPage = {
     }
 
     function renderView() {
+      const completionMap = getCompletionMap();
+      const operationalClasses = getOperationalClasses();
+      const archivedClasses = getArchivedClasses();
+
       filterSlot.innerHTML = renderClassFilters(filters);
-      tableSlot.innerHTML = renderClassesTable(getFilteredClasses(), getCompletionMap());
+      tableSlot.innerHTML = `
+        ${renderClassSection({
+          title: 'Lớp đang vận hành',
+          classes: operationalClasses,
+          completionMap,
+        })}
+        ${renderClassSection({
+          title: 'Kho lưu trữ lớp',
+          classes: archivedClasses,
+          completionMap,
+        })}
+      `;
     }
 
     async function saveClassQuick(classItem, overrides, successTitle, successMessage, errorMessage) {
@@ -262,7 +297,6 @@ export const classesPage = {
       }
 
       filters = {
-        ...filters,
         [event.target.name]: event.target.value,
       };
       renderView();
@@ -276,7 +310,6 @@ export const classesPage = {
       }
 
       filters = {
-        statusFilter: '',
         visibilityFilter: '',
       };
       renderView();
@@ -315,12 +348,45 @@ export const classesPage = {
           }
         }
 
+        completeClass(classItem.id)
+          .then(({ updatedStudentCount }) => {
+            showToast({
+              title: 'Đã hoàn thành lớp',
+              message:
+                updatedStudentCount > 0
+                  ? `Lớp ${classItem.classCode} đã được chốt 100% hoàn thành cho ${updatedStudentCount} học sinh.`
+                  : `Lớp ${classItem.classCode} đã được đánh dấu hoàn thành.`,
+              variant: 'success',
+            });
+          })
+          .catch((error) => {
+            showToast({
+              title: 'Không thể cập nhật',
+              message: mapFirebaseError(error, 'Không thể đánh dấu hoàn thành cho lớp này.'),
+              variant: 'danger',
+            });
+          });
+        return;
+      }
+
+      if (button.dataset.action === 'archive-class') {
         saveClassQuick(
           classItem,
-          { status: 'completed' },
-          'Đã cập nhật lớp',
-          `Lớp ${classItem.classCode} đã được đánh dấu hoàn thành.`,
-          'Không thể đánh dấu hoàn thành cho lớp này.',
+          { status: 'archived' },
+          'Đã chuyển vào lưu trữ',
+          `Lớp ${classItem.classCode} đã được chuyển vào kho lưu trữ.`,
+          'Không thể lưu trữ lớp này lúc này.',
+        );
+        return;
+      }
+
+      if (button.dataset.action === 'restore-class') {
+        saveClassQuick(
+          classItem,
+          { status: 'active' },
+          'Đã khôi phục lớp',
+          `Lớp ${classItem.classCode} đã quay lại danh sách vận hành.`,
+          'Không thể khôi phục lớp này lúc này.',
         );
         return;
       }
@@ -332,7 +398,7 @@ export const classesPage = {
           'Đã cập nhật hiển thị',
           classItem.hidden
             ? `Lớp ${classItem.classCode} đã được hiển thị lại.`
-            : `Lớp ${classItem.classCode} đã được ẩn khỏi danh sách chính.`,
+            : `Lớp ${classItem.classCode} đã được ẩn khỏi luồng báo cáo chính.`,
           'Không thể đổi trạng thái hiển thị của lớp này.',
         );
       }

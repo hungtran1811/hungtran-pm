@@ -5,7 +5,6 @@ const NAV_ITEMS = [
   { href: '#/admin/classes', label: 'Quản lý lớp', icon: 'collection' },
   { href: '#/admin/students', label: 'Quản lý học sinh', icon: 'people' },
   { href: '#/admin/reports', label: 'Báo cáo', icon: 'file-earmark-text' },
-  { href: '#/admin/parent-preview', label: 'Preview phụ huynh', icon: 'phone' },
 ];
 
 export function renderSidebar(currentRoute) {

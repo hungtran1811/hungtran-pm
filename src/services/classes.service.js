@@ -9,10 +9,16 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
+  writeBatch,
 } from 'firebase/firestore';
+import { STAGES } from '../constants/stages.js';
 import { getFirebaseServices } from '../config/firebase.js';
 import { toClassModel } from '../models/class.model.js';
 import { toAppError } from '../utils/firebase-error.js';
+
+const CLASS_COMPLETION_BATCH_SIZE = 450;
+const COMPLETED_CLASS_STAGE = STAGES[STAGES.length - 1] || 'Thuyết trình / Nộp sản phẩm';
 
 function sortClasses(items) {
   return [...items].sort((left, right) => left.className.localeCompare(right.className, 'vi'));
@@ -81,5 +87,57 @@ export async function updateClass(classId, values) {
     });
   } catch (error) {
     throw toAppError(error, 'Không thể cập nhật lớp lúc này.');
+  }
+}
+
+export async function completeClass(classId) {
+  const { db } = getFirebaseServices();
+  const classRef = doc(db, 'classes', classId);
+
+  try {
+    const [classSnapshot, studentsSnapshot] = await Promise.all([
+      getDoc(classRef),
+      getDocs(query(collection(db, 'students'), where('classId', '==', classId))),
+    ]);
+
+    if (!classSnapshot.exists()) {
+      throw new Error('Không tìm thấy lớp cần cập nhật.');
+    }
+
+    const activeStudents = studentsSnapshot.docs;
+    const totalBatches = Math.max(1, Math.ceil(activeStudents.length / CLASS_COMPLETION_BATCH_SIZE));
+
+    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex += 1) {
+      const batch = writeBatch(db);
+
+      if (batchIndex === 0) {
+        batch.update(classRef, {
+          status: 'completed',
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      const batchStudents = activeStudents.slice(
+        batchIndex * CLASS_COMPLETION_BATCH_SIZE,
+        (batchIndex + 1) * CLASS_COMPLETION_BATCH_SIZE,
+      );
+
+      batchStudents.forEach((studentDoc) => {
+        batch.update(studentDoc.ref, {
+          currentProgressPercent: 100,
+          currentStage: COMPLETED_CLASS_STAGE,
+          currentStatus: 'Hoàn thành',
+          updatedAt: serverTimestamp(),
+        });
+      });
+
+      await batch.commit();
+    }
+
+    return {
+      updatedStudentCount: activeStudents.length,
+    };
+  } catch (error) {
+    throw toAppError(error, 'Không thể hoàn thành lớp lúc này.');
   }
 }

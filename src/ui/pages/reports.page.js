@@ -17,6 +17,14 @@ import { renderStageBadge } from '../components/StageBadge.js';
 import { renderStatusBadge } from '../components/StatusBadge.js';
 import { showToast } from '../components/ToastStack.js';
 
+function isReportableClass(classItem) {
+  return classItem?.status === 'active' && !classItem?.hidden;
+}
+
+function isArchivedReportClass(classItem) {
+  return !isReportableClass(classItem);
+}
+
 function getLatestReportsByStudent(reports) {
   const latestByStudent = new Map();
 
@@ -217,6 +225,7 @@ export const reportsPage = {
     const tableSlot = document.getElementById('reports-table-slot');
     const historySlot = document.getElementById('reports-history-slot');
     const filterStore = createFilterStore({
+      viewScope: 'active',
       classId: '',
       studentId: '',
       status: '',
@@ -233,11 +242,47 @@ export const reportsPage = {
       selectedStudentName: '',
     };
 
-    function getFilteredReports() {
-      const filters = filterStore.getState();
-      const latestReports = getLatestReportsByStudent(state.reports);
+    function getScopedClasses(viewScope) {
+      return state.classes.filter(viewScope === 'archive' ? isArchivedReportClass : isReportableClass);
+    }
 
-      return latestReports.filter((report) => {
+    function getScopedStudents(viewScope, classId = '') {
+      const allowedClassCodes = new Set(getScopedClasses(viewScope).map((item) => item.classCode));
+
+      return state.students.filter(
+        (student) => student.active && allowedClassCodes.has(student.classId) && (!classId || student.classId === classId),
+      );
+    }
+
+    function getScopedReports(viewScope) {
+      const allowedClassCodes = new Set(getScopedClasses(viewScope).map((item) => item.classCode));
+
+      return state.reports.filter((report) => allowedClassCodes.has(report.classCode || report.classId));
+    }
+
+    function getReportsContext() {
+      const filters = filterStore.getState();
+      const availableClasses = getScopedClasses(filters.viewScope);
+      const nextFilters = {};
+
+      if (filters.classId && !availableClasses.some((item) => item.classCode === filters.classId)) {
+        nextFilters.classId = '';
+      }
+
+      const effectiveClassId = nextFilters.classId ?? filters.classId;
+      const availableStudents = getScopedStudents(filters.viewScope, effectiveClassId);
+
+      if (filters.studentId && !availableStudents.some((student) => student.id === filters.studentId)) {
+        nextFilters.studentId = '';
+      }
+
+      if (Object.keys(nextFilters).length > 0) {
+        filterStore.set(nextFilters);
+        return null;
+      }
+
+      const latestReports = getLatestReportsByStudent(getScopedReports(filters.viewScope));
+      const filteredReports = latestReports.filter((report) => {
         const reportDateKey = toDateKey(report.submittedAt);
         const byClass = !filters.classId || report.classId === filters.classId;
         const byStudent = !filters.studentId || report.studentId === filters.studentId;
@@ -247,12 +292,26 @@ export const reportsPage = {
         const byTo = !filters.dateTo || reportDateKey <= filters.dateTo;
         return byClass && byStudent && byStatus && byStage && byFrom && byTo;
       });
+
+      return {
+        filters,
+        availableClasses,
+        availableStudents,
+        filteredReports,
+      };
     }
 
     function renderView() {
-      const filters = filterStore.getState();
-      const filteredReports = getFilteredReports();
-      const selectedClass = state.classes.find((item) => item.classCode === filters.classId) || null;
+      const context = getReportsContext();
+
+      if (!context) {
+        return;
+      }
+
+      const { filters, availableClasses, availableStudents, filteredReports } = context;
+      const selectedClass = availableClasses.find((item) => item.classCode === filters.classId) || null;
+      const isArchiveView = filters.viewScope === 'archive';
+      const scopeLabel = isArchiveView ? 'Kho lưu trữ báo cáo' : 'Báo cáo đang theo dõi';
 
       if (state.selectedStudentId && !filteredReports.some((report) => report.studentId === state.selectedStudentId)) {
         state.selectedStudentId = '';
@@ -262,20 +321,43 @@ export const reportsPage = {
 
       filterSlot.innerHTML = `
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3 reports-toolbar">
-          <p class="text-secondary small mb-0">Bấm vào tên học sinh để copy nhanh báo cáo mới nhất.</p>
-          <button
-            type="button"
-            class="btn btn-outline-primary"
-            data-action="copy-class-report"
-            ${selectedClass ? '' : 'disabled'}
-          >
-            <i class="bi bi-clipboard-check me-2"></i>Copy báo cáo lớp
-          </button>
+          <div class="d-flex flex-wrap gap-2 ms-auto">
+            <div class="btn-group" role="group" aria-label="Chế độ báo cáo">
+              <button
+                type="button"
+                class="btn ${isArchiveView ? 'btn-outline-secondary' : 'btn-primary'}"
+                data-action="set-report-scope"
+                data-scope="active"
+              >
+                Đang theo dõi
+              </button>
+              <button
+                type="button"
+                class="btn ${isArchiveView ? 'btn-primary' : 'btn-outline-secondary'}"
+                data-action="set-report-scope"
+                data-scope="archive"
+              >
+                Lưu trữ
+              </button>
+            </div>
+            <button
+              type="button"
+              class="btn btn-outline-primary"
+              data-action="copy-class-report"
+              ${selectedClass ? '' : 'disabled'}
+            >
+              <i class="bi bi-clipboard-check me-2"></i>Copy báo cáo lớp
+            </button>
+          </div>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h3 class="h6 mb-0">${scopeLabel}</h3>
+          <span class="badge text-bg-light text-dark border">${filteredReports.length} báo cáo</span>
         </div>
         ${renderFilterBar({
           id: 'reports-filter-form',
-          classes: state.classes,
-          students: state.students.filter((student) => !filters.classId || student.classId === filters.classId),
+          classes: availableClasses,
+          students: availableStudents,
           values: filters,
           showStudent: true,
           showDateRange: true,
@@ -290,8 +372,10 @@ export const reportsPage = {
             })
           : renderEmptyState({
               icon: 'file-earmark-text',
-              title: 'Không có báo cáo phù hợp',
-              description: 'Hãy điều chỉnh bộ lọc hoặc chờ học sinh gửi thêm báo cáo mới.',
+              title: isArchiveView ? 'Kho lưu trữ chưa có báo cáo phù hợp' : 'Không có báo cáo phù hợp',
+              description: isArchiveView
+                ? 'Hãy điều chỉnh bộ lọc lưu trữ hoặc đánh dấu hoàn thành/lưu trữ lớp khi cần.'
+                : 'Hãy điều chỉnh bộ lọc hoặc chờ học sinh gửi thêm báo cáo mới.',
             });
 
       historySlot.innerHTML = renderDetailPanel(state.history, state.selectedStudentName);
@@ -312,6 +396,14 @@ export const reportsPage = {
         return;
       }
 
+      if (event.target.name === 'classId') {
+        filterStore.set({
+          classId: event.target.value,
+          studentId: '',
+        });
+        return;
+      }
+
       filterStore.set({ [event.target.name]: event.target.value });
     });
 
@@ -322,8 +414,19 @@ export const reportsPage = {
         return;
       }
 
+      if (button.dataset.action === 'set-report-scope') {
+        filterStore.set({
+          viewScope: button.dataset.scope === 'archive' ? 'archive' : 'active',
+          classId: '',
+          studentId: '',
+        });
+        return;
+      }
+
       if (button.dataset.action === 'reset-filters') {
+        const currentScope = filterStore.getState().viewScope;
         filterStore.reset();
+        filterStore.set({ viewScope: currentScope });
         return;
       }
 
