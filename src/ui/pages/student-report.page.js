@@ -410,9 +410,13 @@ export const studentReportPage = {
       }
     });
 
+    const openAdminLogin = () => {
+      window.location.assign('/#/admin/login');
+    };
+
     const cleanupShortcut = attachHiddenAdminShortcut({
       brandElement: brandTrigger,
-      onTrigger: () => navigate('/admin/login'),
+      onTrigger: openAdminLogin,
     });
 
     renderSelections();

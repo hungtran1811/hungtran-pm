@@ -1,4 +1,5 @@
 import { getStudentLibraryView } from '../../services/curriculum.service.js';
+import { attachHiddenAdminShortcut } from '../../utils/admin-shortcut.js';
 import {
   buildPublicLibraryPath,
   buildPublicReportPath,
@@ -68,6 +69,7 @@ export const studentLibraryPage = {
             <div class="student-library-page">
               <div class="student-library-page__brand">
                 ${renderBrandLogo({
+                  id: 'student-library-brand-trigger',
                   className: 'student-library-page__brand-lockup',
                   tone: 'dark',
                   compact: true,
@@ -82,6 +84,7 @@ export const studentLibraryPage = {
   },
   async mount() {
     const slot = document.getElementById('student-library-slot');
+    const brandTrigger = document.getElementById('student-library-brand-trigger');
     const routeState = getStudentLibraryRouteState();
     const lockedClassCode = routeState.classCode;
 
@@ -135,6 +138,13 @@ export const studentLibraryPage = {
       renderView();
     }
 
+    const cleanupShortcut = attachHiddenAdminShortcut({
+      brandElement: brandTrigger,
+      onTrigger: () => {
+        window.location.assign('/#/admin/login');
+      },
+    });
+
     slot.addEventListener('click', (event) => {
       const lessonButton = event.target.closest('[data-action="select-library-lesson"]');
       const imageButton = event.target.closest('[data-action="select-library-image"]');
@@ -178,7 +188,9 @@ export const studentLibraryPage = {
       isLoading = false;
       error = 'Link học liệu không hợp lệ hoặc thiếu mã lớp.';
       renderView();
-      return null;
+      return () => {
+        cleanupShortcut?.();
+      };
     }
 
     try {
@@ -196,6 +208,8 @@ export const studentLibraryPage = {
       renderView();
     }
 
-    return null;
+    return () => {
+      cleanupShortcut?.();
+    };
   },
 };

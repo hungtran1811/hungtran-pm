@@ -30,6 +30,13 @@ const ROUTES = {
 };
 
 function normalizePath() {
+  const hashState = window.location.hash ? getHashRouteState(window.location.hash) : null;
+  const hashPath = hashState?.path || '';
+
+  if (ROUTES[hashPath] && !['/student/report', '/student/library'].includes(hashPath)) {
+    return hashPath;
+  }
+
   if (getPublicReportPathMatch(window.location.pathname)) {
     return '/student/report';
   }
@@ -38,8 +45,7 @@ function normalizePath() {
     return '/student/library';
   }
 
-  const hashState = window.location.hash ? getHashRouteState(window.location.hash) : null;
-  const path = hashState?.path || DEFAULT_HASH_ROUTE.replace(/^#/, '');
+  const path = hashPath || DEFAULT_HASH_ROUTE.replace(/^#/, '');
   return ROUTES[path] ? path : '/404';
 }
 

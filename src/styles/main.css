@@ -138,7 +138,11 @@ body {
 .student-brand-lockup {
   padding: 0.35rem 0.15rem 0.35rem 0;
   min-height: 4.5rem;
-  cursor: pointer;
+  cursor: default;
+}
+
+.student-library-page__brand-lockup {
+  cursor: default;
 }
 
 .sidebar-brand-lockup .brand-lockup__title,
