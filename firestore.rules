@@ -157,6 +157,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /curriculumPrograms/{programId} {
+      allow read: if isAdmin() || resource.data.active == true;
+      allow write: if isAdmin();
+    }
+
     match /students/{studentId} {
       allow read: if isAdmin() || resource.data.active == true;
       allow create: if isAdmin();

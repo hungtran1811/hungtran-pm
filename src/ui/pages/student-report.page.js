@@ -1,6 +1,7 @@
+import { getClassCurriculumView } from '../../services/curriculum.service.js';
 import { getClassRoster, listActiveClasses, submitStudentReport } from '../../services/public-api.service.js';
-import { isToday } from '../../utils/date.js';
 import { attachHiddenAdminShortcut } from '../../utils/admin-shortcut.js';
+import { isToday } from '../../utils/date.js';
 import { getLockedReportClassCode } from '../../utils/route.js';
 import { validateReportForm } from '../../utils/validators.js';
 import { renderAlert } from '../components/Alert.js';
@@ -9,6 +10,7 @@ import { renderClassSelect } from '../components/ClassSelect.js';
 import { renderLoadingOverlay } from '../components/LoadingOverlay.js';
 import { renderProjectSummary } from '../components/ProjectSummary.js';
 import { renderReportForm } from '../components/ReportForm.js';
+import { renderStudentLibraryCta } from '../components/StudentLibraryCta.js';
 import { renderStudentSelect } from '../components/StudentSelect.js';
 import { renderToastStack, showToast } from '../components/ToastStack.js';
 
@@ -40,30 +42,76 @@ function renderLockedClassField(classInfo) {
   `;
 }
 
+function shouldShowProgressForm(curriculumPreview) {
+  if (!curriculumPreview?.program || !curriculumPreview?.assignment) {
+    return true;
+  }
+
+  return curriculumPreview.assignment.curriculumPhase === 'final' && curriculumPreview.program.finalMode === 'project';
+}
+
+function renderReportAvailabilityNotice(curriculumPreview) {
+  if (!curriculumPreview?.program || !curriculumPreview?.assignment) {
+    return '';
+  }
+
+  if (curriculumPreview.assignment.curriculumPhase !== 'final') {
+    return renderAlert(
+      'Form báo cáo tiến độ sản phẩm sẽ mở khi lớp chuyển sang giai đoạn làm sản phẩm cuối khóa.',
+      'info',
+    );
+  }
+
+  if (curriculumPreview.program.finalMode !== 'project') {
+    return renderAlert(
+      'Lớp này đang ở giai đoạn ôn kiểm tra cuối khóa, nên không dùng form báo cáo tiến độ sản phẩm.',
+      'info',
+    );
+  }
+
+  return '';
+}
+
+function renderCurriculumSlot(curriculumPreview, selectedClassInfo, curriculumLoading, curriculumError) {
+  if (!selectedClassInfo?.classCode) {
+    return '';
+  }
+
+  if (curriculumLoading) {
+    return renderLoadingOverlay('Đang tải học liệu...');
+  }
+
+  if (curriculumError) {
+    return renderAlert(curriculumError, 'warning');
+  }
+
+  return renderStudentLibraryCta(curriculumPreview, selectedClassInfo, curriculumLoading, curriculumError);
+}
+
 export const studentReportPage = {
   title: 'Gửi báo cáo tiến độ',
   async render() {
     return `
       <div class="student-layout">
         <section class="student-hero">
-          <div class="container py-5">
+          <div class="container-fluid student-page-shell py-4 py-lg-5">
             <div class="row justify-content-center">
-              <div class="col-12 col-xl-10">
+              <div class="col-12">
                 <div class="student-hero-card shadow-lg border-0">
                   <div class="row g-0">
-                    <div class="col-12 col-lg-5 student-hero-panel">
+                    <div class="col-12 col-lg-4 col-xl-3 student-hero-panel">
                       ${renderBrandLogo({
                         id: 'student-brand-trigger',
                         className: 'student-brand-lockup mb-4',
                         tone: 'light',
-                        compact: false,
+                        compact: true,
                       })}
-                      <h1 class="display-6 fw-semibold mb-3">Báo cáo tiến độ sản phẩm học sinh</h1>
-                      <p class="mb-0 text-white-50">
-                        Chọn đúng tên của mình và điền thật rõ để giáo viên nắm tiến độ và hỗ trợ bạn nhanh hơn.
+                      <h1 class="student-hero-title fw-semibold mb-3">Báo cáo tiến độ sản phẩm</h1>
+                      <p class="student-hero-copy mb-0 text-white-50">
+                        Chọn đúng tên của mình và điền thật rõ để giáo viên nắm tiến độ, hỗ trợ bạn nhanh hơn và để phần học liệu có thêm nhiều không gian xem lại.
                       </p>
                     </div>
-                    <div class="col-12 col-lg-7 p-4 p-lg-5 bg-white">
+                    <div class="col-12 col-lg-8 col-xl-9 p-4 p-xl-5 bg-white student-main-panel">
                       <div id="student-page-alert"></div>
                       <div class="row g-3 mb-3">
                         <div class="col-12 col-md-6">
@@ -74,6 +122,7 @@ export const studentReportPage = {
                         </div>
                       </div>
                       <div id="project-summary-slot" class="mb-3">${renderProjectSummary(null)}</div>
+                      <div id="curriculum-review-slot" class="mb-3"></div>
                       <div id="student-report-form-slot">${renderReportForm({}, { disabled: true })}</div>
                     </div>
                   </div>
@@ -91,6 +140,7 @@ export const studentReportPage = {
     const classSlot = document.getElementById('class-select-slot');
     const studentSlot = document.getElementById('student-select-slot');
     const summarySlot = document.getElementById('project-summary-slot');
+    const reviewSlot = document.getElementById('curriculum-review-slot');
     const formSlot = document.getElementById('student-report-form-slot');
     const brandTrigger = document.getElementById('student-brand-trigger');
     const lockedClassCode = getLockedReportClassCode();
@@ -101,9 +151,21 @@ export const studentReportPage = {
     let selectedStudentId = '';
     let lockedClass = null;
     let lockedClassError = '';
+    let rosterError = '';
+    let curriculumPreview = null;
+    let curriculumLoading = false;
+    let curriculumError = '';
 
     function getSelectedStudent() {
       return students.find((student) => student.studentId === selectedStudentId) || null;
+    }
+
+    function getSelectedClassInfo() {
+      return (
+        classes.find((classItem) => classItem.classCode === selectedClassCode) ||
+        lockedClass ||
+        (selectedClassCode ? { classCode: selectedClassCode, className: '' } : null)
+      );
     }
 
     function getReportHelperText(selectedStudent) {
@@ -120,21 +182,36 @@ export const studentReportPage = {
 
     function renderSelections() {
       const selectedStudent = getSelectedStudent();
+      const selectedClassInfo = getSelectedClassInfo();
+      const canShowReportForm = shouldShowProgressForm(curriculumPreview);
 
       classSlot.innerHTML = lockedClassCode
         ? renderLockedClassField(lockedClass || { classCode: selectedClassCode || lockedClassCode, className: '' })
         : renderClassSelect(classes, selectedClassCode);
       studentSlot.innerHTML = renderStudentSelect(students, selectedStudentId);
       summarySlot.innerHTML = renderProjectSummary(selectedStudent);
-      formSlot.innerHTML = renderReportForm(getFormDefaults(selectedStudent), {
-        disabled: !selectedStudent,
-        helperText: getReportHelperText(selectedStudent),
-      });
+      reviewSlot.innerHTML = renderCurriculumSlot(
+        curriculumPreview,
+        selectedClassInfo,
+        curriculumLoading,
+        curriculumError,
+      );
+      formSlot.innerHTML = canShowReportForm
+        ? renderReportForm(getFormDefaults(selectedStudent), {
+            disabled: !selectedStudent,
+            helperText: getReportHelperText(selectedStudent),
+          })
+        : renderReportAvailabilityNotice(curriculumPreview);
     }
 
     function renderPageAlertState() {
       if (lockedClassError) {
         pageAlert.innerHTML = renderAlert(lockedClassError, 'danger');
+        return;
+      }
+
+      if (rosterError) {
+        pageAlert.innerHTML = renderAlert(rosterError, 'danger');
         return;
       }
 
@@ -166,39 +243,64 @@ export const studentReportPage = {
       pageAlert.innerHTML = '';
     }
 
-    async function loadRoster() {
+    async function loadClassContext() {
       if (!selectedClassCode) {
         students = [];
         selectedStudentId = '';
+        curriculumPreview = null;
+        curriculumLoading = false;
+        curriculumError = '';
+        rosterError = '';
         renderSelections();
         renderPageAlertState();
         return;
       }
 
-      try {
-        lockedClassError = '';
-        studentSlot.innerHTML = renderLoadingOverlay('Đang tải danh sách học sinh...');
-        students = await getClassRoster(selectedClassCode);
+      studentSlot.innerHTML = renderLoadingOverlay('Đang tải danh sách học sinh...');
+      reviewSlot.innerHTML = renderLoadingOverlay('Đang tải học liệu...');
+      curriculumLoading = true;
+      curriculumError = '';
+      rosterError = '';
+
+      const [rosterResult, curriculumResult] = await Promise.allSettled([
+        getClassRoster(selectedClassCode),
+        getClassCurriculumView(selectedClassCode),
+      ]);
+
+      if (rosterResult.status === 'fulfilled') {
+        students = rosterResult.value;
 
         if (!students.some((student) => student.studentId === selectedStudentId)) {
           selectedStudentId = '';
         }
-
-        renderSelections();
-        renderPageAlertState();
-      } catch (error) {
+      } else {
         students = [];
         selectedStudentId = '';
-        renderSelections();
 
         if (lockedClassCode) {
-          lockedClassError = getErrorMessage(error, 'Link lớp này hiện không thể sử dụng để gửi báo cáo.');
-          renderPageAlertState();
-          return;
+          lockedClassError = getErrorMessage(
+            rosterResult.reason,
+            'Link lớp này hiện không thể sử dụng để gửi báo cáo.',
+          );
+        } else {
+          rosterError = getErrorMessage(rosterResult.reason, 'Không tải được danh sách học sinh.');
         }
-
-        pageAlert.innerHTML = renderAlert(getErrorMessage(error, 'Không tải được danh sách học sinh.'), 'danger');
       }
+
+      if (curriculumResult.status === 'fulfilled') {
+        curriculumPreview = curriculumResult.value;
+        curriculumError = '';
+      } else {
+        curriculumPreview = null;
+        curriculumError = getErrorMessage(
+          curriculumResult.reason,
+          'Không tải được phần học liệu của lớp này.',
+        );
+      }
+
+      curriculumLoading = false;
+      renderSelections();
+      renderPageAlertState();
     }
 
     async function loadClasses() {
@@ -216,7 +318,7 @@ export const studentReportPage = {
             return;
           }
 
-          await loadRoster();
+          await loadClassContext();
           return;
         }
 
@@ -240,10 +342,11 @@ export const studentReportPage = {
 
       selectedClassCode = event.target.value;
       selectedStudentId = '';
-      await loadRoster();
+      lockedClassError = '';
+      await loadClassContext();
     });
 
-    studentSlot.addEventListener('change', async (event) => {
+    studentSlot.addEventListener('change', (event) => {
       if (event.target.id !== 'student-name-select') {
         return;
       }
@@ -296,7 +399,7 @@ export const studentReportPage = {
           variant: 'success',
         });
 
-        await loadRoster();
+        await loadClassContext();
         renderSelections();
         renderPageAlertState();
       } catch (error) {

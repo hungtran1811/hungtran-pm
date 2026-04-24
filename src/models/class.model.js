@@ -12,6 +12,9 @@ export function toClassModel(snapshot) {
     startDate: data.startDate ?? '',
     endDate: data.endDate ?? '',
     studentCount: Number(data.studentCount ?? 0),
+    curriculumProgramId: data.curriculumProgramId ?? '',
+    curriculumCurrentSession: Number(data.curriculumCurrentSession ?? 1),
+    curriculumPhase: data.curriculumPhase === 'final' ? 'final' : 'learning',
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt),
   };
@@ -25,5 +28,8 @@ export function getClassDefaults() {
     hidden: false,
     startDate: '',
     endDate: '',
+    curriculumProgramId: '',
+    curriculumCurrentSession: 1,
+    curriculumPhase: 'learning',
   };
 }

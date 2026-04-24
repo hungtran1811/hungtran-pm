@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "install:functions": "npm install --prefix functions",
-    "seed:demo": "node scripts/seed-demo.js"
+    "seed:demo": "node scripts/seed-demo.js",
+    "seed:curriculum": "node scripts/seed-curriculum.js",
+    "migrate:curriculum:v2": "node scripts/migrate-curriculum-v2.js"
   },
   "dependencies": {
     "bootstrap": "^5.3.8",

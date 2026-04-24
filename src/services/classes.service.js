@@ -61,6 +61,9 @@ export async function createClass(values) {
     startDate: values.startDate || '',
     endDate: values.endDate || '',
     studentCount: Number(values.studentCount ?? 0),
+    curriculumProgramId: String(values.curriculumProgramId ?? '').trim(),
+    curriculumCurrentSession: Number(values.curriculumCurrentSession ?? 1),
+    curriculumPhase: values.curriculumPhase === 'final' ? 'final' : 'learning',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };

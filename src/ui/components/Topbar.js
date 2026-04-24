@@ -1,4 +1,3 @@
-import { renderBrandLogo } from './BrandLogo.js';
 import { escapeHtml } from '../../utils/html.js';
 
 export function renderTopbar({ title, subtitle, user }) {
@@ -10,12 +9,7 @@ export function renderTopbar({ title, subtitle, user }) {
   return `
     <header class="topbar border-bottom bg-white">
       <div class="container-fluid py-3 d-flex flex-column flex-lg-row gap-3 align-items-lg-center justify-content-between">
-        <div class="d-flex align-items-start gap-3">
-          ${renderBrandLogo({
-            className: 'topbar-brand-lockup',
-            tone: 'dark',
-            compact: true,
-          })}
+        <div class="d-flex align-items-start">
           <div>
             <h1 class="h3 mb-1">${escapeHtml(title)}</h1>
             ${subtitleMarkup}
