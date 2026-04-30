@@ -1,4 +1,4 @@
-import {
+﻿import {
   getClassCurriculumView,
   getCurriculumProgram,
   getCurriculumProgramGroups,
@@ -18,6 +18,7 @@ import { mapFirebaseError } from '../../utils/firebase-error.js';
 import { escapeHtml } from '../../utils/html.js';
 import { clampCurriculumSession } from '../../utils/curriculum.js';
 import { buildPublicLibraryPath } from '../../utils/route.js';
+import { buildLegacyLessonMarkdown, renderLessonMarkdownHtml } from '../../utils/lesson-markdown.js';
 import {
   createCurriculumItemId,
   getActiveCurriculumChecklist,
@@ -158,12 +159,15 @@ function getNewLessonDraft(program) {
     id: '',
     sessionNumber: getSuggestedLessonSession(program),
     title: '',
+    contentMarkdown: '',
     summary: '',
     keyPoints: [],
     practiceTask: '',
     selfStudyPrompt: '',
     reviewLinks: [],
     teacherNote: '',
+    bannerImage: null,
+    images: [],
   };
 }
 
@@ -780,6 +784,27 @@ function getLessonImagesV3(lessonDraft) {
   return [];
 }
 
+function getLessonBannerImageV3(lessonDraft) {
+  if (lessonDraft?.bannerImage?.secureUrl) {
+    return lessonDraft.bannerImage;
+  }
+
+  if (lessonDraft?.coverImage?.secureUrl) {
+    return {
+      ...lessonDraft.coverImage,
+      id: lessonDraft.coverImage.id || `${lessonDraft.id || 'lesson'}-banner`,
+      order: 1,
+    };
+  }
+
+  const firstImage = getLessonImagesV3(lessonDraft)[0] || null;
+  return firstImage ? { ...firstImage, id: firstImage.id || `${lessonDraft.id || 'lesson'}-banner` } : null;
+}
+
+function getLessonMarkdownDraftV3(lessonDraft) {
+  return String(lessonDraft?.contentMarkdown || '').trim() || buildLegacyLessonMarkdown(lessonDraft);
+}
+
 function getLessonReviewLinksV3(lessonDraft) {
   if (!Array.isArray(lessonDraft?.reviewLinks)) {
     return [];
@@ -898,6 +923,130 @@ function renderLessonImagesFieldV3(lessonDraft, cloudinaryReady) {
   `;
 }
 
+function renderLessonBannerPreviewV3(image = null) {
+  if (!image?.secureUrl) {
+    return `
+      <div class="curriculum-image-upload__empty">
+        Chưa có banner cho buổi học này.
+      </div>
+    `;
+  }
+
+  return `
+    <div class="curriculum-image-upload__preview-card">
+      <img
+        src="${escapeHtml(image.secureUrl)}"
+        alt="${escapeHtml(image.alt || 'Banner buổi học')}"
+        class="curriculum-image-upload__preview-image"
+        loading="lazy"
+      >
+    </div>
+  `;
+}
+
+function renderLessonBannerFieldV3(lessonDraft, cloudinaryReady) {
+  const bannerImage = getLessonBannerImageV3(lessonDraft);
+
+  return `
+    <div class="col-12">
+      <label class="form-label">Banner buổi học</label>
+      <input
+        type="hidden"
+        name="lessonBannerJson"
+        value="${escapeHtml(JSON.stringify(bannerImage || null))}"
+      >
+      <div class="curriculum-image-upload">
+        <div id="curriculum-lesson-banner-preview" class="curriculum-image-upload__preview">
+          ${renderLessonBannerPreviewV3(bannerImage)}
+        </div>
+        <div class="curriculum-image-upload__actions">
+          <input
+            id="curriculum-lesson-banner-input"
+            class="d-none"
+            type="file"
+            accept="image/*"
+            name="bannerImageFile"
+          >
+          <button
+            type="button"
+            class="btn btn-outline-secondary btn-sm"
+            data-action="pick-banner-image"
+            ${cloudinaryReady ? '' : 'disabled'}
+          >
+            <i class="bi bi-card-image me-2"></i>${cloudinaryReady ? 'Tải banner' : 'Cloudinary chưa sẵn sàng'}
+          </button>
+          ${
+            bannerImage?.secureUrl
+              ? `
+                <button
+                  type="button"
+                  class="btn btn-outline-danger btn-sm"
+                  data-action="remove-banner-image"
+                >
+                  <i class="bi bi-trash me-2"></i>Xóa banner
+                </button>
+              `
+              : ''
+          }
+        </div>
+        <div class="small text-secondary mt-2">
+          ${cloudinaryReady ? 'Banner sẽ hiện ở đầu bài học cho học sinh xem cùng nội dung lesson.' : 'Thêm VITE_CLOUDINARY_CLOUD_NAME và VITE_CLOUDINARY_UPLOAD_PRESET để bật upload ảnh.'}
+        </div>
+      </div>
+    </div>
+    <div class="col-12">
+      <label class="form-label">Mô tả banner</label>
+      <input
+        class="form-control"
+        data-role="banner-image-alt"
+        value="${escapeHtml(bannerImage?.alt || '')}"
+        placeholder="Ví dụ: Banner minh họa giao diện trò chơi hoặc kết quả buổi học"
+      >
+    </div>
+  `;
+}
+
+function renderLessonMarkdownFieldV3(lessonDraft) {
+  const markdown = getLessonMarkdownDraftV3(lessonDraft);
+  const previewHtml = renderLessonMarkdownHtml({
+    ...lessonDraft,
+    contentMarkdown: markdown,
+  });
+
+  return `
+    <div class="col-12">
+      <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+        <label class="form-label mb-0">Nội dung markdown</label>
+        <div class="d-flex flex-wrap gap-2">
+          <input
+            id="curriculum-lesson-markdown-input"
+            class="d-none"
+            type="file"
+            accept=".md,.markdown,.txt,text/markdown,text/plain"
+            name="lessonMarkdownFile"
+          >
+          <button type="button" class="btn btn-outline-secondary btn-sm" data-action="pick-markdown-file">
+            <i class="bi bi-file-earmark-arrow-up me-2"></i>Upload file .md
+          </button>
+        </div>
+      </div>
+      <textarea
+        class="form-control font-monospace"
+        name="contentMarkdown"
+        rows="14"
+        placeholder="# Tiêu đề bài học&#10;&#10;Viết hoặc dán nội dung markdown tóm tắt để học sinh xem lại."
+      >${escapeHtml(markdown)}</textarea>
+      <div class="form-text">Bạn có thể upload file markdown rồi chỉnh lại trực tiếp trong ô này trước khi lưu.</div>
+    </div>
+    <div class="col-12">
+      <label class="form-label">Xem trước nội dung</label>
+      <div id="curriculum-markdown-preview" class="curriculum-markdown-preview student-library-markdown">
+        ${previewHtml || '<div class="student-library-markdown-empty">Chưa có nội dung markdown để xem trước.</div>'}
+      </div>
+    </div>
+  `;
+}
+
 function renderReviewLinkRowsV3(reviewLinks = []) {
   if (!Array.isArray(reviewLinks) || reviewLinks.length === 0) {
     return `
@@ -1002,22 +1151,26 @@ function renderLessonFormV3(program, lessonDraft, busyKey, cloudinaryReady) {
           <input class="form-control" name="title" value="${escapeHtml(lessonDraft?.title || '')}" placeholder="Ví dụ: Hoàn thiện bố cục trang chủ">
         </div>
         <div class="col-12">
-          <label class="form-label">Tóm tắt</label>
-          <textarea class="form-control" name="summary" rows="3" placeholder="Tóm tắt ngắn gọn nội dung chính của buổi học">${escapeHtml(lessonDraft?.summary || '')}</textarea>
+          <div class="curriculum-editor-subsection">
+            <div class="curriculum-editor-subsection__title">Nội dung markdown</div>
+            <div class="curriculum-editor-subsection__hint">Upload file markdown tóm tắt hoặc dán nội dung trước khi lưu.</div>
+          </div>
+        </div>
+        ${renderLessonMarkdownFieldV3(lessonDraft)}
+        <div class="col-12">
+          <div class="curriculum-editor-subsection">
+            <div class="curriculum-editor-subsection__title">Banner buổi học</div>
+            <div class="curriculum-editor-subsection__hint">Banner sẽ hiện ở đầu bài học để học sinh xem cùng nội dung.</div>
+          </div>
+        </div>
+        ${renderLessonBannerFieldV3(lessonDraft, cloudinaryReady)}
+        <div class="col-12">
+          <div class="curriculum-editor-subsection">
+            <div class="curriculum-editor-subsection__title">Ảnh minh họa thêm</div>
+            <div class="curriculum-editor-subsection__hint">Các ảnh này sẽ hiện dưới banner theo dạng thumbnail để học sinh chuyển qua lại.</div>
+          </div>
         </div>
         ${renderLessonImagesFieldV3(lessonDraft, cloudinaryReady)}
-        <div class="col-12">
-          <label class="form-label">Ý chính cần nhớ</label>
-          <textarea class="form-control" name="keyPoints" rows="4" placeholder="Mỗi dòng là một ý chính">${escapeHtml(joinLines(lessonDraft?.keyPoints || []))}</textarea>
-        </div>
-        <div class="col-12">
-          <label class="form-label">Bài toán gợi ý</label>
-          <textarea class="form-control" name="practiceTask" rows="3" placeholder="Ví dụ: Hãy tìm cách để người dùng thêm sản phẩm mới và chỉnh sửa được thông tin sản phẩm đã tạo.">${escapeHtml(lessonDraft?.practiceTask || '')}</textarea>
-        </div>
-        <div class="col-12">
-          <label class="form-label">Tự tìm hiểu thêm</label>
-          <textarea class="form-control" name="selfStudyPrompt" rows="3" placeholder="Ví dụ: Tìm thêm cách làm form đăng nhập, từ khóa validation form, hoặc xem mẫu giao diện quản lý sản phẩm đơn giản.">${escapeHtml(lessonDraft?.selfStudyPrompt || '')}</textarea>
-        </div>
         ${renderLessonReviewLinksFieldV3(lessonDraft)}
         <div class="col-12">
           <label class="form-label">Ghi chú cho giáo viên</label>
@@ -1139,6 +1292,111 @@ function setLessonImagesFormStateV3(form, images = []) {
   if (previewElement) {
     previewElement.innerHTML = renderLessonImageItemsV3(nextImages);
   }
+}
+
+function getLessonBannerFromFormV3(form) {
+  const jsonInput = form.querySelector('input[name="lessonBannerJson"]');
+
+  if (!jsonInput?.value) {
+    return null;
+  }
+
+  try {
+    const image = JSON.parse(jsonInput.value);
+    return image?.secureUrl ? image : null;
+  } catch {
+    return null;
+  }
+}
+
+function setLessonBannerFormStateV3(form, bannerImage = null) {
+  if (!form) {
+    return;
+  }
+
+  const jsonInput = form.querySelector('input[name="lessonBannerJson"]');
+  const previewElement = form.querySelector('#curriculum-lesson-banner-preview');
+  const altInput = form.querySelector('[data-role="banner-image-alt"]');
+  const actionsElement = form.querySelector('#curriculum-lesson-banner-preview')?.closest('.curriculum-image-upload')?.querySelector('.curriculum-image-upload__actions');
+  const existingRemoveButton = actionsElement?.querySelector('[data-action="remove-banner-image"]');
+
+  if (jsonInput) {
+    jsonInput.value = bannerImage ? JSON.stringify(bannerImage) : '';
+  }
+
+  if (altInput) {
+    altInput.value = bannerImage?.alt || '';
+  }
+
+  if (previewElement) {
+    previewElement.innerHTML = renderLessonBannerPreviewV3(bannerImage);
+  }
+
+  if (!actionsElement) {
+    return;
+  }
+
+  if (bannerImage?.secureUrl) {
+    if (!existingRemoveButton) {
+      actionsElement.insertAdjacentHTML(
+        'beforeend',
+        `
+          <button
+            type="button"
+            class="btn btn-outline-danger btn-sm"
+            data-action="remove-banner-image"
+          >
+            <i class="bi bi-trash me-2"></i>Xóa banner
+          </button>
+        `,
+      );
+    }
+
+    return;
+  }
+
+  existingRemoveButton?.remove();
+}
+
+function syncBannerImageAltFormStateV3(input) {
+  const form = input.closest('form');
+
+  if (!form) {
+    return;
+  }
+
+  const bannerImage = getLessonBannerFromFormV3(form);
+
+  if (!bannerImage) {
+    return;
+  }
+
+  setLessonBannerFormStateV3(form, {
+    ...bannerImage,
+    alt: input.value,
+  });
+}
+
+function syncLessonMarkdownPreviewV3(form) {
+  if (!form) {
+    return;
+  }
+
+  const previewElement = form.querySelector('#curriculum-markdown-preview');
+  const markdownInput = form.querySelector('textarea[name="contentMarkdown"]');
+  const titleInput = form.querySelector('input[name="title"]');
+
+  if (!previewElement || !markdownInput) {
+    return;
+  }
+
+  const html = renderLessonMarkdownHtml({
+    title: titleInput?.value || '',
+    contentMarkdown: markdownInput.value,
+  });
+
+  previewElement.innerHTML =
+    html || '<div class="student-library-markdown-empty">Chưa có nội dung markdown để xem trước.</div>';
 }
 
 function syncLessonImageAltFormStateV3(input) {
@@ -2839,6 +3097,41 @@ export const curriculumDemoPage = {
         return;
       }
 
+            if (button.dataset.action === 'pick-markdown-file') {
+        const form = button.closest('form');
+        const fileInput = form?.querySelector('input[name="lessonMarkdownFile"]');
+        fileInput?.click();
+        return;
+      }
+
+      if (button.dataset.action === 'pick-banner-image') {
+        const form = button.closest('form');
+        const fileInput = form?.querySelector('input[name="bannerImageFile"]');
+
+        if (!isCloudinaryConfigured()) {
+          showToast({
+            title: 'Cloudinary chưa sẵn sàng',
+            message: 'Hãy cấu hình VITE_CLOUDINARY_CLOUD_NAME và VITE_CLOUDINARY_UPLOAD_PRESET trước khi tải banner.',
+            variant: 'warning',
+          });
+          return;
+        }
+
+        fileInput?.click();
+        return;
+      }
+
+      if (button.dataset.action === 'remove-banner-image') {
+        const form = button.closest('form');
+        setLessonBannerFormStateV3(form, null);
+        showToast({
+          title: 'Đã xóa banner',
+          message: 'Banner sẽ được gỡ khỏi buổi học sau khi bạn bấm lưu.',
+          variant: 'success',
+        });
+        return;
+      }
+
       if (button.dataset.action === 'pick-lesson-image') {
         const form = button.closest('form');
         const fileInput = form?.querySelector('input[name="coverImageFile"]');
@@ -2870,7 +3163,6 @@ export const curriculumDemoPage = {
         });
         return;
       }
-
       if (button.dataset.action === 'add-review-link-row') {
         const form = button.closest('form');
         const list = form?.querySelector('#curriculum-review-links-list');
@@ -3209,16 +3501,14 @@ export const curriculumDemoPage = {
 
         try {
           const images = getLessonImagesFromFormV3(form);
-          await saveCurriculumLesson(selectedProgram.id, {
+                    await saveCurriculumLesson(selectedProgram.id, {
             id: lessonId,
             sessionNumber: Number(formData.get('sessionNumber')),
             title: formData.get('title'),
-            summary: formData.get('summary'),
-            keyPoints: splitLines(formData.get('keyPoints')),
-            practiceTask: formData.get('practiceTask'),
-            selfStudyPrompt: formData.get('selfStudyPrompt'),
+            contentMarkdown: formData.get('contentMarkdown'),
             reviewLinks: getReviewLinksFromFormV3(form),
             teacherNote: formData.get('teacherNote'),
+            bannerImage: getLessonBannerFromFormV3(form),
             images,
             coverImage: images[0] || null,
           });
@@ -3321,8 +3611,102 @@ export const curriculumDemoPage = {
     root.addEventListener('change', async (event) => {
       const target = event.target;
 
-      if (target.dataset.role === 'lesson-image-alt') {
+            if (target.dataset.role === 'lesson-image-alt') {
         syncLessonImageAltFormStateV3(target);
+        return;
+      }
+
+      if (target.dataset.role === 'banner-image-alt') {
+        syncBannerImageAltFormStateV3(target);
+        return;
+      }
+
+      if (target.name === 'contentMarkdown' || target.name === 'title') {
+        const form = target.closest('form');
+        syncLessonMarkdownPreviewV3(form);
+        return;
+      }
+
+      if (target.name === 'lessonMarkdownFile') {
+        const form = target.closest('form');
+        const file = target.files?.[0] || null;
+        const markdownInput = form?.querySelector('textarea[name="contentMarkdown"]');
+
+        if (!file || !form || !markdownInput) {
+          return;
+        }
+
+        try {
+          markdownInput.value = await file.text();
+          syncLessonMarkdownPreviewV3(form);
+          showToast({
+            title: 'Đã nạp file markdown',
+            message: 'Nội dung markdown đã được đưa vào editor. Hãy kiểm tra lại rồi bấm lưu.',
+            variant: 'success',
+          });
+        } catch {
+          showToast({
+            title: 'Không thể đọc file',
+            message: 'File markdown này không thể đọc được ở trình duyệt hiện tại.',
+            variant: 'danger',
+          });
+        } finally {
+          target.value = '';
+        }
+
+        return;
+      }
+
+      if (target.name === 'bannerImageFile') {
+        const form = target.closest('form');
+        const file = target.files?.[0] || null;
+        const uploadButton = form?.querySelector('[data-action="pick-banner-image"]');
+
+        if (!file || !form) {
+          return;
+        }
+
+        if (!isCloudinaryConfigured()) {
+          showToast({
+            title: 'Cloudinary chưa sẵn sàng',
+            message: 'Hãy cấu hình Cloudinary trước khi tải banner cho bài học.',
+            variant: 'warning',
+          });
+          target.value = '';
+          return;
+        }
+
+        if (uploadButton) {
+          uploadButton.setAttribute('disabled', 'disabled');
+          uploadButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Đang tải...';
+        }
+
+        try {
+          const image = await uploadCurriculumLessonImage(file);
+          setLessonBannerFormStateV3(form, {
+            ...image,
+            id: image.id || createCurriculumItemId('lesson-banner'),
+          });
+          showToast({
+            title: 'Đã tải banner',
+            message: 'Banner đã sẵn sàng. Hãy bấm lưu buổi học để cập nhật vào chương trình.',
+            variant: 'success',
+          });
+        } catch (error) {
+          showToast({
+            title: 'Không thể tải banner',
+            message: mapFirebaseError(error, 'Không thể tải banner bài học lên Cloudinary.'),
+            variant: 'danger',
+          });
+        } finally {
+          target.value = '';
+
+          if (uploadButton) {
+            uploadButton.removeAttribute('disabled');
+            uploadButton.innerHTML = '<i class="bi bi-card-image me-2"></i>Tải banner';
+          }
+        }
+
         return;
       }
 
@@ -3379,13 +3763,12 @@ export const curriculumDemoPage = {
 
           if (uploadButton) {
             uploadButton.removeAttribute('disabled');
-            uploadButton.innerHTML = '<i class="bi bi-image me-2"></i>Tải ảnh lên';
+            uploadButton.innerHTML = '<i class="bi bi-images me-2"></i>Tải ảnh lên';
           }
         }
 
         return;
       }
-
       if (target.name === 'previewClassCode') {
         state.selectedClassCode = target.value;
         const selectedClass = getSelectedClass();

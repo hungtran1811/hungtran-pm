@@ -1,3 +1,4 @@
+import { renderLessonMarkdownEmptyState, renderLessonMarkdownHtml } from '../../utils/lesson-markdown.js';
 import { escapeHtml } from '../../utils/html.js';
 
 function getSafeLinkHref(value) {
@@ -18,18 +19,6 @@ function getSafeLinkHref(value) {
   return '';
 }
 
-function getLessonImages(lesson) {
-  if (Array.isArray(lesson?.images) && lesson.images.length > 0) {
-    return [...lesson.images].sort((left, right) => (left.order || 0) - (right.order || 0));
-  }
-
-  if (lesson?.coverImage?.secureUrl) {
-    return [{ ...lesson.coverImage, id: lesson.coverImage.id || `${lesson.id}-cover`, order: 1 }];
-  }
-
-  return [];
-}
-
 function buildCloudinaryVariant(url, transformation) {
   const rawUrl = String(url ?? '').trim();
 
@@ -40,36 +29,37 @@ function buildCloudinaryVariant(url, transformation) {
   return rawUrl.replace('/image/upload/', `/image/upload/${transformation}/`);
 }
 
-function getVisibleKeyPoints(lesson) {
-  const items = Array.isArray(lesson?.keyPoints) ? lesson.keyPoints.filter(Boolean) : [];
-  return {
-    points: items.slice(0, 6),
-    hiddenCount: Math.max(0, items.length - 6),
-  };
-}
+function getLessonMediaItems(lesson) {
+  const normalizedImages = Array.isArray(lesson?.images)
+    ? [...lesson.images].sort((left, right) => (left.order || 0) - (right.order || 0))
+    : [];
+  const mediaItems = [];
+  const seen = new Set();
 
-function renderOverviewSection(label, content, { emptyMessage = '' } = {}) {
-  const value = String(content ?? '').trim();
-
-  if (!value) {
-    if (!emptyMessage) {
-      return '';
+  function pushImage(image, kind = 'image') {
+    if (!image?.secureUrl) {
+      return;
     }
 
-    return `
-      <div class="student-library-detail__section">
-        <div class="student-library-detail__label">${label}</div>
-        <div class="student-library-detail__box student-library-detail__box--muted">${escapeHtml(emptyMessage)}</div>
-      </div>
-    `;
+    const uniqueKey = image.publicId || image.secureUrl;
+
+    if (seen.has(uniqueKey)) {
+      return;
+    }
+
+    seen.add(uniqueKey);
+    mediaItems.push({
+      ...image,
+      kind,
+      id: image.id || `${lesson?.id || 'lesson'}-${kind}-${mediaItems.length + 1}`,
+    });
   }
 
-  return `
-    <div class="student-library-detail__section">
-      <div class="student-library-detail__label">${label}</div>
-      <div class="student-library-detail__box">${escapeHtml(value)}</div>
-    </div>
-  `;
+  pushImage(lesson?.bannerImage, 'banner');
+  pushImage(lesson?.coverImage, 'cover');
+  normalizedImages.forEach((image) => pushImage(image, 'image'));
+
+  return mediaItems;
 }
 
 function renderLessonMeta(preview, reportLink = '') {
@@ -131,107 +121,56 @@ function renderLessonList(lessons, activeLessonId) {
   `;
 }
 
-function renderWorkspaceTabs(activeTab) {
-  const tabs = [
-    { id: 'overview', label: 'Tổng quan', icon: 'journal-text' },
-    { id: 'images', label: 'Hình ảnh', icon: 'images' },
-    { id: 'links', label: 'Tài liệu', icon: 'link-45deg' },
-  ];
+function renderLessonMediaFrame(lesson, selectedImageId) {
+  const mediaItems = getLessonMediaItems(lesson);
+  const activeMedia = mediaItems.find((item) => item.id === selectedImageId) || mediaItems[0] || null;
 
   return `
-    <div class="student-library-tabbar" role="tablist" aria-label="Nội dung buổi học">
-      ${tabs
-        .map(
-          (tab) => `
-            <button
-              type="button"
-              class="student-library-tab ${tab.id === activeTab ? 'student-library-tab--active' : ''}"
-              data-action="select-library-tab"
-              data-tab="${tab.id}"
-            >
-              <i class="bi bi-${tab.icon} me-2"></i>${tab.label}
-            </button>
-          `,
-        )
-        .join('')}
-    </div>
-  `;
-}
-
-function renderOverviewTab(lesson) {
-  const { points, hiddenCount } = getVisibleKeyPoints(lesson);
-
-  return `
-    <div class="student-library-overview">
-      ${renderOverviewSection('Tóm tắt', lesson.summary)}
-
-      <div class="student-library-detail__section">
-        <div class="student-library-detail__label">Ý chính cần nhớ</div>
-        <div class="student-library-detail__box">
-          <ul class="mb-0 ps-3">
-            ${points.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
-          </ul>
-          ${
-            hiddenCount > 0
-              ? `<div class="small text-secondary mt-2">Còn ${hiddenCount} ý nữa trong nội dung bài học.</div>`
-              : ''
-          }
-        </div>
-      </div>
-
-      ${renderOverviewSection('Bài toán gợi ý', lesson.practiceTask)}
-      ${renderOverviewSection('Tự tìm hiểu thêm', lesson.selfStudyPrompt, {
-        emptyMessage: 'Giáo viên chưa thêm phần gợi ý tự tìm hiểu cho buổi học này.',
-      })}
-    </div>
-  `;
-}
-
-function renderImagesTab(lesson, selectedImageId) {
-  const images = getLessonImages(lesson);
-  const activeImage = images.find((item) => item.id === selectedImageId) || images[0] || null;
-
-  return `
-    <div class="student-library-media">
-      <div class="student-library-media__frame">
+    <div class="student-library-article__media">
+      <div class="student-library-media__frame student-library-media__frame--article">
         ${
-          activeImage?.secureUrl
+          activeMedia?.secureUrl
             ? `
               <img
-                src="${escapeHtml(buildCloudinaryVariant(activeImage.secureUrl, 'f_auto,q_auto,c_fit,w_1280,h_720'))}"
-                alt="${escapeHtml(activeImage.alt || lesson.title || 'Ảnh minh họa bài học')}"
+                src="${escapeHtml(buildCloudinaryVariant(activeMedia.secureUrl, 'f_auto,q_auto,c_fit,w_1440,h_880'))}"
+                alt="${escapeHtml(activeMedia.alt || lesson.title || 'Ảnh minh họa bài học')}"
                 class="student-library-media__image"
                 loading="lazy"
               >
             `
             : `
               <div class="student-library-media__empty">
-                Bài học này chưa có ảnh minh họa.
+                Buổi học này chưa có banner hoặc ảnh minh họa.
               </div>
             `
         }
       </div>
       ${
-        images.length > 1
+        mediaItems.length > 0
           ? `
-            <div class="student-library-media__thumbs" role="list" aria-label="Danh sách ảnh minh họa">
-              ${images
+            <div class="student-library-media__thumbs student-library-media__thumbs--article" role="list" aria-label="Ảnh minh họa buổi học">
+              ${mediaItems
                 .map(
                   (image, index) => `
                     <button
                       type="button"
-                      class="student-library-thumb ${image.id === activeImage?.id ? 'student-library-thumb--active' : ''}"
+                      class="student-library-thumb ${image.id === activeMedia?.id ? 'student-library-thumb--active' : ''}"
                       data-action="select-library-image"
                       data-lesson-id="${escapeHtml(lesson.id)}"
                       data-image-id="${escapeHtml(image.id)}"
-                      aria-label="Ảnh ${index + 1}"
+                      aria-label="${escapeHtml(image.kind === 'banner' ? 'Banner bài học' : `Ảnh minh họa ${index + 1}`)}"
                     >
                       <img
-                        src="${escapeHtml(buildCloudinaryVariant(image.secureUrl, 'f_auto,q_auto,c_fill,w_180,h_140'))}"
-                        alt="${escapeHtml(image.alt || `Ảnh ${index + 1}`)}"
+                        src="${escapeHtml(buildCloudinaryVariant(image.secureUrl, 'f_auto,q_auto,c_fill,w_220,h_150'))}"
+                        alt="${escapeHtml(image.alt || `Ảnh minh họa ${index + 1}`)}"
                         class="student-library-thumb__image"
                         loading="lazy"
                       >
+                      ${
+                        image.kind === 'banner'
+                          ? '<span class="student-library-thumb__badge">Banner</span>'
+                          : ''
+                      }
                     </button>
                   `,
                 )
@@ -244,78 +183,55 @@ function renderImagesTab(lesson, selectedImageId) {
   `;
 }
 
-function renderLinksTab(lesson) {
+function renderLessonReferences(lesson) {
   const links = Array.isArray(lesson?.reviewLinks) ? lesson.reviewLinks : [];
 
   if (links.length === 0) {
-    return `
-      <div class="student-library-empty-panel">
-        Bài học này chưa có tài liệu đính kèm.
-      </div>
-    `;
+    return '';
   }
 
   return `
-    <div class="student-library-links-panel">
-      ${links
-        .map((item) => {
-          const label = typeof item === 'string' ? item : item?.label || item?.url || '';
-          const url = typeof item === 'string' ? item : item?.url || '';
-          const href = getSafeLinkHref(url);
+    <section class="student-library-resources">
+      <div class="student-library-detail__label">Tài liệu & tham khảo</div>
+      <div class="student-library-resources__list">
+        ${links
+          .map((item) => {
+            const label = typeof item === 'string' ? item : item?.label || item?.url || '';
+            const url = typeof item === 'string' ? item : item?.url || '';
+            const href = getSafeLinkHref(url);
 
-          if (!href) {
+            if (!href) {
+              return `
+                <div class="student-library-resource-card student-library-resource-card--muted">
+                  <div class="student-library-resource-card__title">${escapeHtml(label)}</div>
+                  <div class="small text-secondary">Chưa có đường link hợp lệ</div>
+                </div>
+              `;
+            }
+
             return `
-              <div class="student-library-link-card student-library-link-card--muted">
-                <div class="student-library-link-card__title">${escapeHtml(label)}</div>
-                <div class="small text-secondary">Chưa có đường link hợp lệ</div>
-              </div>
+              <a
+                class="student-library-resource-card"
+                href="${escapeHtml(href)}"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <div class="student-library-resource-card__title">
+                  <i class="bi bi-link-45deg me-2"></i>${escapeHtml(label)}
+                </div>
+                <div class="student-library-resource-card__url">${escapeHtml(href)}</div>
+              </a>
             `;
-          }
-
-          return `
-            <a
-              class="student-library-link-card"
-              href="${escapeHtml(href)}"
-              target="_blank"
-              rel="noreferrer"
-            >
-              <div class="student-library-link-card__title">
-                <i class="bi bi-link-45deg me-2"></i>${escapeHtml(label)}
-              </div>
-              <div class="student-library-link-card__url">${escapeHtml(href)}</div>
-            </a>
-          `;
-        })
-        .join('')}
-    </div>
+          })
+          .join('')}
+      </div>
+    </section>
   `;
 }
 
-function renderWorkspaceBody(lesson, activeTab, selectedImageId) {
-  if (!lesson) {
-    return `
-      <div class="student-library-detail__empty">
-        Chọn một buổi học để xem nội dung chi tiết.
-      </div>
-    `;
-  }
-
-  if (activeTab === 'images') {
-    return renderImagesTab(lesson, selectedImageId);
-  }
-
-  if (activeTab === 'links') {
-    return renderLinksTab(lesson);
-  }
-
-  return renderOverviewTab(lesson);
-}
-
-function renderWorkspace(preview, lesson, activeTab, selectedImageId) {
-  const lessons = preview?.visibleLessons || [];
-  const currentIndex = lessons.findIndex((item) => item.id === lesson?.id);
-  const previousLesson = currentIndex > 0 ? lessons[currentIndex - 1] : null;
-  const nextLesson = currentIndex >= 0 && currentIndex < lessons.length - 1 ? lessons[currentIndex + 1] : null;
+function renderLessonArticle(lesson, selectedImageId) {
+  const articleHtml = renderLessonMarkdownHtml(lesson);
+  const references = renderLessonReferences(lesson);
 
   return `
     <section class="student-library-workspace">
@@ -330,7 +246,7 @@ function renderWorkspace(preview, lesson, activeTab, selectedImageId) {
             class="btn btn-outline-secondary btn-sm"
             data-action="go-to-library-neighbor"
             data-direction="prev"
-            ${previousLesson ? `data-lesson-id="${escapeHtml(previousLesson.id)}"` : 'disabled'}
+            ${lesson?.previousLessonId ? `data-lesson-id="${escapeHtml(lesson.previousLessonId)}"` : 'disabled'}
           >
             <i class="bi bi-chevron-left me-1"></i>Buổi trước
           </button>
@@ -339,17 +255,25 @@ function renderWorkspace(preview, lesson, activeTab, selectedImageId) {
             class="btn btn-outline-secondary btn-sm"
             data-action="go-to-library-neighbor"
             data-direction="next"
-            ${nextLesson ? `data-lesson-id="${escapeHtml(nextLesson.id)}"` : 'disabled'}
+            ${lesson?.nextLessonId ? `data-lesson-id="${escapeHtml(lesson.nextLessonId)}"` : 'disabled'}
           >
             Buổi sau<i class="bi bi-chevron-right ms-1"></i>
           </button>
         </div>
       </div>
 
-      ${renderWorkspaceTabs(activeTab)}
+      <div class="student-library-article">
+        ${renderLessonMediaFrame(lesson, selectedImageId)}
 
-      <div class="student-library-workspace__body">
-        ${renderWorkspaceBody(lesson, activeTab, selectedImageId)}
+        <div class="student-library-article__body">
+          <article class="student-library-markdown">
+            ${
+              articleHtml ||
+              renderLessonMarkdownEmptyState('Giáo viên chưa thêm nội dung markdown cho buổi học này.')
+            }
+          </article>
+        </div>
+        ${references}
       </div>
     </section>
   `;
@@ -362,13 +286,13 @@ export function renderStudentLibraryBrowser(
   options = {},
 ) {
   const lessons = preview?.visibleLessons || [];
+  const activeLessonIndex = lessons.findIndex((lesson) => lesson.id === selectedLessonId);
   const activeLesson =
-    lessons.find((lesson) => lesson.id === selectedLessonId) ||
+    lessons[activeLessonIndex] ||
     lessons.find((lesson) => lesson.sessionNumber === preview?.assignment?.currentSession) ||
     lessons[lessons.length - 1] ||
     null;
   const selectedImageId = activeLesson ? selectedImageIds?.[activeLesson.id] || '' : '';
-  const activeTab = options.activeTab || 'overview';
   const reportLink = options.reportLink || '';
   const embedded = Boolean(options.embedded);
 
@@ -384,14 +308,33 @@ export function renderStudentLibraryBrowser(
     `;
   }
 
+  const enrichedLesson = activeLesson
+    ? {
+        ...activeLesson,
+        previousLessonId: activeLessonIndex > 0 ? lessons[activeLessonIndex - 1]?.id || '' : '',
+        nextLessonId:
+          activeLessonIndex >= 0 && activeLessonIndex < lessons.length - 1
+            ? lessons[activeLessonIndex + 1]?.id || ''
+            : '',
+      }
+    : null;
+
   return `
     <div class="card border-0 shadow-sm student-library-card ${embedded ? 'student-library-card--embedded' : ''}">
       <div class="card-body">
         ${renderLessonMeta(preview, reportLink)}
-        <div class="student-library-layout">
+        <div class="student-library-layout student-library-layout--article">
           ${renderLessonList(lessons, activeLesson?.id || '')}
           <div class="student-library-content">
-            ${renderWorkspace(preview, activeLesson, activeTab, selectedImageId)}
+            ${
+              enrichedLesson
+                ? renderLessonArticle(enrichedLesson, selectedImageId)
+                : `
+                  <div class="student-library-empty-panel">
+                    Chọn một buổi học để xem nội dung chi tiết.
+                  </div>
+                `
+            }
           </div>
         </div>
       </div>

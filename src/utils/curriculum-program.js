@@ -36,6 +36,10 @@ function normalizeLegacyCoverImage(input = null) {
 }
 
 function normalizeLessonImageRecord(input = {}, fallbackId = 'lesson-image', order = 1) {
+  if (!input || typeof input !== 'object') {
+    return null;
+  }
+
   const secureUrl = coerceText(input.secureUrl);
 
   if (!secureUrl) {
@@ -82,6 +86,10 @@ function normalizeLessonImages(images = [], coverImage = null) {
   return [{ ...legacyCoverImage, order: 1 }];
 }
 
+function normalizeLessonBannerImage(input = null) {
+  return normalizeLessonImageRecord(input, 'lesson-banner', 1);
+}
+
 function normalizeReviewLinkRecord(input = {}, fallbackId = 'review-link', order = 1) {
   if (typeof input === 'string') {
     const rawValue = coerceText(input);
@@ -96,6 +104,10 @@ function normalizeReviewLinkRecord(input = {}, fallbackId = 'review-link', order
       url: rawValue,
       order,
     };
+  }
+
+  if (!input || typeof input !== 'object') {
+    return null;
   }
 
   const label = coerceText(input.label);
@@ -165,11 +177,13 @@ export function clampKnowledgeSession(program, sessionNumber) {
 
 export function normalizeLessonRecord(input = {}, fallbackId = 'lesson') {
   const images = normalizeLessonImages(input.images, input.coverImage);
+  const bannerImage = normalizeLessonBannerImage(input.bannerImage);
 
   return {
     id: coerceText(input.id) || createCurriculumItemId(fallbackId),
     sessionNumber: Math.max(1, Number(input.sessionNumber || 1)),
     title: coerceText(input.title),
+    contentMarkdown: coerceText(input.contentMarkdown),
     summary: coerceText(input.summary),
     keyPoints: coerceArray(input.keyPoints)
       .map(coerceText)
@@ -178,6 +192,7 @@ export function normalizeLessonRecord(input = {}, fallbackId = 'lesson') {
     selfStudyPrompt: coerceText(input.selfStudyPrompt),
     reviewLinks: normalizeReviewLinks(input.reviewLinks),
     teacherNote: coerceText(input.teacherNote),
+    bannerImage,
     images,
     coverImage: images[0] || null,
     archived: Boolean(input.archived),

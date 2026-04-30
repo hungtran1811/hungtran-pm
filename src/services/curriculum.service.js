@@ -1,4 +1,4 @@
-import {
+﻿import {
   collection,
   doc,
   getDoc,
@@ -94,18 +94,17 @@ function validateLessonPayload(program, lesson, lessons, currentLessonId = '') {
     throw new Error('Tiêu đề buổi học không được để trống.');
   }
 
-  if (!lesson.summary) {
-    throw new Error('Phần tóm tắt buổi học không được để trống.');
-  }
+    const hasMarkdownContent = Boolean(String(lesson.contentMarkdown || '').trim());
+  const hasLegacyStructuredContent = Boolean(
+    lesson.summary ||
+      lesson.practiceTask ||
+      lesson.selfStudyPrompt ||
+      (Array.isArray(lesson.keyPoints) && lesson.keyPoints.length > 0),
+  );
 
-  if (!lesson.practiceTask) {
-    throw new Error('Hãy nhập bài toán gợi ý cho buổi học.');
+  if (!hasMarkdownContent && !hasLegacyStructuredContent) {
+    throw new Error('Hãy nhập nội dung học liệu cho buổi học này.');
   }
-
-  if (lesson.keyPoints.length === 0) {
-    throw new Error('Hãy nhập ít nhất 1 ý chính cần nhớ.');
-  }
-
   const invalidReviewLink = (lesson.reviewLinks || []).find(
     (item) => !item.label || !item.url || !isCurriculumReviewLinkValid(item),
   );

@@ -1241,16 +1241,12 @@ body {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 0.8rem;
-  height: min(76vh, 860px);
+  height: auto;
   padding: 0.95rem 1rem;
   border: 1px solid var(--app-border);
   border-radius: 1rem;
   background: #ffffff;
-  overflow: hidden;
-}
-
-.student-library-card--embedded .student-library-workspace {
-  height: min(68vh, 720px);
+  overflow: visible;
 }
 
 .student-library-workspace__top {
@@ -1377,6 +1373,291 @@ body {
 
 .curriculum-assignment-actions .btn {
   width: 100%;
+}
+
+.student-library-layout--article {
+  grid-template-columns: minmax(180px, 210px) minmax(0, 1fr);
+}
+
+.student-library-layout--article .student-library-workspace {
+  grid-template-rows: auto auto;
+}
+
+.student-library-article {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto;
+  gap: 0.85rem;
+  overflow: visible;
+}
+
+.student-library-article__media {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.student-library-media__frame--article {
+  min-height: 250px;
+  max-height: 360px;
+}
+
+.student-library-media__thumbs--article {
+  padding-bottom: 0.1rem;
+}
+
+.student-library-thumb {
+  position: relative;
+  overflow: hidden;
+}
+
+.student-library-thumb__badge {
+  position: absolute;
+  left: 0.45rem;
+  bottom: 0.45rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: rgba(15, 76, 129, 0.88);
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.student-library-article__body {
+  min-height: 0;
+  display: block;
+  overflow: visible;
+  padding-right: 0;
+}
+
+.student-library-markdown {
+  min-width: 0;
+  padding: 1rem 1.05rem;
+  border: 1px solid var(--app-border);
+  border-radius: 1rem;
+  background: #ffffff;
+  line-height: 1.75;
+  color: var(--app-text);
+}
+
+.student-library-markdown > :first-child {
+  margin-top: 0;
+}
+
+.student-library-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.student-library-markdown h1,
+.student-library-markdown h2,
+.student-library-markdown h3,
+.student-library-markdown h4,
+.student-library-markdown h5,
+.student-library-markdown h6 {
+  margin-top: 1.2rem;
+  margin-bottom: 0.55rem;
+  line-height: 1.3;
+}
+
+.student-library-markdown p,
+.student-library-markdown ul,
+.student-library-markdown ol,
+.student-library-markdown pre,
+.student-library-markdown table,
+.student-library-markdown blockquote {
+  margin-bottom: 0.95rem;
+}
+
+.student-library-markdown ul,
+.student-library-markdown ol {
+  padding-left: 1.2rem;
+}
+
+.student-library-markdown li + li {
+  margin-top: 0.3rem;
+}
+
+.student-library-markdown a {
+  color: var(--app-brand);
+  word-break: break-word;
+}
+
+.student-library-markdown code {
+  padding: 0.12rem 0.32rem;
+  border-radius: 0.4rem;
+  background: #eef5fb;
+  font-size: 0.92em;
+}
+
+.student-library-markdown pre {
+  overflow: auto;
+  padding: 0.85rem 0.95rem;
+  border-radius: 0.9rem;
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+.student-library-markdown pre code {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.student-library-markdown blockquote {
+  margin-left: 0;
+  padding: 0.85rem 1rem;
+  border-left: 4px solid rgba(15, 76, 129, 0.3);
+  border-radius: 0.9rem;
+  background: #f8fbff;
+  color: var(--app-text);
+}
+
+.student-library-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: 0.9rem;
+}
+
+.student-library-markdown th,
+.student-library-markdown td {
+  padding: 0.7rem 0.8rem;
+  border-bottom: 1px solid var(--app-border);
+  border-right: 1px solid var(--app-border);
+  vertical-align: top;
+}
+
+.student-library-markdown th:last-child,
+.student-library-markdown td:last-child {
+  border-right: 0;
+}
+
+.student-library-markdown tr:last-child td {
+  border-bottom: 0;
+}
+
+.student-library-markdown th {
+  background: #f8fbff;
+  font-weight: 700;
+}
+
+.student-library-markdown img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.9rem auto;
+  border-radius: 0.9rem;
+}
+
+.student-library-markdown hr {
+  margin: 1.2rem 0;
+  border: 0;
+  border-top: 1px solid var(--app-border);
+}
+
+.student-library-markdown-empty {
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  border: 1px dashed var(--app-border);
+  border-radius: 1rem;
+  background: #f8fbff;
+  color: var(--app-muted);
+  text-align: center;
+}
+
+.student-library-resources {
+  display: grid;
+  gap: 0.55rem;
+  align-content: start;
+  margin-top: 0.15rem;
+}
+
+.student-library-resources__list {
+  display: grid;
+  gap: 0.7rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.student-library-card--embedded .student-library-workspace {
+  height: min(68vh, 720px);
+  overflow: hidden;
+}
+
+.student-library-card--embedded .student-library-layout--article .student-library-workspace {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.student-library-card--embedded .student-library-article {
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.student-library-card--embedded .student-library-article__body {
+  overflow: auto;
+  padding-right: 0.15rem;
+}
+
+.student-library-resource-card {
+  display: block;
+  padding: 0.9rem 0.95rem;
+  border: 1px solid rgba(15, 76, 129, 0.14);
+  border-radius: 1rem;
+  background: #eef5fb;
+  color: var(--app-brand-dark);
+  text-decoration: none;
+  transition: all 0.18s ease;
+}
+
+.student-library-resource-card:hover {
+  border-color: rgba(15, 76, 129, 0.32);
+  background: #e5f0fa;
+  color: var(--app-brand-dark);
+}
+
+.student-library-resource-card--muted {
+  background: #f8fafc;
+  border-color: var(--app-border);
+  color: var(--app-text);
+}
+
+.student-library-resource-card__title {
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.student-library-resource-card__url {
+  margin-top: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--app-muted);
+  word-break: break-all;
+}
+
+.curriculum-editor-subsection {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.curriculum-editor-subsection__title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--app-text);
+}
+
+.curriculum-editor-subsection__hint {
+  font-size: 0.84rem;
+  color: var(--app-muted);
+  line-height: 1.45;
+}
+
+.curriculum-markdown-preview {
+  min-height: 220px;
+  max-height: 420px;
+  overflow: auto;
+  padding-right: 0.15rem;
 }
 
 .curriculum-management-shell {
@@ -1943,6 +2224,10 @@ body {
     grid-template-columns: 1fr;
   }
 
+  .student-library-layout--article {
+    grid-template-columns: 1fr;
+  }
+
   .student-library-lesson-list {
     display: flex;
     gap: 0.6rem;
@@ -1962,6 +2247,10 @@ body {
     min-height: 0;
   }
 
+  .student-library-layout--article .student-library-workspace {
+    grid-template-rows: auto auto;
+  }
+
   .student-library-workspace__body {
     overflow: visible;
     padding-right: 0;
@@ -1975,6 +2264,16 @@ body {
 
   .student-library-media__frame {
     min-height: 200px;
+  }
+
+  .student-library-media__frame--article {
+    max-height: none;
+  }
+
+  .student-library-article__body {
+    grid-template-columns: 1fr;
+    overflow: visible;
+    padding-right: 0;
   }
 
   .curriculum-image-manager {
@@ -2020,20 +2319,17 @@ body {
     padding: 0.85rem;
   }
 
-  .student-library-tabbar {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .student-library-tab {
-    text-align: center;
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
-  }
-
   .student-library-header,
   .student-library-header__actions {
     flex-direction: column;
+  }
+
+  .student-library-markdown {
+    padding: 0.85rem 0.9rem;
+  }
+
+  .curriculum-markdown-preview {
+    max-height: none;
   }
 
   .curriculum-assignment-actions {

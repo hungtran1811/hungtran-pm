@@ -194,14 +194,9 @@ export function buildPublicReportPath(classCode = '') {
 export function buildPublicLibraryPath(classCode = '', options = {}) {
   const params = new URLSearchParams();
   const lessonId = normalizeLessonId(options.lessonId);
-  const tab = normalizeLibraryTab(options.tab);
 
   if (lessonId) {
     params.set('lesson', lessonId);
-  }
-
-  if (tab !== 'overview') {
-    params.set('tab', tab);
   }
 
   const serialized = params.toString();
