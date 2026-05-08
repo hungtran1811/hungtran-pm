@@ -29,6 +29,10 @@ function buildCloudinaryVariant(url, transformation) {
   return rawUrl.replace('/image/upload/', `/image/upload/${transformation}/`);
 }
 
+function getLargeImageUrl(url) {
+  return buildCloudinaryVariant(url, 'f_auto,q_auto:best,c_fit,w_2400,h_1600');
+}
+
 function getLessonMediaItems(lesson) {
   const normalizedImages = Array.isArray(lesson?.images)
     ? [...lesson.images].sort((left, right) => (left.order || 0) - (right.order || 0))
@@ -124,6 +128,14 @@ function renderLessonList(lessons, activeLessonId) {
 function renderLessonMediaFrame(lesson, selectedImageId) {
   const mediaItems = getLessonMediaItems(lesson);
   const activeMedia = mediaItems.find((item) => item.id === selectedImageId) || mediaItems[0] || null;
+  const activeMediaUrl = activeMedia?.secureUrl ? getLargeImageUrl(activeMedia.secureUrl) : '';
+  const activeMediaAlt = activeMedia?.alt || lesson.title || 'Ảnh minh họa bài học';
+  const activeMediaLabel =
+    activeMedia?.kind === 'banner'
+      ? 'Banner bài học'
+      : activeMedia?.kind === 'cover'
+        ? 'Ảnh chính'
+        : 'Ảnh minh họa';
 
   return `
     <div class="student-library-article__media">
@@ -131,12 +143,25 @@ function renderLessonMediaFrame(lesson, selectedImageId) {
         ${
           activeMedia?.secureUrl
             ? `
-              <img
-                src="${escapeHtml(buildCloudinaryVariant(activeMedia.secureUrl, 'f_auto,q_auto,c_fit,w_1440,h_880'))}"
-                alt="${escapeHtml(activeMedia.alt || lesson.title || 'Ảnh minh họa bài học')}"
-                class="student-library-media__image"
-                loading="lazy"
+              <button
+                type="button"
+                class="student-library-media__zoom-button"
+                data-action="open-library-image"
+                data-image-url="${escapeHtml(activeMediaUrl)}"
+                data-image-alt="${escapeHtml(activeMediaAlt)}"
+                data-image-label="${escapeHtml(activeMediaLabel)}"
+                aria-label="Phóng to ${escapeHtml(activeMediaLabel.toLowerCase())}"
               >
+                <img
+                  src="${escapeHtml(activeMediaUrl)}"
+                  alt="${escapeHtml(activeMediaAlt)}"
+                  class="student-library-media__image"
+                  loading="lazy"
+                >
+                <span class="student-library-media__zoom-hint">
+                  <i class="bi bi-arrows-fullscreen me-1"></i>Bấm để phóng to
+                </span>
+              </button>
             `
             : `
               <div class="student-library-media__empty">
@@ -229,6 +254,43 @@ function renderLessonReferences(lesson) {
   `;
 }
 
+function renderLibraryImageLightbox(image = null) {
+  if (!image?.url) {
+    return '';
+  }
+
+  return `
+    <div
+      class="student-library-lightbox"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Xem ảnh phóng to"
+      data-action="close-library-image-lightbox"
+    >
+      <button
+        type="button"
+        class="student-library-lightbox__close"
+        data-action="close-library-image-lightbox"
+        aria-label="Đóng ảnh phóng to"
+      >
+        <i class="bi bi-x-lg"></i>
+      </button>
+      <figure class="student-library-lightbox__figure">
+        <img
+          src="${escapeHtml(image.url)}"
+          alt="${escapeHtml(image.alt || image.label || 'Ảnh minh họa bài học')}"
+          class="student-library-lightbox__image"
+        >
+        ${
+          image.label || image.alt
+            ? `<figcaption class="student-library-lightbox__caption">${escapeHtml(image.label || image.alt)}</figcaption>`
+            : ''
+        }
+      </figure>
+    </div>
+  `;
+}
+
 function renderLessonArticle(lesson, selectedImageId) {
   const articleHtml = renderLessonMarkdownHtml(lesson);
   const references = renderLessonReferences(lesson);
@@ -295,6 +357,7 @@ export function renderStudentLibraryBrowser(
   const selectedImageId = activeLesson ? selectedImageIds?.[activeLesson.id] || '' : '';
   const reportLink = options.reportLink || '';
   const embedded = Boolean(options.embedded);
+  const lightboxImage = options.lightboxImage || null;
 
   if (!preview?.program || lessons.length === 0) {
     return `
@@ -339,5 +402,6 @@ export function renderStudentLibraryBrowser(
         </div>
       </div>
     </div>
+    ${renderLibraryImageLightbox(lightboxImage)}
   `;
 }

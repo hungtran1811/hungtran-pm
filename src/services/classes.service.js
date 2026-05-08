@@ -64,6 +64,7 @@ export async function createClass(values) {
     curriculumProgramId: String(values.curriculumProgramId ?? '').trim(),
     curriculumCurrentSession: Number(values.curriculumCurrentSession ?? 1),
     curriculumPhase: values.curriculumPhase === 'final' ? 'final' : 'learning',
+    activeQuizMode: 'official_quiz',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };

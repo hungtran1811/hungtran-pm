@@ -28,6 +28,7 @@ import {
   normalizeExamChecklistItemRecord,
   normalizeLessonRecord,
   normalizeProjectChecklistRecords,
+  normalizeSessionActivityRecord,
   sortCurriculumChecklist,
   sortCurriculumLessons,
 } from '../utils/curriculum-program.js';
@@ -81,6 +82,7 @@ function buildCurriculumView(classItem, program) {
     program: {
       ...program,
       lessons,
+      sessionActivities: program.sessionActivities || [],
       finalChecklist: checklistItems,
     },
     lessons,
@@ -287,6 +289,35 @@ export async function saveCurriculumLesson(programId, values) {
       };
     },
     'Không thể lưu buổi học cho chương trình này.',
+  );
+}
+
+export async function saveCurriculumSessionActivity(programId, values) {
+  await updateCurriculumProgram(
+    programId,
+    (program) => {
+      const sessionLimit = Math.max(
+        1,
+        Number(program.totalSessionCount || program.knowledgePhaseEndSession || 1),
+      );
+      const activity = normalizeSessionActivityRecord(values, values.sessionNumber);
+
+      if (activity.sessionNumber > sessionLimit) {
+        throw new Error(`Chương trình này chỉ có ${sessionLimit} buổi.`);
+      }
+
+      const activitiesBySession = new Map(
+        (program.sessionActivities || []).map((item) => [Number(item.sessionNumber || 0), item]),
+      );
+      activitiesBySession.set(activity.sessionNumber, activity);
+
+      return {
+        sessionActivities: Array.from(activitiesBySession.values())
+          .filter((item) => Number(item.sessionNumber || 0) >= 1 && Number(item.sessionNumber || 0) <= sessionLimit)
+          .sort((left, right) => Number(left.sessionNumber || 0) - Number(right.sessionNumber || 0)),
+      };
+    },
+    'Không thể lưu loại buổi cho chương trình này.',
   );
 }
 

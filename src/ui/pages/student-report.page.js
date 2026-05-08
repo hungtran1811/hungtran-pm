@@ -85,7 +85,14 @@ function renderCurriculumSlot(curriculumPreview, selectedClassInfo, curriculumLo
     return renderAlert(curriculumError, 'warning');
   }
 
-  return renderStudentLibraryCta(curriculumPreview, selectedClassInfo, curriculumLoading, curriculumError);
+  const libraryCta = renderStudentLibraryCta(curriculumPreview, selectedClassInfo, curriculumLoading, curriculumError);
+  const cards = [libraryCta].filter(Boolean);
+
+  if (cards.length === 0) {
+    return '';
+  }
+
+  return `<div class="d-grid gap-3">${cards.join('')}</div>`;
 }
 
 export const studentReportPage = {

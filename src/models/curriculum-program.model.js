@@ -2,6 +2,7 @@ import {
   normalizeExamChecklistItemRecord,
   normalizeLessonRecord,
   normalizeProjectChecklistRecords,
+  normalizeSessionActivities,
   sortCurriculumChecklist,
   sortCurriculumLessons,
 } from '../utils/curriculum-program.js';
@@ -34,6 +35,7 @@ function normalizeChecklist(programId, finalMode, checklist = []) {
 
 export function toCurriculumProgramModelFromData(id, data = {}) {
   const finalMode = data.finalMode === 'exam' ? 'exam' : 'project';
+  const totalSessionCount = Number(data.totalSessionCount ?? data.knowledgePhaseEndSession ?? 14);
 
   return {
     id,
@@ -41,11 +43,12 @@ export function toCurriculumProgramModelFromData(id, data = {}) {
     subject: data.subject ?? '',
     level: data.level ?? '',
     knowledgePhaseEndSession: Number(data.knowledgePhaseEndSession ?? 1),
-    totalSessionCount: Number(data.totalSessionCount ?? data.knowledgePhaseEndSession ?? 14),
+    totalSessionCount,
     finalMode,
     description: data.description ?? '',
     active: Boolean(data.active ?? true),
     lessons: normalizeLessons(data.lessons),
+    sessionActivities: normalizeSessionActivities(data.sessionActivities, totalSessionCount),
     finalChecklist: normalizeChecklist(id, finalMode, data.finalChecklist),
   };
 }

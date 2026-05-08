@@ -9,6 +9,15 @@ function normalizeLessonId(value) {
   return decodeURIComponent(String(value ?? '').trim());
 }
 
+function normalizeProgramId(value) {
+  return decodeURIComponent(String(value ?? '').trim());
+}
+
+function normalizeSessionNumber(value) {
+  const numericValue = Number(value || 0);
+  return Number.isFinite(numericValue) && numericValue > 0 ? Math.floor(numericValue) : 0;
+}
+
 function normalizeLibraryTab(value) {
   const normalized = String(value ?? '').trim().toLowerCase();
   return LIBRARY_TABS.has(normalized) ? normalized : 'overview';
@@ -20,6 +29,10 @@ export function getPublicReportPathMatch(pathname = '/') {
 
 export function getPublicLibraryPathMatch(pathname = '/') {
   return pathname.match(/^\/library\/([^/]+)\/?$/i);
+}
+
+export function getPublicQuizPathMatch(pathname = '/') {
+  return pathname.match(/^\/quiz\/([^/]+)\/?$/i);
 }
 
 function normalizeHash(hash) {
@@ -64,6 +77,7 @@ export function getHashRouteState(hash = window.location.hash) {
   const { path, search } = splitHashRoute(hash);
   const reportPathMatch = path.match(/^\/student\/report\/([^/?#]+)\/?$/i);
   const libraryPathMatch = path.match(/^\/student\/library\/([^/?#]+)\/?$/i);
+  const quizPathMatch = path.match(/^\/student\/quiz\/([^/?#]+)\/?$/i);
   const params = new URLSearchParams(search);
 
   if (reportPathMatch) {
@@ -84,10 +98,22 @@ export function getHashRouteState(hash = window.location.hash) {
     };
   }
 
+  if (quizPathMatch) {
+    return {
+      path: '/student/quiz',
+      classCode: normalizeClassCode(quizPathMatch[1]),
+      lessonId: '',
+      tab: 'overview',
+    };
+  }
+
   return {
     path,
     classCode: normalizeClassCode(params.get('classCode')),
     lessonId: normalizeLessonId(params.get('lesson')),
+    programId: normalizeProgramId(params.get('programId')),
+    sessionNumber: normalizeSessionNumber(params.get('session') || params.get('sessionNumber')),
+    quizMode: normalizeProgramId(params.get('quizMode')),
     tab: normalizeLibraryTab(params.get('tab')),
   };
 }
@@ -114,12 +140,17 @@ export function normalizeAppRoute(pathname = '/', hash = '', search = '') {
 
   const publicReportMatch = getPublicReportPathMatch(pathname);
   const publicLibraryMatch = getPublicLibraryPathMatch(pathname);
+  const publicQuizMatch = getPublicQuizPathMatch(pathname);
 
   if (publicReportMatch) {
     return `${pathname}${search}`;
   }
 
   if (publicLibraryMatch) {
+    return `${pathname}${search}`;
+  }
+
+  if (publicQuizMatch) {
     return `${pathname}${search}`;
   }
 
@@ -154,6 +185,23 @@ export function getLockedLibraryClassCode(search = window.location.search, pathn
   const hashRouteState = getHashRouteState();
 
   if (hashRouteState.path === '/student/library' && hashRouteState.classCode) {
+    return hashRouteState.classCode;
+  }
+
+  const params = new URLSearchParams(search);
+  return normalizeClassCode(params.get('classCode'));
+}
+
+export function getLockedQuizClassCode(search = window.location.search, pathname = window.location.pathname) {
+  const publicQuizMatch = getPublicQuizPathMatch(pathname);
+
+  if (publicQuizMatch) {
+    return normalizeClassCode(publicQuizMatch[1]);
+  }
+
+  const hashRouteState = getHashRouteState();
+
+  if (hashRouteState.path === '/student/quiz' && hashRouteState.classCode) {
     return hashRouteState.classCode;
   }
 
@@ -203,8 +251,41 @@ export function buildPublicLibraryPath(classCode = '', options = {}) {
   return `/library/${encodeURIComponent(normalizeClassCode(classCode))}${serialized ? `?${serialized}` : ''}`;
 }
 
+export function buildPublicQuizPath(classCode = '') {
+  return `/quiz/${encodeURIComponent(normalizeClassCode(classCode))}`;
+}
+
+function buildAdminPreviewHashPath(path, programId = '', sessionNumber = 0) {
+  const params = new URLSearchParams();
+  const normalizedProgramId = normalizeProgramId(programId);
+  const normalizedSessionNumber = normalizeSessionNumber(sessionNumber);
+
+  if (normalizedProgramId) {
+    params.set('programId', normalizedProgramId);
+  }
+
+  if (normalizedSessionNumber) {
+    params.set('session', String(normalizedSessionNumber));
+  }
+
+  const serialized = params.toString();
+  return `#${path}${serialized ? `?${serialized}` : ''}`;
+}
+
+export function buildAdminLessonPreviewPath(programId = '', sessionNumber = 0) {
+  return buildAdminPreviewHashPath('/admin/lesson-preview', programId, sessionNumber);
+}
+
+export function buildAdminQuizPreviewPath(programId = '', sessionNumber = 0) {
+  return buildAdminPreviewHashPath('/admin/quiz-preview', programId, sessionNumber);
+}
+
 export function ensureHashRouteLocation(win = window) {
-  if (getPublicReportPathMatch(win.location.pathname) || getPublicLibraryPathMatch(win.location.pathname)) {
+  if (
+    getPublicReportPathMatch(win.location.pathname) ||
+    getPublicLibraryPathMatch(win.location.pathname) ||
+    getPublicQuizPathMatch(win.location.pathname)
+  ) {
     return false;
   }
 

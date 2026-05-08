@@ -1,4 +1,20 @@
 import { getProjectStageChecklist } from '../demo/project-stage-guide.js';
+import {
+  QUIZ_DEFAULT_OFFICIAL_SESSION_NUMBERS,
+  QUIZ_MODE_OFFICIAL,
+} from './quiz.js';
+
+export const CURRICULUM_ACTIVITY_TYPE_LESSON = 'lesson';
+export const CURRICULUM_ACTIVITY_TYPE_OFFICIAL_QUIZ = QUIZ_MODE_OFFICIAL;
+export const CURRICULUM_ACTIVITY_TYPES = [
+  CURRICULUM_ACTIVITY_TYPE_LESSON,
+  CURRICULUM_ACTIVITY_TYPE_OFFICIAL_QUIZ,
+];
+
+export const CURRICULUM_ACTIVITY_TYPE_LABELS = {
+  [CURRICULUM_ACTIVITY_TYPE_LESSON]: 'Học kiến thức',
+  [CURRICULUM_ACTIVITY_TYPE_OFFICIAL_QUIZ]: 'Kiểm tra',
+};
 
 function coerceText(value) {
   return String(value ?? '').trim();
@@ -6,6 +22,45 @@ function coerceText(value) {
 
 function coerceArray(values) {
   return Array.isArray(values) ? values : [];
+}
+
+export function getDefaultCurriculumActivityType(sessionNumber = 0) {
+  return QUIZ_DEFAULT_OFFICIAL_SESSION_NUMBERS.includes(Number(sessionNumber || 0))
+    ? CURRICULUM_ACTIVITY_TYPE_OFFICIAL_QUIZ
+    : CURRICULUM_ACTIVITY_TYPE_LESSON;
+}
+
+export function normalizeCurriculumActivityType(value = '', sessionNumber = 0) {
+  const normalizedValue = coerceText(value).toLowerCase();
+
+  if (
+    normalizedValue === CURRICULUM_ACTIVITY_TYPE_OFFICIAL_QUIZ
+    || normalizedValue === 'official'
+    || normalizedValue === 'quiz'
+    || normalizedValue === 'test'
+    || normalizedValue === 'practice'
+    || normalizedValue === 'game'
+    || normalizedValue === 'quiz_game'
+    || normalizedValue === 'game_quiz'
+  ) {
+    return CURRICULUM_ACTIVITY_TYPE_OFFICIAL_QUIZ;
+  }
+
+  if (normalizedValue === CURRICULUM_ACTIVITY_TYPE_LESSON || normalizedValue === 'knowledge') {
+    return CURRICULUM_ACTIVITY_TYPE_LESSON;
+  }
+
+  return getDefaultCurriculumActivityType(sessionNumber);
+}
+
+export function getCurriculumActivityTypeLabel(activityType = CURRICULUM_ACTIVITY_TYPE_LESSON) {
+  return CURRICULUM_ACTIVITY_TYPE_LABELS[normalizeCurriculumActivityType(activityType)]
+    || CURRICULUM_ACTIVITY_TYPE_LABELS[CURRICULUM_ACTIVITY_TYPE_LESSON];
+}
+
+export function isCurriculumQuizActivity(activityType = '') {
+  const normalizedType = normalizeCurriculumActivityType(activityType);
+  return normalizedType === CURRICULUM_ACTIVITY_TYPE_OFFICIAL_QUIZ;
 }
 
 function isLikelyUrl(value) {
@@ -142,6 +197,38 @@ function normalizeReviewLinks(reviewLinks = []) {
     }));
 }
 
+export function normalizeSessionActivityRecord(input = {}, fallbackSessionNumber = 1) {
+  const sessionNumber = Math.max(1, Number(input.sessionNumber || fallbackSessionNumber || 1));
+
+  return {
+    sessionNumber,
+    activityType: normalizeCurriculumActivityType(input.activityType, sessionNumber),
+  };
+}
+
+export function normalizeSessionActivities(records = [], totalSessionCount = 1) {
+  const limit = Math.max(1, Number(totalSessionCount || 1));
+  const activitiesBySession = new Map();
+
+  coerceArray(records).forEach((item, index) => {
+    const activity = normalizeSessionActivityRecord(item, index + 1);
+
+    if (activity.sessionNumber >= 1 && activity.sessionNumber <= limit) {
+      activitiesBySession.set(activity.sessionNumber, activity);
+    }
+  });
+
+  return Array.from({ length: limit }, (_, index) => {
+    const sessionNumber = index + 1;
+    return (
+      activitiesBySession.get(sessionNumber) || {
+        sessionNumber,
+        activityType: getDefaultCurriculumActivityType(sessionNumber),
+      }
+    );
+  });
+}
+
 export function createCurriculumItemId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -239,6 +326,25 @@ export function normalizeProjectChecklistRecords(programId, records = []) {
 
 export function getActiveCurriculumLessons(program) {
   return sortCurriculumLessons((program?.lessons || []).filter((lesson) => !lesson.archived));
+}
+
+export function getCurriculumSessionActivities(program) {
+  const totalSessionCount = Math.max(
+    1,
+    Number(program?.totalSessionCount || program?.knowledgePhaseEndSession || 1),
+  );
+
+  return normalizeSessionActivities(program?.sessionActivities || [], totalSessionCount);
+}
+
+export function getCurriculumSessionActivity(program, sessionNumber = 1) {
+  const normalizedSessionNumber = Math.max(1, Number(sessionNumber || 1));
+  return (
+    getCurriculumSessionActivities(program).find((item) => item.sessionNumber === normalizedSessionNumber) || {
+      sessionNumber: normalizedSessionNumber,
+      activityType: getDefaultCurriculumActivityType(normalizedSessionNumber),
+    }
+  );
 }
 
 export function getArchivedCurriculumLessons(program) {

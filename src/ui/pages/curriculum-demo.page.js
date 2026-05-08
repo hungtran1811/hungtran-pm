@@ -7,6 +7,7 @@
   saveCurriculumExamChecklistItem,
   saveCurriculumLesson,
   saveCurriculumProjectStages,
+  saveCurriculumSessionActivity,
   setCurriculumExamChecklistItemArchived,
   setCurriculumLessonArchived,
   subscribeCurriculumPrograms,
@@ -17,15 +18,24 @@ import { getAuthState } from '../../state/auth.store.js';
 import { mapFirebaseError } from '../../utils/firebase-error.js';
 import { escapeHtml } from '../../utils/html.js';
 import { clampCurriculumSession } from '../../utils/curriculum.js';
-import { buildPublicLibraryPath } from '../../utils/route.js';
+import {
+  buildAdminLessonPreviewPath,
+  buildAdminQuizPreviewPath,
+  buildPublicLibraryPath,
+} from '../../utils/route.js';
 import { buildLegacyLessonMarkdown, renderLessonMarkdownHtml } from '../../utils/lesson-markdown.js';
 import {
+  CURRICULUM_ACTIVITY_TYPES,
+  getCurriculumActivityTypeLabel,
+  getCurriculumSessionActivities,
+  getCurriculumSessionActivity,
   createCurriculumItemId,
   getActiveCurriculumChecklist,
   getActiveCurriculumLessons,
   getArchivedCurriculumChecklist,
   getArchivedCurriculumLessons,
 } from '../../utils/curriculum-program.js';
+import { mountQuizManagement, renderQuizManagementContent } from './quizzes.page.js';
 import { renderAppShell } from '../components/AppShell.js';
 import { renderEmptyState } from '../components/EmptyState.js';
 import { renderLoadingOverlay } from '../components/LoadingOverlay.js';
@@ -53,8 +63,10 @@ const FINAL_MODE_BADGE_CLASSES = {
   exam: 'text-bg-info',
 };
 
+const QUIZ_UI_ENABLED = false;
+
 function getOperationalClasses(classes) {
-  return classes.filter((item) => item.status === 'active');
+  return classes.filter((item) => item.status === 'active' && !item.hidden);
 }
 
 function splitLines(value) {
@@ -1123,27 +1135,17 @@ function renderLessonReviewLinksFieldV3(lessonDraft) {
 function renderLessonFormV3(program, lessonDraft, busyKey, cloudinaryReady) {
   const isEditing = Boolean(lessonDraft?.id);
   const sessionNumber = Number(lessonDraft?.sessionNumber || 1);
-  const sessionLimit = getLessonSessionLimit(program);
 
   return `
     <form id="curriculum-lesson-form" class="curriculum-editor-form">
       <input type="hidden" name="lessonId" value="${escapeHtml(lessonDraft?.id || '')}">
+      <input type="hidden" name="sessionNumber" value="${sessionNumber}">
       <div class="row g-3">
         <div class="col-12 col-md-4">
-          <label class="form-label">Buổi</label>
-          <select class="form-select" name="sessionNumber">
-            ${Array.from({ length: sessionLimit }, (_, index) => index + 1)
-              .map(
-                (value) => `
-                  <option value="${value}" ${value === sessionNumber ? 'selected' : ''}>
-                    Buổi ${value}
-                  </option>
-                `,
-              )
-              .join('')}
-          </select>
+          <label class="form-label">Buổi đang chỉnh</label>
+          <div class="form-control bg-body-tertiary fw-semibold">Buổi ${sessionNumber}</div>
           <div class="form-text">
-            Mốc chuẩn của chương trình là buổi 1-${program.knowledgePhaseEndSession}, nhưng bạn có thể bổ sung kiến thức phát sinh tới buổi ${sessionLimit}.
+            Chọn buổi ở cột danh sách bên trái. Form này chỉ sửa nội dung của buổi đang chọn.
           </div>
         </div>
         <div class="col-12 col-md-8">
@@ -2675,7 +2677,87 @@ function renderCompactAssignmentControlsV3(classes, programs, selectedClassCode,
   `;
 }
 
-function renderCompactProgramManagementV3(programGroups, selectedProgramId, editorTab, selectedLessonId, selectedChecklistId, busyKey) {
+function renderSessionActivityPanel(program, selectedSessionNumber = 1, busyKey = '') {
+  if (!program) {
+    return '';
+  }
+
+  const sessions = getCurriculumSessionActivities(program);
+  const selectedActivity = getCurriculumSessionActivity(program, selectedSessionNumber);
+  const lessonPreviewPath = buildAdminLessonPreviewPath(program.id, selectedActivity.sessionNumber);
+  const quizPreviewPath = buildAdminQuizPreviewPath(program.id, selectedActivity.sessionNumber);
+
+  return `
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-white border-0">
+        <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start">
+          <div>
+            <h3 class="h6 mb-1">Thiết lập loại buổi</h3>
+            <p class="text-secondary mb-0">Buổi 5 và 9 mặc định là kiểm tra. Các buổi khác có thể đổi giữa học kiến thức và kiểm tra khi cần.</p>
+          </div>
+          <span class="badge text-bg-light text-dark border">Theo từng chương trình</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <form id="curriculum-session-activity-form" class="row g-3 align-items-end">
+          <div class="col-12 col-md-4">
+            <label class="form-label">Buổi</label>
+            <select class="form-select" name="activitySessionNumber">
+              ${sessions
+                .map(
+                  (item) => `
+                    <option value="${item.sessionNumber}" ${item.sessionNumber === selectedActivity.sessionNumber ? 'selected' : ''}>
+                      Buổi ${item.sessionNumber} - ${escapeHtml(getCurriculumActivityTypeLabel(item.activityType))}
+                    </option>
+                  `,
+                )
+                .join('')}
+            </select>
+          </div>
+          <div class="col-12 col-md-5">
+            <label class="form-label">Loại buổi</label>
+            <select class="form-select" name="activityType">
+              ${CURRICULUM_ACTIVITY_TYPES.map(
+                (activityType) => `
+                  <option value="${escapeHtml(activityType)}" ${activityType === selectedActivity.activityType ? 'selected' : ''}>
+                    ${escapeHtml(getCurriculumActivityTypeLabel(activityType))}
+                  </option>
+                `,
+              ).join('')}
+            </select>
+          </div>
+          <div class="col-12 col-md-3">
+            <button type="submit" class="btn btn-primary w-100" ${busyKey === 'save-session-activity' ? 'disabled' : ''}>
+              ${
+                busyKey === 'save-session-activity'
+                  ? '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Đang lưu...'
+                  : '<i class="bi bi-save me-2"></i>Lưu loại buổi'
+              }
+            </button>
+          </div>
+        </form>
+        <div class="d-flex flex-wrap gap-2 mt-3">
+          <a class="btn btn-outline-secondary btn-sm" href="${escapeHtml(lessonPreviewPath)}" target="_blank" rel="noreferrer">
+            <i class="bi bi-journal-richtext me-1"></i>Xem thử học liệu
+          </a>
+          <a class="btn btn-outline-primary btn-sm" href="${escapeHtml(quizPreviewPath)}" target="_blank" rel="noreferrer">
+            <i class="bi bi-play-circle me-1"></i>Test quiz không cần mã lớp
+          </a>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderCompactProgramManagementV3(
+  programGroups,
+  selectedProgramId,
+  editorTab,
+  selectedLessonId,
+  selectedChecklistId,
+  selectedActivitySessionNumber,
+  busyKey,
+) {
   const selectedProgram = programGroups
     .flatMap((group) => group.programs)
     .find((program) => program.id === selectedProgramId);
@@ -2740,6 +2822,7 @@ function renderCompactProgramManagementV3(programGroups, selectedProgramId, edit
           ${
             selectedProgram
               ? `
+                ${QUIZ_UI_ENABLED ? renderSessionActivityPanel(selectedProgram, selectedActivitySessionNumber, busyKey) : ''}
                 <div class="mt-2">
                   ${renderProgramEditorTabs(selectedProgram, editorTab)}
                 </div>
@@ -2772,8 +2855,22 @@ function renderCurriculumWorkspaceSwitch(activeSection) {
         data-action="switch-workspace"
         data-workspace="editor"
       >
-        <i class="bi bi-pencil-square me-2"></i>Chỉnh sửa nội dung mẫu
+        <i class="bi bi-pencil-square me-2"></i>Nội dung theo buổi
       </button>
+      ${
+        QUIZ_UI_ENABLED
+          ? `
+            <button
+              type="button"
+              class="curriculum-workspace-switch__button ${activeSection === 'quiz' ? 'curriculum-workspace-switch__button--active' : ''}"
+              data-action="switch-workspace"
+              data-workspace="quiz"
+            >
+              <i class="bi bi-bar-chart-steps me-2"></i>Điều khiển & thống kê
+            </button>
+          `
+          : ''
+      }
     </div>
   `;
 }
@@ -2852,8 +2949,24 @@ function renderCompactCurriculumPageV3(state) {
                 state.editorTab,
                 state.selectedLessonId,
                 state.selectedChecklistId,
+                state.selectedActivitySessionNumber,
                 state.busyKey,
               )}
+            </div>
+          </section>
+        `
+        : ''
+    }
+
+    ${
+      QUIZ_UI_ENABLED && state.workspaceSection === 'quiz'
+        ? `
+          <section class="curriculum-workspace curriculum-workspace--editor curriculum-workspace--compact">
+            <div class="curriculum-workspace__head curriculum-workspace__head--compact">
+              <div class="curriculum-workspace__eyebrow">Điều khiển & thống kê</div>
+            </div>
+            <div class="curriculum-workspace__body">
+              ${renderQuizManagementContent({ embedded: true })}
             </div>
           </section>
         `
@@ -2889,6 +3002,7 @@ export const curriculumDemoPage = {
       selectedClassCode: '',
       workspaceSection: 'assignment',
       editorTab: 'lessons',
+      selectedActivitySessionNumber: 5,
       previewLessonId: '',
       previewTab: 'overview',
       previewImageSelections: {},
@@ -2969,6 +3083,15 @@ export const curriculumDemoPage = {
       const selectedProgram = getSelectedProgram();
       const activeLessons = getActiveCurriculumLessons(selectedProgram);
       const activeChecklist = getActiveCurriculumChecklist(selectedProgram);
+      const sessionLimit = Math.max(
+        1,
+        Number(selectedProgram?.totalSessionCount || selectedProgram?.knowledgePhaseEndSession || 1),
+      );
+
+      state.selectedActivitySessionNumber = Math.min(
+        sessionLimit,
+        Math.max(1, Number(state.selectedActivitySessionNumber || 1)),
+      );
 
       if (state.selectedLessonId !== 'new' && !activeLessons.some((item) => item.id === state.selectedLessonId)) {
         state.selectedLessonId = activeLessons[0]?.id || 'new';
@@ -3014,11 +3137,44 @@ export const curriculumDemoPage = {
       state.previewLessonId = getDefaultPreviewLessonId(preview, state.previewLessonId);
     }
 
+    let quizManagementCleanup = null;
+    let quizManagementMountToken = 0;
+
+    function cleanupQuizManagement() {
+      quizManagementMountToken += 1;
+      quizManagementCleanup?.();
+      quizManagementCleanup = null;
+    }
+
+    function mountEmbeddedQuizManagement() {
+      cleanupQuizManagement();
+
+      if (!QUIZ_UI_ENABLED || state.workspaceSection !== 'quiz') {
+        return;
+      }
+
+      const mountToken = quizManagementMountToken;
+
+      void mountQuizManagement({ embedded: true, defaultActiveTab: 'operations', forceDefaultTab: true }).then((cleanup) => {
+        if (mountToken !== quizManagementMountToken) {
+          cleanup?.();
+          return;
+        }
+
+        quizManagementCleanup = cleanup;
+      });
+    }
+
     function renderView() {
+      if (!QUIZ_UI_ENABLED && state.workspaceSection === 'quiz') {
+        state.workspaceSection = 'editor';
+      }
+
       syncSelectedClass();
       syncSelectedProgram();
       syncPreviewState();
       root.innerHTML = renderCompactCurriculumPageV3(state);
+      mountEmbeddedQuizManagement();
     }
 
     function updateDraftForSelectedClass(patch) {
@@ -3058,7 +3214,10 @@ export const curriculumDemoPage = {
       const selectedProgram = getSelectedProgram();
 
       if (button.dataset.action === 'switch-workspace') {
-        state.workspaceSection = button.dataset.workspace === 'editor' ? 'editor' : 'assignment';
+        const allowedWorkspaces = QUIZ_UI_ENABLED ? ['assignment', 'editor', 'quiz'] : ['assignment', 'editor'];
+        state.workspaceSection = allowedWorkspaces.includes(button.dataset.workspace)
+          ? button.dataset.workspace
+          : 'assignment';
         renderView();
         return;
       }
@@ -3490,6 +3649,42 @@ export const curriculumDemoPage = {
       const form = event.target;
       const selectedProgram = getSelectedProgram();
 
+      if (form.id === 'curriculum-session-activity-form' && selectedProgram) {
+        event.preventDefault();
+
+        const formData = new FormData(form);
+        const sessionNumber = Number(formData.get('activitySessionNumber'));
+        const activityType = String(formData.get('activityType') || '').trim();
+
+        state.busyKey = 'save-session-activity';
+        renderView();
+
+        try {
+          await saveCurriculumSessionActivity(selectedProgram.id, {
+            sessionNumber,
+            activityType,
+          });
+          await refreshProgram(selectedProgram.id);
+          state.selectedActivitySessionNumber = sessionNumber;
+          showToast({
+            title: 'Đã lưu loại buổi',
+            message: `Buổi ${sessionNumber} đã được cập nhật thành ${getCurriculumActivityTypeLabel(activityType)}.`,
+            variant: 'success',
+          });
+        } catch (error) {
+          showToast({
+            title: 'Không thể lưu loại buổi',
+            message: mapFirebaseError(error, 'Không thể lưu loại buổi cho chương trình này.'),
+            variant: 'danger',
+          });
+        } finally {
+          state.busyKey = '';
+          renderView();
+        }
+
+        return;
+      }
+
       if (form.id === 'curriculum-lesson-form' && selectedProgram) {
         event.preventDefault();
 
@@ -3611,8 +3806,14 @@ export const curriculumDemoPage = {
     root.addEventListener('change', async (event) => {
       const target = event.target;
 
-            if (target.dataset.role === 'lesson-image-alt') {
+      if (target.dataset.role === 'lesson-image-alt') {
         syncLessonImageAltFormStateV3(target);
+        return;
+      }
+
+      if (target.name === 'activitySessionNumber') {
+        state.selectedActivitySessionNumber = Number(target.value || 1);
+        renderView();
         return;
       }
 
@@ -3835,6 +4036,7 @@ export const curriculumDemoPage = {
     renderView();
 
     return () => {
+      cleanupQuizManagement();
       unsubscribers.forEach((unsubscribe) => unsubscribe?.());
     };
   },

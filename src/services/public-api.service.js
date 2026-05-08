@@ -26,6 +26,22 @@ function normalizeText(value) {
   return String(value ?? '').trim();
 }
 
+function normalizeQuizAnswers(answers) {
+  if (!answers || typeof answers !== 'object') {
+    return {};
+  }
+
+  return Object.entries(answers).reduce((result, [questionId, optionId]) => {
+    const normalizedQuestionId = normalizeText(questionId);
+
+    if (normalizedQuestionId) {
+      result[normalizedQuestionId] = normalizeText(optionId);
+    }
+
+    return result;
+  }, {});
+}
+
 function mapRosterStudent(snapshot) {
   const data = snapshot.data();
 
@@ -197,5 +213,32 @@ export async function submitStudentReport(payload) {
     } catch {
       throw toAppError(directError, 'Không thể gửi báo cáo lúc này.');
     }
+  }
+}
+
+export async function getStudentQuizContext(payload = {}) {
+  try {
+    const response = await callable('getStudentQuizContext')({
+      classCode: normalizeClassCode(payload.classCode),
+      studentId: normalizeText(payload.studentId),
+    });
+
+    return response.data;
+  } catch (error) {
+    throw toAppError(error, 'Không tải được bài kiểm tra trắc nghiệm của lớp này.');
+  }
+}
+
+export async function submitStudentQuiz(payload = {}) {
+  try {
+    const response = await callable('submitStudentQuiz')({
+      classCode: normalizeClassCode(payload.classCode),
+      studentId: normalizeText(payload.studentId),
+      answers: normalizeQuizAnswers(payload.answers),
+    });
+
+    return response.data;
+  } catch (error) {
+    throw toAppError(error, 'Không thể nộp bài kiểm tra lúc này.');
   }
 }

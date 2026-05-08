@@ -35,6 +35,7 @@ function renderLibraryState({
   activeLessonId,
   activeTab,
   imageSelections,
+  lightboxImage,
   reportLink,
 }) {
   if (!classCode) {
@@ -55,6 +56,7 @@ function renderLibraryState({
 
   return renderStudentLibraryBrowser(preview, activeLessonId, imageSelections, {
     activeTab,
+    lightboxImage,
     reportLink,
   });
 }
@@ -94,6 +96,7 @@ export const studentLibraryPage = {
     let activeLessonId = routeState.lessonId || '';
     let activeTab = normalizeLibraryTab(routeState.tab);
     let imageSelections = {};
+    let lightboxImage = null;
 
     function syncUrlState() {
       if (!lockedClassCode || !getPublicLibraryPathMatch(window.location.pathname)) {
@@ -122,6 +125,7 @@ export const studentLibraryPage = {
         activeLessonId,
         activeTab,
         imageSelections,
+        lightboxImage,
         reportLink,
       });
     }
@@ -138,6 +142,36 @@ export const studentLibraryPage = {
       renderView();
     }
 
+    function openLightbox(image = {}) {
+      const url = String(image.url || '').trim();
+
+      if (!url) {
+        return;
+      }
+
+      lightboxImage = {
+        url,
+        alt: String(image.alt || '').trim(),
+        label: String(image.label || '').trim(),
+      };
+      renderView();
+    }
+
+    function closeLightbox() {
+      if (!lightboxImage) {
+        return;
+      }
+
+      lightboxImage = null;
+      renderView();
+    }
+
+    function handleKeydown(event) {
+      if (event.key === 'Escape') {
+        closeLightbox();
+      }
+    }
+
     const cleanupShortcut = attachHiddenAdminShortcut({
       brandElement: brandTrigger,
       onTrigger: () => {
@@ -146,10 +180,36 @@ export const studentLibraryPage = {
     });
 
     slot.addEventListener('click', (event) => {
+      const closeLightboxButton = event.target.closest('[data-action="close-library-image-lightbox"]');
+      const openImageButton = event.target.closest('[data-action="open-library-image"]');
+      const markdownImage = event.target.closest('.student-library-markdown img');
       const lessonButton = event.target.closest('[data-action="select-library-lesson"]');
       const imageButton = event.target.closest('[data-action="select-library-image"]');
       const tabButton = event.target.closest('[data-action="select-library-tab"]');
       const neighborButton = event.target.closest('[data-action="go-to-library-neighbor"]');
+
+      if (closeLightboxButton) {
+        closeLightbox();
+        return;
+      }
+
+      if (openImageButton) {
+        openLightbox({
+          url: openImageButton.dataset.imageUrl || '',
+          alt: openImageButton.dataset.imageAlt || '',
+          label: openImageButton.dataset.imageLabel || '',
+        });
+        return;
+      }
+
+      if (markdownImage) {
+        openLightbox({
+          url: markdownImage.currentSrc || markdownImage.src || '',
+          alt: markdownImage.alt || '',
+          label: markdownImage.alt || 'Ảnh trong học liệu',
+        });
+        return;
+      }
 
       if (lessonButton) {
         setLesson(lessonButton.dataset.lessonId || '');
@@ -182,6 +242,8 @@ export const studentLibraryPage = {
       }
     });
 
+    document.addEventListener('keydown', handleKeydown);
+
     renderView();
 
     if (!lockedClassCode) {
@@ -189,6 +251,7 @@ export const studentLibraryPage = {
       error = 'Link học liệu không hợp lệ hoặc thiếu mã lớp.';
       renderView();
       return () => {
+        document.removeEventListener('keydown', handleKeydown);
         cleanupShortcut?.();
       };
     }
@@ -209,6 +272,7 @@ export const studentLibraryPage = {
     }
 
     return () => {
+      document.removeEventListener('keydown', handleKeydown);
       cleanupShortcut?.();
     };
   },
