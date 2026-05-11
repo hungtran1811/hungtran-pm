@@ -24,7 +24,8 @@ function getDefaultLessonId(preview) {
 }
 
 function normalizeLibraryTab(value) {
-  return ['overview', 'images', 'links'].includes(value) ? value : 'overview';
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === 'exercise' ? 'exercise' : 'lecture';
 }
 
 function renderLibraryState({
@@ -217,7 +218,7 @@ export const studentLibraryPage = {
       }
 
       if (tabButton) {
-        setTab(tabButton.dataset.tab || 'overview');
+        setTab(tabButton.dataset.tab || 'lecture');
         return;
       }
 

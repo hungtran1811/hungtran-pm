@@ -1,4 +1,11 @@
-import { renderLessonMarkdownEmptyState, renderLessonMarkdownHtml } from '../../utils/lesson-markdown.js';
+import {
+  hasVisibleLessonExercises,
+  LESSON_MARKDOWN_TAB_EXERCISE,
+  LESSON_MARKDOWN_TAB_LECTURE,
+  normalizeLessonMarkdownTab,
+  renderLessonMarkdownEmptyState,
+  renderLessonMarkdownHtml,
+} from '../../utils/lesson-markdown.js';
 import { escapeHtml } from '../../utils/html.js';
 
 function getSafeLinkHref(value) {
@@ -291,8 +298,54 @@ function renderLibraryImageLightbox(image = null) {
   `;
 }
 
-function renderLessonArticle(lesson, selectedImageId) {
-  const articleHtml = renderLessonMarkdownHtml(lesson);
+function renderLessonContentTabs(activeTab, showExercises) {
+  const tabs = [
+    {
+      id: LESSON_MARKDOWN_TAB_LECTURE,
+      label: 'Bài giảng',
+      icon: 'journal-text',
+    },
+  ];
+
+  if (showExercises) {
+    tabs.push({
+      id: LESSON_MARKDOWN_TAB_EXERCISE,
+      label: 'Bài tập',
+      icon: 'pencil-square',
+    });
+  }
+
+  return `
+    <div class="student-library-tabbar mb-3" role="tablist" aria-label="Nội dung buổi học">
+      ${tabs
+        .map(
+          (tab) => `
+            <button
+              type="button"
+              class="student-library-tab ${tab.id === activeTab ? 'student-library-tab--active' : ''}"
+              data-action="select-library-tab"
+              data-tab="${tab.id}"
+            >
+              <i class="bi bi-${tab.icon} me-1"></i>${tab.label}
+            </button>
+          `,
+        )
+        .join('')}
+    </div>
+  `;
+}
+
+function renderLessonArticle(lesson, selectedImageId, activeTab = LESSON_MARKDOWN_TAB_LECTURE) {
+  const showExercises = hasVisibleLessonExercises(lesson);
+  const normalizedTab =
+    normalizeLessonMarkdownTab(activeTab) === LESSON_MARKDOWN_TAB_EXERCISE && showExercises
+      ? LESSON_MARKDOWN_TAB_EXERCISE
+      : LESSON_MARKDOWN_TAB_LECTURE;
+  const articleHtml = renderLessonMarkdownHtml(lesson, normalizedTab);
+  const emptyMessage =
+    normalizedTab === LESSON_MARKDOWN_TAB_EXERCISE
+      ? 'Giáo viên chưa thêm bài tập cho buổi học này.'
+      : 'Giáo viên chưa thêm nội dung bài giảng cho buổi học này.';
   const references = renderLessonReferences(lesson);
 
   return `
@@ -328,10 +381,11 @@ function renderLessonArticle(lesson, selectedImageId) {
         ${renderLessonMediaFrame(lesson, selectedImageId)}
 
         <div class="student-library-article__body">
+          ${renderLessonContentTabs(normalizedTab, showExercises)}
           <article class="student-library-markdown">
             ${
               articleHtml ||
-              renderLessonMarkdownEmptyState('Giáo viên chưa thêm nội dung markdown cho buổi học này.')
+              renderLessonMarkdownEmptyState(emptyMessage)
             }
           </article>
         </div>
@@ -358,6 +412,7 @@ export function renderStudentLibraryBrowser(
   const reportLink = options.reportLink || '';
   const embedded = Boolean(options.embedded);
   const lightboxImage = options.lightboxImage || null;
+  const activeTab = normalizeLessonMarkdownTab(options.activeTab);
 
   if (!preview?.program || lessons.length === 0) {
     return `
@@ -391,7 +446,7 @@ export function renderStudentLibraryBrowser(
           <div class="student-library-content">
             ${
               enrichedLesson
-                ? renderLessonArticle(enrichedLesson, selectedImageId)
+                ? renderLessonArticle(enrichedLesson, selectedImageId, activeTab)
                 : `
                   <div class="student-library-empty-panel">
                     Chọn một buổi học để xem nội dung chi tiết.

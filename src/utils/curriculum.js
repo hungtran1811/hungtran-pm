@@ -86,6 +86,48 @@ export function clampCurriculumSession(program, sessionNumber) {
   return Math.min(maxSession, Math.max(1, Number.isFinite(numericSession) ? numericSession : 1));
 }
 
+export function normalizeCurriculumExerciseVisibleSessions(value = [], program = null) {
+  const rawValues = Array.isArray(value)
+    ? value
+    : value && typeof value === 'object'
+      ? Object.entries(value)
+          .filter(([, visible]) => Boolean(visible))
+          .map(([sessionNumber]) => sessionNumber)
+      : [];
+  const sessionLimit = program
+    ? Math.max(1, Number(program.totalSessionCount || program.knowledgePhaseEndSession || 1))
+    : Number.POSITIVE_INFINITY;
+  const uniqueSessions = new Set();
+
+  rawValues.forEach((item) => {
+    const sessionNumber = Number(item || 0);
+
+    if (Number.isFinite(sessionNumber) && sessionNumber >= 1 && sessionNumber <= sessionLimit) {
+      uniqueSessions.add(Math.floor(sessionNumber));
+    }
+  });
+
+  return [...uniqueSessions].sort((left, right) => left - right);
+}
+
+export function isCurriculumExerciseVisibleForSession(assignment = {}, sessionNumber = 0) {
+  const visibleSessions = normalizeCurriculumExerciseVisibleSessions(assignment.exerciseVisibleSessions);
+  return visibleSessions.includes(Number(sessionNumber || 0));
+}
+
+export function setCurriculumExerciseVisibleForSession(assignment = {}, sessionNumber = 0, visible = false, program = null) {
+  const normalizedSession = clampCurriculumSession(program, sessionNumber);
+  const visibleSessions = new Set(normalizeCurriculumExerciseVisibleSessions(assignment.exerciseVisibleSessions, program));
+
+  if (visible) {
+    visibleSessions.add(normalizedSession);
+  } else {
+    visibleSessions.delete(normalizedSession);
+  }
+
+  return [...visibleSessions].sort((left, right) => left - right);
+}
+
 export function suggestCurriculumProgramIdForClass(programs = [], classInfo = null) {
   const fallbackProgramId = getDefaultCurriculumProgramId(programs);
   const haystack = normalizeCurriculumText(`${classInfo?.classCode || ''} ${classInfo?.className || ''}`);
@@ -124,3 +166,17 @@ export function suggestCurriculumProgramIdForClass(programs = [], classInfo = nu
   return bestProgramId;
 }
 
+export function getSuggestedCurriculumAssignment(classInfo = null, programs = []) {
+  const programId = classInfo?.curriculumProgramId || suggestCurriculumProgramIdForClass(programs, classInfo);
+  const program = programs.find((item) => item.id === programId) || null;
+
+  return {
+    programId,
+    currentSession: clampCurriculumSession(program, classInfo?.curriculumCurrentSession || 1),
+    curriculumPhase: classInfo?.curriculumPhase === 'final' ? 'final' : 'learning',
+    exerciseVisibleSessions: normalizeCurriculumExerciseVisibleSessions(
+      classInfo?.curriculumExerciseVisibleSessions,
+      program,
+    ),
+  };
+}

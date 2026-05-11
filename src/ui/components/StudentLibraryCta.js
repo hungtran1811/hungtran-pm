@@ -27,7 +27,7 @@ export function renderStudentLibraryCta(curriculumPreview, classInfo, isLoading 
     '';
   const href = buildPublicLibraryPath(classInfo.classCode, {
     lessonId: currentLessonId,
-    tab: 'overview',
+    tab: 'lecture',
   });
 
   return `

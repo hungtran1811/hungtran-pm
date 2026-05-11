@@ -17,13 +17,24 @@ import { subscribeClasses } from '../../services/classes.service.js';
 import { getAuthState } from '../../state/auth.store.js';
 import { mapFirebaseError } from '../../utils/firebase-error.js';
 import { escapeHtml } from '../../utils/html.js';
-import { clampCurriculumSession } from '../../utils/curriculum.js';
+import {
+  clampCurriculumSession,
+  isCurriculumExerciseVisibleForSession,
+  normalizeCurriculumExerciseVisibleSessions,
+  setCurriculumExerciseVisibleForSession,
+} from '../../utils/curriculum.js';
 import {
   buildAdminLessonPreviewPath,
   buildAdminQuizPreviewPath,
   buildPublicLibraryPath,
 } from '../../utils/route.js';
-import { buildLegacyLessonMarkdown, renderLessonMarkdownHtml } from '../../utils/lesson-markdown.js';
+import {
+  getLessonMarkdownSource,
+  LESSON_MARKDOWN_TAB_EXERCISE,
+  LESSON_MARKDOWN_TAB_LECTURE,
+  normalizeLessonMarkdownTab,
+  renderLessonMarkdownHtml,
+} from '../../utils/lesson-markdown.js';
 import {
   CURRICULUM_ACTIVITY_TYPES,
   getCurriculumActivityTypeLabel,
@@ -97,11 +108,24 @@ function isDraftDifferentFromSaved(classItem, assignment) {
     return true;
   }
 
+  const savedExerciseSessions = normalizeCurriculumExerciseVisibleSessions(classItem.curriculumExerciseVisibleSessions);
+  const draftExerciseSessions = normalizeCurriculumExerciseVisibleSessions(assignment.exerciseVisibleSessions);
+
   return (
     classItem.curriculumProgramId !== assignment.programId ||
     Number(classItem.curriculumCurrentSession || 1) !== Number(assignment.currentSession || 1) ||
-    (classItem.curriculumPhase === 'final' ? 'final' : 'learning') !== assignment.curriculumPhase
+    (classItem.curriculumPhase === 'final' ? 'final' : 'learning') !== assignment.curriculumPhase ||
+    savedExerciseSessions.join(',') !== draftExerciseSessions.join(',')
   );
+}
+
+function applyAssignmentExerciseVisibility(lessons = [], assignment = null) {
+  const visibleSessions = new Set(normalizeCurriculumExerciseVisibleSessions(assignment?.exerciseVisibleSessions));
+
+  return lessons.map((lesson) => ({
+    ...lesson,
+    exerciseVisible: visibleSessions.has(Number(lesson.sessionNumber || 0)),
+  }));
 }
 
 function buildPreviewView(classItem, assignment, program) {
@@ -109,7 +133,7 @@ function buildPreviewView(classItem, assignment, program) {
     return null;
   }
 
-  const lessons = getActiveCurriculumLessons(program);
+  const lessons = applyAssignmentExerciseVisibility(getActiveCurriculumLessons(program), assignment);
   const checklistItems = getActiveCurriculumChecklist(program);
   const visibleLessons =
     assignment.curriculumPhase === 'final'
@@ -131,8 +155,7 @@ function buildPreviewView(classItem, assignment, program) {
 }
 
 function normalizePreviewTab(value) {
-  const normalized = String(value || '').trim().toLowerCase();
-  return ['overview', 'images', 'links'].includes(normalized) ? normalized : 'overview';
+  return normalizeLessonMarkdownTab(value);
 }
 
 function getDefaultPreviewLessonId(preview, preferredLessonId = '') {
@@ -172,6 +195,8 @@ function getNewLessonDraft(program) {
     sessionNumber: getSuggestedLessonSession(program),
     title: '',
     contentMarkdown: '',
+    lectureMarkdown: '',
+    exerciseMarkdown: '',
     summary: '',
     keyPoints: [],
     practiceTask: '',
@@ -813,8 +838,8 @@ function getLessonBannerImageV3(lessonDraft) {
   return firstImage ? { ...firstImage, id: firstImage.id || `${lessonDraft.id || 'lesson'}-banner` } : null;
 }
 
-function getLessonMarkdownDraftV3(lessonDraft) {
-  return String(lessonDraft?.contentMarkdown || '').trim() || buildLegacyLessonMarkdown(lessonDraft);
+function getLessonMarkdownDraftV3(lessonDraft, tab = LESSON_MARKDOWN_TAB_LECTURE) {
+  return getLessonMarkdownSource(lessonDraft, tab);
 }
 
 function getLessonReviewLinksV3(lessonDraft) {
@@ -1018,42 +1043,121 @@ function renderLessonBannerFieldV3(lessonDraft, cloudinaryReady) {
   `;
 }
 
-function renderLessonMarkdownFieldV3(lessonDraft) {
-  const markdown = getLessonMarkdownDraftV3(lessonDraft);
-  const previewHtml = renderLessonMarkdownHtml({
-    ...lessonDraft,
-    contentMarkdown: markdown,
-  });
-
+function renderLessonMarkdownPaneV3({
+  tab,
+  label,
+  hint,
+  markdown,
+  previewHtml,
+  placeholder,
+  active = false,
+}) {
   return `
-    <div class="col-12">
+    <div
+      class="curriculum-lesson-markdown-pane ${active ? '' : 'd-none'}"
+      data-markdown-pane="${tab}"
+    >
       <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
-        <label class="form-label mb-0">Nội dung markdown</label>
+        <div>
+          <label class="form-label mb-0">${label}</label>
+          <div class="form-text mt-1">${hint}</div>
+        </div>
         <div class="d-flex flex-wrap gap-2">
           <input
-            id="curriculum-lesson-markdown-input"
             class="d-none"
             type="file"
             accept=".md,.markdown,.txt,text/markdown,text/plain"
-            name="lessonMarkdownFile"
+            name="${tab}MarkdownFile"
           >
-          <button type="button" class="btn btn-outline-secondary btn-sm" data-action="pick-markdown-file">
+          <button
+            type="button"
+            class="btn btn-outline-secondary btn-sm"
+            data-action="pick-markdown-file"
+            data-markdown-tab="${tab}"
+          >
             <i class="bi bi-file-earmark-arrow-up me-2"></i>Upload file .md
           </button>
         </div>
       </div>
       <textarea
         class="form-control font-monospace"
-        name="contentMarkdown"
+        name="${tab}Markdown"
         rows="14"
-        placeholder="# Tiêu đề bài học&#10;&#10;Viết hoặc dán nội dung markdown tóm tắt để học sinh xem lại."
+        placeholder="${placeholder}"
       >${escapeHtml(markdown)}</textarea>
       <div class="form-text">Bạn có thể upload file markdown rồi chỉnh lại trực tiếp trong ô này trước khi lưu.</div>
+      <div class="mt-3">
+        <label class="form-label">Xem trước ${label.toLowerCase()}</label>
+        <div
+          id="curriculum-markdown-preview-${tab}"
+          class="curriculum-markdown-preview student-library-markdown"
+          data-markdown-preview="${tab}"
+        >
+          ${previewHtml || '<div class="student-library-markdown-empty">Chưa có nội dung markdown để xem trước.</div>'}
+        </div>
+      </div>
     </div>
+  `;
+}
+
+function renderLessonMarkdownFieldV3(lessonDraft) {
+  const lectureMarkdown = getLessonMarkdownDraftV3(lessonDraft, LESSON_MARKDOWN_TAB_LECTURE);
+  const exerciseMarkdown = getLessonMarkdownDraftV3(lessonDraft, LESSON_MARKDOWN_TAB_EXERCISE);
+  const lecturePreviewHtml = renderLessonMarkdownHtml(
+    {
+      ...lessonDraft,
+      lectureMarkdown,
+      contentMarkdown: lectureMarkdown,
+    },
+    LESSON_MARKDOWN_TAB_LECTURE,
+  );
+  const exercisePreviewHtml = renderLessonMarkdownHtml(
+    {
+      ...lessonDraft,
+      exerciseMarkdown,
+    },
+    LESSON_MARKDOWN_TAB_EXERCISE,
+  );
+  return `
     <div class="col-12">
-      <label class="form-label">Xem trước nội dung</label>
-      <div id="curriculum-markdown-preview" class="curriculum-markdown-preview student-library-markdown">
-        ${previewHtml || '<div class="student-library-markdown-empty">Chưa có nội dung markdown để xem trước.</div>'}
+      <div class="curriculum-lesson-markdown-editor">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+          <div class="student-library-tabbar" role="tablist" aria-label="Nội dung markdown">
+            <button
+              type="button"
+              class="student-library-tab student-library-tab--active"
+              data-action="switch-lesson-markdown-tab"
+              data-markdown-tab="${LESSON_MARKDOWN_TAB_LECTURE}"
+            >
+              <i class="bi bi-journal-text me-1"></i>Bài giảng
+            </button>
+            <button
+              type="button"
+              class="student-library-tab"
+              data-action="switch-lesson-markdown-tab"
+              data-markdown-tab="${LESSON_MARKDOWN_TAB_EXERCISE}"
+            >
+              <i class="bi bi-pencil-square me-1"></i>Bài tập
+            </button>
+          </div>
+        </div>
+        ${renderLessonMarkdownPaneV3({
+          tab: LESSON_MARKDOWN_TAB_LECTURE,
+          label: 'Bài giảng',
+          hint: 'Dùng cho khái niệm, code mẫu, giải thích và phần học sinh cần xem lại.',
+          markdown: lectureMarkdown,
+          previewHtml: lecturePreviewHtml,
+          placeholder: '# Tiêu đề bài học&#10;&#10;## Khái niệm&#10;&#10;## Code mẫu&#10;&#10;## Giải thích',
+          active: true,
+        })}
+        ${renderLessonMarkdownPaneV3({
+          tab: LESSON_MARKDOWN_TAB_EXERCISE,
+          label: 'Bài tập',
+          hint: 'Dùng cho bài tập không đáp án.',
+          markdown: exerciseMarkdown,
+          previewHtml: exercisePreviewHtml,
+          placeholder: '# Bài tập tự luyện&#10;&#10;## Bài 1&#10;&#10;Mô tả yêu cầu học sinh cần làm, không ghi đáp án.',
+        })}
       </div>
     </div>
   `;
@@ -1154,8 +1258,8 @@ function renderLessonFormV3(program, lessonDraft, busyKey, cloudinaryReady) {
         </div>
         <div class="col-12">
           <div class="curriculum-editor-subsection">
-            <div class="curriculum-editor-subsection__title">Nội dung markdown</div>
-            <div class="curriculum-editor-subsection__hint">Upload file markdown tóm tắt hoặc dán nội dung trước khi lưu.</div>
+            <div class="curriculum-editor-subsection__title">Bài giảng & bài tập</div>
+            <div class="curriculum-editor-subsection__hint">Tách phần giảng dạy và phần bài tập tự luyện để học sinh xem rõ ràng hơn.</div>
           </div>
         </div>
         ${renderLessonMarkdownFieldV3(lessonDraft)}
@@ -1215,6 +1319,8 @@ function renderLessonsTabV3(program, selectedLessonId, busyKey, cloudinaryReady)
     selectedLessonId === 'new'
       ? getNewLessonDraft(program)
       : activeLessons.find((lesson) => lesson.id === selectedLessonId) || getNewLessonDraft(program);
+  const selectedSessionNumber = Number(selectedLesson?.sessionNumber || 1);
+  const lessonPreviewPath = buildAdminLessonPreviewPath(program.id, selectedSessionNumber);
 
   return `
     <div class="row g-4">
@@ -1241,8 +1347,11 @@ function renderLessonsTabV3(program, selectedLessonId, busyKey, cloudinaryReady)
       </div>
       <div class="col-12 col-xl-8">
         <div class="card border-0 shadow-sm h-100">
-          <div class="card-header bg-white border-0">
+          <div class="card-header bg-white border-0 d-flex flex-wrap justify-content-between align-items-center gap-2">
             <h3 class="h6 mb-0">${selectedLessonId === 'new' || !selectedLessonId ? 'Thêm buổi học mới' : 'Chỉnh sửa buổi học'}</h3>
+            <a class="btn btn-outline-secondary btn-sm" href="${escapeHtml(lessonPreviewPath)}" target="_blank" rel="noreferrer">
+              <i class="bi bi-eye me-1"></i>Xem thử buổi này
+            </a>
           </div>
           <div class="card-body">
             ${renderLessonFormV3(program, selectedLesson, busyKey, cloudinaryReady)}
@@ -1379,26 +1488,37 @@ function syncBannerImageAltFormStateV3(input) {
   });
 }
 
-function syncLessonMarkdownPreviewV3(form) {
+function syncLessonMarkdownPreviewV3(form, tab = '') {
   if (!form) {
     return;
   }
 
-  const previewElement = form.querySelector('#curriculum-markdown-preview');
-  const markdownInput = form.querySelector('textarea[name="contentMarkdown"]');
+  const tabs = tab
+    ? [normalizeLessonMarkdownTab(tab)]
+    : [LESSON_MARKDOWN_TAB_LECTURE, LESSON_MARKDOWN_TAB_EXERCISE];
   const titleInput = form.querySelector('input[name="title"]');
 
-  if (!previewElement || !markdownInput) {
-    return;
-  }
+  tabs.forEach((currentTab) => {
+    const previewElement = form.querySelector(`[data-markdown-preview="${currentTab}"]`);
+    const markdownInput = form.querySelector(`textarea[name="${currentTab}Markdown"]`);
 
-  const html = renderLessonMarkdownHtml({
-    title: titleInput?.value || '',
-    contentMarkdown: markdownInput.value,
+    if (!previewElement || !markdownInput) {
+      return;
+    }
+
+    const html = renderLessonMarkdownHtml(
+      {
+        title: titleInput?.value || '',
+        lectureMarkdown: currentTab === LESSON_MARKDOWN_TAB_LECTURE ? markdownInput.value : '',
+        contentMarkdown: currentTab === LESSON_MARKDOWN_TAB_LECTURE ? markdownInput.value : '',
+        exerciseMarkdown: currentTab === LESSON_MARKDOWN_TAB_EXERCISE ? markdownInput.value : '',
+      },
+      currentTab,
+    );
+
+    previewElement.innerHTML =
+      html || '<div class="student-library-markdown-empty">Chưa có nội dung markdown để xem trước.</div>';
   });
-
-  previewElement.innerHTML =
-    html || '<div class="student-library-markdown-empty">Chưa có nội dung markdown để xem trước.</div>';
 }
 
 function syncLessonImageAltFormStateV3(input) {
@@ -2575,7 +2695,17 @@ function renderCompactAssignmentControlsV3(classes, programs, selectedClassCode,
   const maxSession = selectedProgram?.totalSessionCount || 1;
   const currentSession = assignment?.currentSession || 1;
   const currentPhase = assignment?.curriculumPhase || 'learning';
-  const libraryPath = selectedClassCode ? buildPublicLibraryPath(selectedClassCode) : '';
+  const currentLesson =
+    getActiveCurriculumLessons(selectedProgram).find((lesson) => Number(lesson.sessionNumber || 0) === currentSession) ||
+    null;
+  const hasExerciseContent = Boolean(getLessonMarkdownSource(currentLesson, LESSON_MARKDOWN_TAB_EXERCISE));
+  const exerciseVisible = isCurriculumExerciseVisibleForSession(assignment, currentSession);
+  const libraryPath = selectedClassCode
+    ? buildPublicLibraryPath(selectedClassCode, {
+        lessonId: currentLesson?.id || '',
+        tab: exerciseVisible && hasExerciseContent ? LESSON_MARKDOWN_TAB_EXERCISE : LESSON_MARKDOWN_TAB_LECTURE,
+      })
+    : '';
   const hasSavedConfig = hasSavedCurriculumAssignment(classItem);
   const isDirty = isDraftDifferentFromSaved(classItem, assignment);
   const statusLabel = !hasSavedConfig ? 'Chưa lưu' : isDirty ? 'Có thay đổi' : 'Đã lưu';
@@ -2648,6 +2778,30 @@ function renderCompactAssignmentControlsV3(classes, programs, selectedClassCode,
             </select>
           </div>
         </div>
+        <div class="curriculum-compact-note mt-3">
+          <div class="d-flex flex-wrap justify-content-between gap-2 align-items-center">
+            <div>
+              <div class="fw-semibold">Bài tập buổi ${currentSession}</div>
+              <div class="small text-secondary">
+                ${hasExerciseContent ? 'Bật để học sinh lớp này thấy tab Bài tập.' : 'Buổi này chưa có nội dung Bài tập trong kho học liệu.'}
+              </div>
+            </div>
+            <div class="form-check form-switch mb-0">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                role="switch"
+                id="assignment-exercise-visible"
+                name="previewExerciseVisible"
+                ${exerciseVisible && hasExerciseContent ? 'checked' : ''}
+                ${hasExerciseContent ? '' : 'disabled'}
+              >
+              <label class="form-check-label" for="assignment-exercise-visible">
+                ${exerciseVisible && hasExerciseContent ? 'Đang hiện' : 'Đang ẩn'}
+              </label>
+            </div>
+          </div>
+        </div>
         <div class="curriculum-assignment-actions ${libraryPath ? '' : 'curriculum-assignment-actions--single'} mt-3">
           <button
             type="button"
@@ -2664,7 +2818,7 @@ function renderCompactAssignmentControlsV3(classes, programs, selectedClassCode,
           ${
             libraryPath
               ? `
-                <a class="btn btn-outline-secondary" href="${libraryPath}" target="_blank" rel="noreferrer">
+                <a class="btn btn-outline-secondary" href="${escapeHtml(libraryPath)}" target="_blank" rel="noreferrer">
                   <i class="bi bi-journal-richtext me-2"></i>Xem học liệu của lớp
                 </a>
               `
@@ -3004,7 +3158,7 @@ export const curriculumDemoPage = {
       editorTab: 'lessons',
       selectedActivitySessionNumber: 5,
       previewLessonId: '',
-      previewTab: 'overview',
+      previewTab: LESSON_MARKDOWN_TAB_LECTURE,
       previewImageSelections: {},
       draftsByClassCode: {},
       busyKey: '',
@@ -3193,6 +3347,10 @@ export const curriculumDemoPage = {
         ...patch,
         programId,
         currentSession: clampCurriculumSession(program, patch.currentSession ?? current.currentSession),
+        exerciseVisibleSessions: normalizeCurriculumExerciseVisibleSessions(
+          patch.exerciseVisibleSessions ?? current.exerciseVisibleSessions,
+          program,
+        ),
         curriculumPhase:
           patch.curriculumPhase === 'final'
             ? 'final'
@@ -3234,6 +3392,27 @@ export const curriculumDemoPage = {
         return;
       }
 
+      if (button.dataset.action === 'switch-lesson-markdown-tab') {
+        const form = button.closest('form');
+        const activeTab = normalizeLessonMarkdownTab(button.dataset.markdownTab);
+
+        form?.querySelectorAll('[data-action="switch-lesson-markdown-tab"]').forEach((tabButton) => {
+          tabButton.classList.toggle(
+            'student-library-tab--active',
+            normalizeLessonMarkdownTab(tabButton.dataset.markdownTab) === activeTab,
+          );
+        });
+
+        form?.querySelectorAll('[data-markdown-pane]').forEach((pane) => {
+          pane.classList.toggle(
+            'd-none',
+            normalizeLessonMarkdownTab(pane.dataset.markdownPane) !== activeTab,
+          );
+        });
+
+        return;
+      }
+
       if (button.dataset.action === 'go-to-library-neighbor') {
         state.previewLessonId = button.dataset.lessonId || '';
         renderView();
@@ -3256,9 +3435,10 @@ export const curriculumDemoPage = {
         return;
       }
 
-            if (button.dataset.action === 'pick-markdown-file') {
+      if (button.dataset.action === 'pick-markdown-file') {
         const form = button.closest('form');
-        const fileInput = form?.querySelector('input[name="lessonMarkdownFile"]');
+        const markdownTab = normalizeLessonMarkdownTab(button.dataset.markdownTab);
+        const fileInput = form?.querySelector(`input[name="${markdownTab}MarkdownFile"]`);
         fileInput?.click();
         return;
       }
@@ -3442,6 +3622,7 @@ export const curriculumDemoPage = {
             curriculumProgramId: assignment.programId,
             curriculumCurrentSession: assignment.currentSession,
             curriculumPhase: assignment.curriculumPhase,
+            curriculumExerciseVisibleSessions: assignment.exerciseVisibleSessions || [],
           });
 
           const latestView = await getClassCurriculumView(selectedClass.classCode, { publicAccess: false });
@@ -3696,11 +3877,15 @@ export const curriculumDemoPage = {
 
         try {
           const images = getLessonImagesFromFormV3(form);
-                    await saveCurriculumLesson(selectedProgram.id, {
+          const lectureMarkdown = String(formData.get('lectureMarkdown') || '').trim();
+          const exerciseMarkdown = String(formData.get('exerciseMarkdown') || '').trim();
+          await saveCurriculumLesson(selectedProgram.id, {
             id: lessonId,
             sessionNumber: Number(formData.get('sessionNumber')),
             title: formData.get('title'),
-            contentMarkdown: formData.get('contentMarkdown'),
+            contentMarkdown: lectureMarkdown,
+            lectureMarkdown,
+            exerciseMarkdown,
             reviewLinks: getReviewLinksFromFormV3(form),
             teacherNote: formData.get('teacherNote'),
             bannerImage: getLessonBannerFromFormV3(form),
@@ -3822,16 +4007,17 @@ export const curriculumDemoPage = {
         return;
       }
 
-      if (target.name === 'contentMarkdown' || target.name === 'title') {
+      if (['lectureMarkdown', 'exerciseMarkdown', 'title'].includes(target.name)) {
         const form = target.closest('form');
-        syncLessonMarkdownPreviewV3(form);
+        syncLessonMarkdownPreviewV3(form, target.name === 'title' ? '' : target.name.replace('Markdown', ''));
         return;
       }
 
-      if (target.name === 'lessonMarkdownFile') {
+      if (['lectureMarkdownFile', 'exerciseMarkdownFile'].includes(target.name)) {
         const form = target.closest('form');
         const file = target.files?.[0] || null;
-        const markdownInput = form?.querySelector('textarea[name="contentMarkdown"]');
+        const markdownTab = normalizeLessonMarkdownTab(target.name.replace('MarkdownFile', ''));
+        const markdownInput = form?.querySelector(`textarea[name="${markdownTab}Markdown"]`);
 
         if (!file || !form || !markdownInput) {
           return;
@@ -3839,7 +4025,7 @@ export const curriculumDemoPage = {
 
         try {
           markdownInput.value = await file.text();
-          syncLessonMarkdownPreviewV3(form);
+          syncLessonMarkdownPreviewV3(form, markdownTab);
           showToast({
             title: 'Đã nạp file markdown',
             message: 'Nội dung markdown đã được đưa vào editor. Hãy kiểm tra lại rồi bấm lưu.',
@@ -3992,6 +4178,25 @@ export const curriculumDemoPage = {
 
       if (target.name === 'previewCurrentSession') {
         updateDraftForSelectedClass({ currentSession: Number(target.value) });
+        renderView();
+        return;
+      }
+
+      if (target.name === 'previewExerciseVisible') {
+        const selectedClass = getSelectedClass();
+        const assignment = selectedClass ? ensureDraftForClass(selectedClass) : null;
+        const program = state.programs.find((item) => item.id === assignment?.programId) || null;
+        const sessionNumber = Number(assignment?.currentSession || 1);
+
+        updateDraftForSelectedClass({
+          exerciseVisibleSessions: setCurriculumExerciseVisibleForSession(
+            assignment,
+            sessionNumber,
+            target.checked,
+            program,
+          ),
+        });
+        state.previewTab = target.checked ? LESSON_MARKDOWN_TAB_EXERCISE : LESSON_MARKDOWN_TAB_LECTURE;
         renderView();
         return;
       }

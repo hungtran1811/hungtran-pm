@@ -1,5 +1,6 @@
 import { toDate } from '../utils/date.js';
 import { normalizeQuizMode, QUIZ_MODE_OFFICIAL } from '../utils/quiz.js';
+import { normalizeCurriculumExerciseVisibleSessions } from '../utils/curriculum.js';
 
 export function toClassModel(snapshot) {
   const data = snapshot.data();
@@ -16,6 +17,7 @@ export function toClassModel(snapshot) {
     curriculumProgramId: data.curriculumProgramId ?? '',
     curriculumCurrentSession: Number(data.curriculumCurrentSession ?? 1),
     curriculumPhase: data.curriculumPhase === 'final' ? 'final' : 'learning',
+    curriculumExerciseVisibleSessions: normalizeCurriculumExerciseVisibleSessions(data.curriculumExerciseVisibleSessions),
     activeQuizSessionNumber: Number(data.activeQuizSessionNumber ?? 0),
     activeQuizMode: normalizeQuizMode(data.activeQuizMode || QUIZ_MODE_OFFICIAL),
     quizStatus: String(data.quizStatus ?? 'idle').trim().toLowerCase() === 'started' ? 'started' : 'idle',
@@ -37,6 +39,7 @@ export function getClassDefaults() {
     curriculumProgramId: '',
     curriculumCurrentSession: 1,
     curriculumPhase: 'learning',
+    curriculumExerciseVisibleSessions: [],
     activeQuizSessionNumber: 0,
     activeQuizMode: QUIZ_MODE_OFFICIAL,
     quizStatus: 'idle',

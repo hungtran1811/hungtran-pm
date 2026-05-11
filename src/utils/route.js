@@ -1,5 +1,5 @@
 export const DEFAULT_HASH_ROUTE = '#/student/report';
-const LIBRARY_TABS = new Set(['overview', 'images', 'links']);
+const LIBRARY_TABS = new Set(['lecture', 'exercise']);
 
 function normalizeClassCode(value) {
   return decodeURIComponent(String(value ?? '').trim()).toUpperCase();
@@ -20,7 +20,12 @@ function normalizeSessionNumber(value) {
 
 function normalizeLibraryTab(value) {
   const normalized = String(value ?? '').trim().toLowerCase();
-  return LIBRARY_TABS.has(normalized) ? normalized : 'overview';
+
+  if (LIBRARY_TABS.has(normalized)) {
+    return normalized;
+  }
+
+  return 'lecture';
 }
 
 export function getPublicReportPathMatch(pathname = '/') {
@@ -103,7 +108,7 @@ export function getHashRouteState(hash = window.location.hash) {
       path: '/student/quiz',
       classCode: normalizeClassCode(quizPathMatch[1]),
       lessonId: '',
-      tab: 'overview',
+      tab: 'lecture',
     };
   }
 
@@ -242,9 +247,14 @@ export function buildPublicReportPath(classCode = '') {
 export function buildPublicLibraryPath(classCode = '', options = {}) {
   const params = new URLSearchParams();
   const lessonId = normalizeLessonId(options.lessonId);
+  const tab = normalizeLibraryTab(options.tab);
 
   if (lessonId) {
     params.set('lesson', lessonId);
+  }
+
+  if (tab !== 'lecture') {
+    params.set('tab', tab);
   }
 
   const serialized = params.toString();

@@ -17,6 +17,7 @@ import { toAppError } from '../utils/firebase-error.js';
 import {
   clampCurriculumSession,
   groupCurriculumProgramsBySubject,
+  normalizeCurriculumExerciseVisibleSessions,
   sortCurriculumPrograms,
   suggestCurriculumProgramIdForClass,
 } from '../utils/curriculum.js';
@@ -46,6 +47,7 @@ function buildCurriculumAssignment(classItem, programs) {
       programId: '',
       currentSession: 1,
       curriculumPhase: 'learning',
+      exerciseVisibleSessions: [],
     };
   }
 
@@ -53,7 +55,20 @@ function buildCurriculumAssignment(classItem, programs) {
     programId: program.id,
     currentSession: clampCurriculumSession(program, classItem?.curriculumCurrentSession || 1),
     curriculumPhase: classItem?.curriculumPhase === 'final' ? 'final' : 'learning',
+    exerciseVisibleSessions: normalizeCurriculumExerciseVisibleSessions(
+      classItem?.curriculumExerciseVisibleSessions,
+      program,
+    ),
   };
+}
+
+function applyClassExerciseVisibility(lessons = [], assignment = null) {
+  const visibleSessions = new Set(normalizeCurriculumExerciseVisibleSessions(assignment?.exerciseVisibleSessions));
+
+  return lessons.map((lesson) => ({
+    ...lesson,
+    exerciseVisible: visibleSessions.has(Number(lesson.sessionNumber || 0)),
+  }));
 }
 
 function buildCurriculumView(classItem, program) {
@@ -69,7 +84,7 @@ function buildCurriculumView(classItem, program) {
   }
 
   const assignment = buildCurriculumAssignment(classItem, [program]);
-  const lessons = getActiveCurriculumLessons(program);
+  const lessons = applyClassExerciseVisibility(getActiveCurriculumLessons(program), assignment);
   const checklistItems = getActiveCurriculumChecklist(program);
   const visibleLessons =
     assignment.curriculumPhase === 'final'
@@ -96,7 +111,10 @@ function validateLessonPayload(program, lesson, lessons, currentLessonId = '') {
     throw new Error('Tiêu đề buổi học không được để trống.');
   }
 
-    const hasMarkdownContent = Boolean(String(lesson.contentMarkdown || '').trim());
+  const hasMarkdownContent = Boolean(
+    String(lesson.lectureMarkdown || lesson.contentMarkdown || '').trim() ||
+      String(lesson.exerciseMarkdown || '').trim(),
+  );
   const hasLegacyStructuredContent = Boolean(
     lesson.summary ||
       lesson.practiceTask ||
@@ -252,12 +270,16 @@ export async function saveClassCurriculumAssignment(classCode, payload) {
 
     const program = toCurriculumProgramModelFromData(programSnapshot.id, programSnapshot.data());
 
-    await updateDoc(classRef, {
-      curriculumProgramId: program.id,
-      curriculumCurrentSession: clampCurriculumSession(program, payload.curriculumCurrentSession),
-      curriculumPhase: payload.curriculumPhase === 'final' ? 'final' : 'learning',
-      updatedAt: serverTimestamp(),
-    });
+      await updateDoc(classRef, {
+        curriculumProgramId: program.id,
+        curriculumCurrentSession: clampCurriculumSession(program, payload.curriculumCurrentSession),
+        curriculumPhase: payload.curriculumPhase === 'final' ? 'final' : 'learning',
+        curriculumExerciseVisibleSessions: normalizeCurriculumExerciseVisibleSessions(
+          payload.curriculumExerciseVisibleSessions,
+          program,
+        ),
+        updatedAt: serverTimestamp(),
+      });
   } catch (error) {
     throw toAppError(error, 'Không thể lưu cấu hình học liệu cho lớp này.');
   }

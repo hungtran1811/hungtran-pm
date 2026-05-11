@@ -24,6 +24,14 @@ function coerceArray(values) {
   return Array.isArray(values) ? values : [];
 }
 
+function coerceBoolean(value) {
+  if (typeof value === 'string') {
+    return ['1', 'true', 'yes', 'on'].includes(value.trim().toLowerCase());
+  }
+
+  return Boolean(value);
+}
+
 export function getDefaultCurriculumActivityType(sessionNumber = 0) {
   return QUIZ_DEFAULT_OFFICIAL_SESSION_NUMBERS.includes(Number(sessionNumber || 0))
     ? CURRICULUM_ACTIVITY_TYPE_OFFICIAL_QUIZ
@@ -265,12 +273,18 @@ export function clampKnowledgeSession(program, sessionNumber) {
 export function normalizeLessonRecord(input = {}, fallbackId = 'lesson') {
   const images = normalizeLessonImages(input.images, input.coverImage);
   const bannerImage = normalizeLessonBannerImage(input.bannerImage);
+  const legacyMarkdown = coerceText(input.contentMarkdown);
+  const lectureMarkdown = coerceText(input.lectureMarkdown) || legacyMarkdown;
+  const exerciseMarkdown = coerceText(input.exerciseMarkdown);
 
   return {
     id: coerceText(input.id) || createCurriculumItemId(fallbackId),
     sessionNumber: Math.max(1, Number(input.sessionNumber || 1)),
     title: coerceText(input.title),
-    contentMarkdown: coerceText(input.contentMarkdown),
+    contentMarkdown: lectureMarkdown,
+    lectureMarkdown,
+    exerciseMarkdown,
+    exerciseVisible: coerceBoolean(input.exerciseVisible) && Boolean(exerciseMarkdown),
     summary: coerceText(input.summary),
     keyPoints: coerceArray(input.keyPoints)
       .map(coerceText)

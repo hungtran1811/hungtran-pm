@@ -1957,6 +1957,28 @@ body {
   padding-right: 0.15rem;
 }
 
+.admin-lesson-student-preview {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+.admin-lesson-student-preview .student-library-card {
+  max-width: 100%;
+}
+
+.admin-lesson-student-preview .student-library-article {
+  grid-template-rows: auto auto;
+}
+
+.admin-lesson-student-preview .student-library-media__frame--article {
+  min-height: clamp(260px, 42vw, 560px);
+}
+
+.admin-lesson-student-preview .student-library-media__zoom-button,
+.admin-lesson-student-preview .student-library-media__image {
+  max-width: 100%;
+}
+
 .student-library-resource-card {
   display: block;
   padding: 0.9rem 0.95rem;
@@ -2007,6 +2029,17 @@ body {
   font-size: 0.84rem;
   color: var(--app-muted);
   line-height: 1.45;
+}
+
+.curriculum-lesson-markdown-editor {
+  padding: 1rem;
+  border: 1px solid var(--app-border);
+  border-radius: 1rem;
+  background: #f8fbff;
+}
+
+.curriculum-lesson-markdown-pane {
+  min-width: 0;
 }
 
 .curriculum-markdown-preview {
