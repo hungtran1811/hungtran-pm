@@ -12,13 +12,13 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
-import { STAGES } from '../constants/stages.js';
+import { COMPLETED_STAGE } from '../constants/stages.js';
 import { getFirebaseServices } from '../config/firebase.js';
 import { toClassModel } from '../models/class.model.js';
 import { toAppError } from '../utils/firebase-error.js';
 
 const CLASS_COMPLETION_BATCH_SIZE = 450;
-const COMPLETED_CLASS_STAGE = STAGES[STAGES.length - 1] || 'Thuyết trình / Nộp sản phẩm';
+const COMPLETED_CLASS_STAGE = COMPLETED_STAGE || 'Bảo trì & cải tiến';
 
 function sortClasses(items) {
   return [...items].sort((left, right) => left.className.localeCompare(right.className, 'vi'));
@@ -117,6 +117,7 @@ export async function completeClass(classId) {
       if (batchIndex === 0) {
         batch.update(classRef, {
           status: 'completed',
+          hidden: true,
           updatedAt: serverTimestamp(),
         });
       }

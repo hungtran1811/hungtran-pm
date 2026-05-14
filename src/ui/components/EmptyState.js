@@ -1,15 +1,15 @@
 export function renderEmptyState({
   icon = 'inboxes',
   title = 'Chưa có dữ liệu',
-  description = 'Dữ liệu sẽ hiển thị tại đây khi có bản ghi phù hợp.',
+  description = 'Dữ liệu sẽ hiển thị khi có bản ghi phù hợp.',
 }) {
   return `
-    <div class="card border-0 shadow-sm">
-      <div class="card-body py-5 text-center">
-        <i class="bi bi-${icon} fs-1 text-secondary"></i>
-        <h2 class="h5 mt-3">${title}</h2>
-        <p class="text-secondary mb-0">${description}</p>
+    <div class="admin-empty-state">
+      <div class="admin-empty-state__icon">
+        <i class="bi bi-${icon}"></i>
       </div>
+      <h2>${title}</h2>
+      <p>${description}</p>
     </div>
   `;
 }

@@ -342,6 +342,62 @@ export function getActiveCurriculumLessons(program) {
   return sortCurriculumLessons((program?.lessons || []).filter((lesson) => !lesson.archived));
 }
 
+export function createCurriculumVirtualQuizLesson(program, sessionNumber = 1) {
+  const normalizedSessionNumber = clampKnowledgeSession(program, sessionNumber);
+
+  return {
+    id: `quiz-session-${normalizedSessionNumber}`,
+    sessionNumber: normalizedSessionNumber,
+    title: `Kiểm tra buổi ${normalizedSessionNumber}`,
+    contentMarkdown: '',
+    lectureMarkdown: '',
+    exerciseMarkdown: '',
+    exerciseVisible: false,
+    summary: '',
+    keyPoints: [],
+    practiceTask: '',
+    selfStudyPrompt: '',
+    reviewLinks: [],
+    teacherNote: '',
+    bannerImage: null,
+    images: [],
+    coverImage: null,
+    archived: false,
+    isVirtualQuizLesson: true,
+  };
+}
+
+export function buildCurriculumVisibleLessons(program, lessons = [], assignment = null) {
+  const sessionLimit =
+    assignment?.curriculumPhase === 'final'
+      ? clampKnowledgeSession(program, program?.totalSessionCount || program?.knowledgePhaseEndSession || 1)
+      : clampKnowledgeSession(program, assignment?.currentSession || 1);
+  const lessonsBySession = new Map();
+
+  sortCurriculumLessons(lessons).forEach((lesson) => {
+    const sessionNumber = Number(lesson.sessionNumber || 0);
+
+    if (sessionNumber >= 1 && sessionNumber <= sessionLimit && !lessonsBySession.has(sessionNumber)) {
+      lessonsBySession.set(sessionNumber, lesson);
+    }
+  });
+
+  return Array.from({ length: sessionLimit }, (_, index) => {
+    const sessionNumber = index + 1;
+    const savedLesson = lessonsBySession.get(sessionNumber);
+
+    if (savedLesson) {
+      return savedLesson;
+    }
+
+    const sessionActivity = getCurriculumSessionActivity(program, sessionNumber);
+
+    return isCurriculumQuizActivity(sessionActivity.activityType)
+      ? createCurriculumVirtualQuizLesson(program, sessionNumber)
+      : null;
+  }).filter(Boolean);
+}
+
 export function getCurriculumSessionActivities(program) {
   const totalSessionCount = Math.max(
     1,

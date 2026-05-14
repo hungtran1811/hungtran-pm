@@ -10,26 +10,28 @@ import { validateClassForm } from '../../utils/validators.js';
 import { renderAlert } from '../components/Alert.js';
 import { renderAppShell } from '../components/AppShell.js';
 import { renderClassFormModal } from '../components/ClassFormModal.js';
+import { confirmDialog } from '../components/ConfirmDialog.js';
 import { renderEmptyState } from '../components/EmptyState.js';
 import { renderLoadingOverlay } from '../components/LoadingOverlay.js';
 import { showToast } from '../components/ToastStack.js';
 
 function renderClassFilters(filters) {
   return `
-    <div class="card border-0 shadow-sm mb-4">
-      <div class="card-body">
+    <div class="admin-command-bar mb-4">
+      <div class="admin-command-bar__body">
         <div class="row g-3 align-items-end">
-          <div class="col-12 col-md-4">
-            <label class="form-label">Hiển thị</label>
-            <select class="form-select" name="visibilityFilter">
+          <div class="col-12 col-md-5 col-xl-3">
+            <label class="form-label">Trạng thái lớp</label>
+            <select class="form-select" name="statusFilter">
               <option value="">Tất cả</option>
-              <option value="visible" ${filters.visibilityFilter === 'visible' ? 'selected' : ''}>Đang hiển thị</option>
-              <option value="hidden" ${filters.visibilityFilter === 'hidden' ? 'selected' : ''}>Đang ẩn</option>
+              <option value="active" ${filters.statusFilter === 'active' ? 'selected' : ''}>Đang vận hành</option>
+              <option value="completed" ${filters.statusFilter === 'completed' ? 'selected' : ''}>Đã hoàn thành</option>
+              <option value="archived" ${filters.statusFilter === 'archived' ? 'selected' : ''}>Lưu trữ</option>
             </select>
           </div>
           <div class="col-12 col-md-auto ms-md-auto">
             <button type="button" class="btn btn-outline-secondary w-100" data-action="reset-class-filters">
-              Đặt lại bộ lọc
+              <i class="bi bi-arrow-counterclockwise me-2"></i>Đặt lại
             </button>
           </div>
         </div>
@@ -52,116 +54,150 @@ function renderClassActions(classItem, completion) {
             ? 'Đánh dấu hoàn thành'
             : 'Lớp này chưa đủ điều kiện, nhưng admin vẫn có thể chốt thủ công'
         }"
-      >Hoàn thành lớp</button>`,
+      ><i class="bi bi-check2-circle me-1"></i>Hoàn thành</button>`,
     );
   }
 
   if (classItem.status === 'completed') {
     actions.push(
-      `<button class="btn btn-sm btn-outline-dark" data-action="archive-class" data-class-id="${escapeHtml(classItem.id)}">Lưu trữ</button>`,
+      `<button class="btn btn-sm btn-outline-dark" data-action="archive-class" data-class-id="${escapeHtml(classItem.id)}"><i class="bi bi-archive me-1"></i>Lưu trữ</button>`,
     );
   }
 
   if (classItem.status === 'archived') {
     actions.push(
-      `<button class="btn btn-sm btn-outline-success" data-action="restore-class" data-class-id="${escapeHtml(classItem.id)}">Khôi phục</button>`,
+      `<button class="btn btn-sm btn-outline-success" data-action="restore-class" data-class-id="${escapeHtml(classItem.id)}"><i class="bi bi-arrow-counterclockwise me-1"></i>Khôi phục</button>`,
     );
   }
 
   actions.push(
     `<button class="btn btn-sm btn-outline-secondary" data-action="toggle-hidden" data-class-id="${escapeHtml(classItem.id)}">${
-      classItem.hidden ? 'Bỏ ẩn' : 'Ẩn'
+      classItem.hidden ? '<i class="bi bi-eye me-1"></i>Bỏ ẩn' : '<i class="bi bi-eye-slash me-1"></i>Ẩn'
     }</button>`,
   );
   actions.push(
-    `<button class="btn btn-sm btn-outline-primary" data-action="edit-class" data-class-id="${escapeHtml(classItem.id)}">Sửa</button>`,
+    `<button class="btn btn-sm btn-outline-primary" data-action="edit-class" data-class-id="${escapeHtml(classItem.id)}"><i class="bi bi-pencil-square me-1"></i>Sửa</button>`,
   );
 
-  return `<div class="d-flex flex-wrap gap-2 justify-content-end">${actions.join('')}</div>`;
+  return `<div class="admin-class-card__actions">${actions.join('')}</div>`;
 }
 
-function renderClassesTable(classes, completionMap) {
-  if (classes.length === 0) {
-    return renderEmptyState({
-      icon: 'collection',
-      title: 'Chưa có lớp phù hợp',
-      description: 'Hãy tạo lớp mới hoặc điều chỉnh bộ lọc để xem dữ liệu.',
-    });
+function renderClassCard(classItem, completionMap, { compact = false } = {}) {
+  const completion = completionMap[classItem.classCode] ?? {
+    activeStudentCount: 0,
+    completedStudentCount: 0,
+    completionReady: false,
+  };
+  const completionPercent = completion.activeStudentCount
+    ? Math.round((completion.completedStudentCount / completion.activeStudentCount) * 100)
+    : 0;
+  const visibilityMarkup = classItem.hidden
+    ? '<span class="admin-soft-badge admin-soft-badge--muted"><i class="bi bi-eye-slash"></i>Đang ẩn</span>'
+    : '<span class="admin-soft-badge admin-soft-badge--success"><i class="bi bi-eye"></i>Đang hiển thị</span>';
+
+  if (compact) {
+    return `
+      <article class="admin-class-card admin-class-card--compact">
+        <div class="admin-class-card__top">
+          <div>
+            <div class="admin-class-card__code">${escapeHtml(classItem.classCode)}</div>
+            <div class="admin-class-card__name">${escapeHtml(classItem.className)}</div>
+          </div>
+          <span class="badge text-bg-${CLASS_STATUS_BADGES[classItem.status] || 'secondary'}">
+            ${escapeHtml(CLASS_STATUS_LABELS[classItem.status] || classItem.status)}
+          </span>
+        </div>
+        <div class="admin-class-card__meta">
+          <span><i class="bi bi-people"></i>${classItem.studentCount} học sinh</span>
+          ${visibilityMarkup}
+        </div>
+        ${renderClassActions(classItem, completion)}
+      </article>
+    `;
   }
 
-  const rows = classes
-    .map((classItem) => {
-      const completion = completionMap[classItem.classCode] ?? {
-        activeStudentCount: 0,
-        completedStudentCount: 0,
-        completionReady: false,
-      };
-
-      return `
-        <tr>
-          <td>
-            <div class="fw-semibold">${escapeHtml(classItem.classCode)}</div>
-            <div class="small text-secondary">${escapeHtml(classItem.className)}</div>
-            <div class="small text-secondary mt-1">
-              Hoàn thành: ${completion.completedStudentCount}/${completion.activeStudentCount} học sinh
-            </div>
-          </td>
-          <td>
-            <span class="badge text-bg-${CLASS_STATUS_BADGES[classItem.status] || 'secondary'}">
-              ${escapeHtml(CLASS_STATUS_LABELS[classItem.status] || classItem.status)}
-            </span>
-            ${
-              classItem.status === 'active' && completion.completionReady
-                ? '<div class="mt-2"><span class="badge text-bg-success">Đủ điều kiện hoàn thành</span></div>'
-                : ''
-            }
-          </td>
-          <td>
-            ${
-              classItem.hidden
-                ? '<span class="badge bg-dark-subtle text-dark">Đang ẩn</span>'
-                : '<span class="badge text-bg-light text-dark border">Đang hiển thị</span>'
-            }
-          </td>
-          <td>${classItem.studentCount}</td>
-          <td>${escapeHtml(formatDate(classItem.startDate))}</td>
-          <td>${escapeHtml(formatDate(classItem.endDate))}</td>
-          <td class="text-end">${renderClassActions(classItem, completion)}</td>
-        </tr>
-      `;
-    })
-    .join('');
-
   return `
-    <div class="card border-0 shadow-sm">
-      <div class="table-responsive">
-        <table class="table align-middle mb-0">
-          <thead class="table-light">
-            <tr>
-              <th>Lớp</th>
-              <th>Trạng thái</th>
-              <th>Hiển thị</th>
-              <th>Số học sinh</th>
-              <th>Bắt đầu</th>
-              <th>Kết thúc</th>
-              <th class="text-end">Tác vụ</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
+    <article class="admin-class-card">
+      <div class="admin-class-card__top">
+        <div>
+          <div class="admin-class-card__code">${escapeHtml(classItem.classCode)}</div>
+          <div class="admin-class-card__name">${escapeHtml(classItem.className)}</div>
+        </div>
+        <span class="badge text-bg-${CLASS_STATUS_BADGES[classItem.status] || 'secondary'}">
+          ${escapeHtml(CLASS_STATUS_LABELS[classItem.status] || classItem.status)}
+        </span>
       </div>
-    </div>
+
+      <div class="admin-class-card__meta">
+        <span><i class="bi bi-people"></i>${classItem.studentCount} học sinh</span>
+        ${visibilityMarkup}
+      </div>
+
+      <div class="admin-progress-block">
+        <div class="d-flex justify-content-between align-items-center gap-2">
+          <span>Hoàn thành</span>
+          <strong>${completion.completedStudentCount}/${completion.activeStudentCount}</strong>
+        </div>
+        <div class="progress admin-progress">
+          <div class="progress-bar" style="width: ${completionPercent}%;"></div>
+        </div>
+        ${
+          classItem.status === 'active' && completion.completionReady
+            ? '<span class="admin-soft-badge admin-soft-badge--success mt-2">Đủ điều kiện hoàn thành</span>'
+            : ''
+        }
+      </div>
+
+      <div class="admin-class-card__dates">
+        <span><i class="bi bi-calendar-event"></i>${escapeHtml(formatDate(classItem.startDate))}</span>
+        <span><i class="bi bi-calendar-check"></i>${escapeHtml(formatDate(classItem.endDate))}</span>
+      </div>
+
+      ${renderClassActions(classItem, completion)}
+    </article>
   `;
 }
 
-function renderClassSection({ title, classes, completionMap }) {
-  return `
-    <section class="mb-4">
-      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-        <h3 class="h5 mb-0">${escapeHtml(title)}</h3>
-        <span class="badge text-bg-light text-dark border">${classes.length} lớp</span>
+function renderClassGrid(classes, completionMap, { compact = false } = {}) {
+  if (classes.length === 0) {
+    return renderEmptyState({
+      icon: 'collection',
+      title: 'Chưa có lớp',
+      description: 'Tạo lớp mới hoặc đổi bộ lọc để xem dữ liệu.',
+    });
+  }
+
+  return `<div class="admin-class-grid ${compact ? 'admin-class-grid--compact' : ''}">${classes
+    .map((classItem) => renderClassCard(classItem, completionMap, { compact }))
+    .join('')}</div>`;
+}
+
+function renderClassSection({ title, classes, completionMap, compact = false, collapsed = false }) {
+  const headerMarkup = `
+    <div class="admin-section__header">
+      <div>
+        <h3>${escapeHtml(title)}</h3>
       </div>
-      ${renderClassesTable(classes, completionMap)}
+      <span class="admin-count-pill">${classes.length} lớp</span>
+    </div>
+  `;
+  const bodyMarkup = renderClassGrid(classes, completionMap, { compact });
+
+  if (collapsed) {
+    return `
+      <details class="admin-section admin-section--collapsible">
+        <summary class="admin-section__summary">
+          ${headerMarkup}
+        </summary>
+        ${bodyMarkup}
+      </details>
+    `;
+  }
+
+  return `
+    <section class="admin-section">
+      ${headerMarkup}
+      ${bodyMarkup}
     </section>
   `;
 }
@@ -177,17 +213,16 @@ export const classesPage = {
       currentRoute: '/admin/classes',
       user: authState.user,
       content: `
-        <div class="d-flex justify-content-between align-items-center mb-4 gap-3">
-          <div>
-            <h2 class="h5 mb-1">Danh sách lớp</h2>
+        <section class="admin-page admin-page--classes">
+          <div class="admin-page__actions">
+            <button type="button" class="btn btn-primary" id="create-class-button">
+              <i class="bi bi-plus-circle me-2"></i>Tạo lớp mới
+            </button>
           </div>
-          <button type="button" class="btn btn-primary" id="create-class-button">
-            <i class="bi bi-plus-circle me-2"></i>Tạo lớp mới
-          </button>
-        </div>
-        <div id="classes-filter-slot"></div>
-        <div id="classes-table-slot">${renderLoadingOverlay()}</div>
-        ${renderClassFormModal()}
+          <div id="classes-filter-slot"></div>
+          <div id="classes-table-slot">${renderLoadingOverlay()}</div>
+          ${renderClassFormModal()}
+        </section>
       `,
     });
   },
@@ -202,7 +237,7 @@ export const classesPage = {
     let students = [];
     let editingClass = null;
     let filters = {
-      visibilityFilter: '',
+      statusFilter: '',
     };
 
     function getCompletionMap() {
@@ -212,20 +247,20 @@ export const classesPage = {
       }, {});
     }
 
-    function matchesVisibilityFilter(classItem) {
-      return (
-        !filters.visibilityFilter ||
-        (filters.visibilityFilter === 'hidden' && classItem.hidden) ||
-        (filters.visibilityFilter === 'visible' && !classItem.hidden)
-      );
+    function matchesStatusFilter(classItem) {
+      return !filters.statusFilter || classItem.status === filters.statusFilter;
     }
 
     function getOperationalClasses() {
-      return classes.filter((classItem) => classItem.status === 'active' && matchesVisibilityFilter(classItem));
+      return classes.filter((classItem) => classItem.status === 'active' && matchesStatusFilter(classItem));
+    }
+
+    function getCompletedClasses() {
+      return classes.filter((classItem) => classItem.status === 'completed' && matchesStatusFilter(classItem));
     }
 
     function getArchivedClasses() {
-      return classes.filter((classItem) => classItem.status !== 'active' && matchesVisibilityFilter(classItem));
+      return classes.filter((classItem) => classItem.status === 'archived' && matchesStatusFilter(classItem));
     }
 
     function fillForm(values = {}, isEditing = false) {
@@ -234,8 +269,6 @@ export const classesPage = {
       form.elements.classCode.readOnly = isEditing;
       form.elements.className.value = values.className || '';
       form.elements.status.value = values.status || 'active';
-      form.elements.startDate.value = values.startDate || '';
-      form.elements.endDate.value = values.endDate || '';
       form.elements.hidden.checked = Boolean(values.hidden);
       document.getElementById('class-form-alert').innerHTML = '';
     }
@@ -243,21 +276,33 @@ export const classesPage = {
     function renderView() {
       const completionMap = getCompletionMap();
       const operationalClasses = getOperationalClasses();
+      const completedClasses = getCompletedClasses();
       const archivedClasses = getArchivedClasses();
+      const sections = [
+        { title: 'Đang vận hành', classes: operationalClasses },
+        { title: 'Đã hoàn thành', classes: completedClasses, compact: true, collapsed: true },
+        { title: 'Lưu trữ', classes: archivedClasses },
+      ].filter((section) => section.classes.length > 0);
 
       filterSlot.innerHTML = renderClassFilters(filters);
-      tableSlot.innerHTML = `
-        ${renderClassSection({
-          title: 'Lớp đang vận hành',
-          classes: operationalClasses,
-          completionMap,
-        })}
-        ${renderClassSection({
-          title: 'Kho lưu trữ lớp',
-          classes: archivedClasses,
-          completionMap,
-        })}
-      `;
+      tableSlot.innerHTML =
+        sections.length > 0
+          ? sections
+              .map((section) =>
+                renderClassSection({
+                  title: section.title,
+                  classes: section.classes,
+                  completionMap,
+                  compact: Boolean(section.compact),
+                  collapsed: Boolean(section.collapsed),
+                }),
+              )
+              .join('')
+          : renderEmptyState({
+              icon: 'collection',
+              title: 'Chưa có lớp',
+              description: 'Tạo lớp mới hoặc đổi bộ lọc để xem dữ liệu.',
+            });
     }
 
     async function saveClassQuick(classItem, overrides, successTitle, successMessage, errorMessage) {
@@ -310,12 +355,12 @@ export const classesPage = {
       }
 
       filters = {
-        visibilityFilter: '',
+        statusFilter: '',
       };
       renderView();
     });
 
-    tableSlot.addEventListener('click', (event) => {
+    tableSlot.addEventListener('click', async (event) => {
       const button = event.target.closest('[data-action]');
 
       if (!button) {
@@ -339,9 +384,12 @@ export const classesPage = {
         const completion = getClassCompletionStats(classItem.classCode, students);
 
         if (!completion.completionReady) {
-          const confirmed = window.confirm(
-            `Lớp ${classItem.classCode} chưa đủ điều kiện hoàn thành (${completion.completedStudentCount}/${completion.activeStudentCount} học sinh đã hoàn thành). Bạn vẫn muốn đánh dấu hoàn thành?`,
-          );
+          const confirmed = await confirmDialog({
+            title: 'Đánh dấu hoàn thành lớp?',
+            message: `Lớp ${classItem.classCode} chưa đủ điều kiện hoàn thành (${completion.completedStudentCount}/${completion.activeStudentCount} học sinh đã hoàn thành). Bạn vẫn muốn đánh dấu hoàn thành?`,
+            confirmText: 'Đánh dấu hoàn thành',
+            variant: 'warning',
+          });
 
           if (!confirmed) {
             return;
@@ -354,8 +402,8 @@ export const classesPage = {
               title: 'Đã hoàn thành lớp',
               message:
                 updatedStudentCount > 0
-                  ? `Lớp ${classItem.classCode} đã được chốt 100% hoàn thành cho ${updatedStudentCount} học sinh.`
-                  : `Lớp ${classItem.classCode} đã được đánh dấu hoàn thành.`,
+                  ? `Lớp ${classItem.classCode} đã được chốt 100% hoàn thành cho ${updatedStudentCount} học sinh và ẩn khỏi luồng học sinh.`
+                  : `Lớp ${classItem.classCode} đã được đánh dấu hoàn thành và ẩn khỏi luồng học sinh.`,
               variant: 'success',
             });
           })
@@ -411,8 +459,8 @@ export const classesPage = {
         classCode: form.elements.classCode.value,
         className: form.elements.className.value,
         status: form.elements.status.value,
-        startDate: form.elements.startDate.value,
-        endDate: form.elements.endDate.value,
+        startDate: editingClass?.startDate || '',
+        endDate: editingClass?.endDate || '',
         hidden: form.elements.hidden.checked,
       };
       const validation = validateClassForm(values);

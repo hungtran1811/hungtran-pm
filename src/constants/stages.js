@@ -1,9 +1,10 @@
 export const STAGES = [
-  'Ý tưởng',
-  'Lên kế hoạch',
-  'Thiết kế',
-  'Xây dựng chức năng',
-  'Kiểm thử',
-  'Hoàn thiện',
-  'Thuyết trình / Nộp sản phẩm',
+  'Phân tích vấn đề',
+  'Thiết kế giải pháp',
+  'Xây dựng sản phẩm',
+  'Kiểm thử sản phẩm',
+  'Bảo trì & cải tiến',
 ];
+
+export const DEFAULT_STAGE = STAGES[0];
+export const COMPLETED_STAGE = STAGES[STAGES.length - 1];

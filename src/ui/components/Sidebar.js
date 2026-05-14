@@ -21,20 +21,17 @@ export function renderSidebar(currentRoute) {
   }).join('');
 
   return `
-    <aside class="sidebar bg-dark text-white">
-      <div class="sidebar-brand px-4 py-4">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
         ${renderBrandLogo({
           className: 'sidebar-brand-lockup',
           tone: 'light',
           compact: true,
         })}
       </div>
-      <nav class="nav flex-column px-3 gap-2">
+      <nav class="nav sidebar-nav">
         ${items}
       </nav>
-      <div class="px-4 py-4 mt-auto text-white-50 small">
-        Tối ưu cho giáo viên và quản trị lớp học.
-      </div>
     </aside>
   `;
 }

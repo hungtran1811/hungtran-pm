@@ -23,6 +23,8 @@ import {
 } from '../utils/curriculum.js';
 import {
   clampKnowledgeSession,
+  buildCurriculumVisibleLessons,
+  createCurriculumItemId,
   getActiveCurriculumChecklist,
   getActiveCurriculumLessons,
   isCurriculumReviewLinkValid,
@@ -86,10 +88,7 @@ function buildCurriculumView(classItem, program) {
   const assignment = buildCurriculumAssignment(classItem, [program]);
   const lessons = applyClassExerciseVisibility(getActiveCurriculumLessons(program), assignment);
   const checklistItems = getActiveCurriculumChecklist(program);
-  const visibleLessons =
-    assignment.curriculumPhase === 'final'
-      ? lessons
-      : lessons.filter((lesson) => lesson.sessionNumber <= assignment.currentSession);
+  const visibleLessons = buildCurriculumVisibleLessons(program, lessons, assignment);
 
   return {
     classInfo: classItem,
@@ -353,12 +352,36 @@ export async function setCurriculumLessonArchived(programId, lessonId, archived)
         throw new Error('Không tìm thấy buổi học cần cập nhật.');
       }
 
+      const nextTargetLesson = { ...targetLesson, archived: Boolean(archived) };
+
       if (!archived) {
-        validateLessonPayload(program, { ...targetLesson, archived: false }, program.lessons || [], targetLesson.id);
+        const sessionLimit = Math.max(
+          1,
+          Number(program.totalSessionCount || program.knowledgePhaseEndSession || 1),
+        );
+        const usedSessions = new Set(
+          (program.lessons || [])
+            .filter((item) => !item.archived && item.id !== lessonId)
+            .map((item) => Number(item.sessionNumber || 0))
+            .filter(Boolean),
+        );
+
+        if (usedSessions.has(Number(nextTargetLesson.sessionNumber || 0))) {
+          const availableSession = Array.from({ length: sessionLimit }, (_item, index) => index + 1)
+            .find((sessionNumber) => !usedSessions.has(sessionNumber));
+
+          if (!availableSession) {
+            throw new Error('Chưa có buổi trống để khôi phục bài học này. Hãy lưu kho một buổi khác trước.');
+          }
+
+          nextTargetLesson.sessionNumber = availableSession;
+        }
+
+        validateLessonPayload(program, nextTargetLesson, program.lessons || [], targetLesson.id);
       }
 
       const nextLessons = (program.lessons || []).map((item) =>
-        item.id === lessonId ? { ...item, archived: Boolean(archived) } : item,
+        item.id === lessonId ? nextTargetLesson : item,
       );
 
       return {
@@ -366,6 +389,134 @@ export async function setCurriculumLessonArchived(programId, lessonId, archived)
       };
     },
     archived ? 'Không thể lưu kho buổi học này.' : 'Không thể khôi phục buổi học này.',
+  );
+}
+
+export async function archiveEmptyCurriculumSession(programId, sessionNumber) {
+  await updateCurriculumProgram(
+    programId,
+    (program) => {
+      const normalizedSessionNumber = clampKnowledgeSession(program, sessionNumber);
+      const existingLesson = (program.lessons || []).find(
+        (item) => !item.archived && Number(item.sessionNumber || 0) === normalizedSessionNumber,
+      );
+
+      if (existingLesson) {
+        return {
+          lessons: sortCurriculumLessons(
+            (program.lessons || []).map((item) =>
+              item.id === existingLesson.id ? { ...item, archived: true } : item,
+            ),
+          ),
+        };
+      }
+
+      const currentSessionCount = Math.max(
+        1,
+        Number(program.totalSessionCount || program.knowledgePhaseEndSession || 1),
+      );
+
+      if (normalizedSessionNumber >= currentSessionCount) {
+        const nextSessionCount = Math.max(1, currentSessionCount - 1);
+
+        return {
+          totalSessionCount: nextSessionCount,
+          sessionActivities: (program.sessionActivities || [])
+            .filter((item) => Number(item.sessionNumber || 0) <= nextSessionCount)
+            .sort((left, right) => Number(left.sessionNumber || 0) - Number(right.sessionNumber || 0)),
+        };
+      }
+
+      const placeholderLesson = normalizeLessonRecord(
+        {
+          id: createCurriculumItemId(`${programId}-archived-session-${normalizedSessionNumber}`),
+          sessionNumber: normalizedSessionNumber,
+          title: `Buổi ${normalizedSessionNumber}`,
+          contentMarkdown: '',
+          lectureMarkdown: '',
+          exerciseMarkdown: '',
+          reviewLinks: [],
+          teacherNote: '',
+          bannerImage: null,
+          images: [],
+          coverImage: null,
+          archived: true,
+        },
+        `${programId}-archived-session`,
+      );
+
+      return {
+        lessons: sortCurriculumLessons([...(program.lessons || []), placeholderLesson]),
+      };
+    },
+    'Không thể lưu kho buổi trống này.',
+  );
+}
+
+export async function deleteArchivedCurriculumLesson(programId, lessonId) {
+  await updateCurriculumProgram(
+    programId,
+    (program) => {
+      const targetLesson = (program.lessons || []).find((item) => item.id === lessonId);
+
+      if (!targetLesson) {
+        throw new Error('Không tìm thấy buổi học cần xóa.');
+      }
+
+      if (!targetLesson.archived) {
+        throw new Error('Chỉ có thể xóa vĩnh viễn các buổi học đã nằm trong kho lưu trữ.');
+      }
+
+      const nextLessons = (program.lessons || []).filter((item) => item.id !== lessonId);
+      const currentSessionCount = Math.max(
+        1,
+        Number(program.totalSessionCount || program.knowledgePhaseEndSession || 1),
+      );
+      const deletedSessionNumber = Number(targetLesson.sessionNumber || 0);
+      const patch = {
+        lessons: sortCurriculumLessons(nextLessons),
+      };
+
+      const stillHasLessonAtCurrentSession = nextLessons.some(
+        (item) => Number(item.sessionNumber || 0) === currentSessionCount,
+      );
+
+      if (deletedSessionNumber === currentSessionCount && !stillHasLessonAtCurrentSession) {
+        const nextSessionCount = Math.max(1, currentSessionCount - 1);
+
+        patch.totalSessionCount = nextSessionCount;
+        patch.sessionActivities = (program.sessionActivities || [])
+          .filter((item) => Number(item.sessionNumber || 0) <= nextSessionCount)
+          .sort((left, right) => Number(left.sessionNumber || 0) - Number(right.sessionNumber || 0));
+      }
+
+      return {
+        ...patch,
+      };
+    },
+    'Không thể xóa vĩnh viễn buổi học này.',
+  );
+}
+
+export async function setCurriculumProgramSessionCount(programId, totalSessionCount) {
+  await updateCurriculumProgram(
+    programId,
+    (program) => {
+      const currentCount = Math.max(
+        1,
+        Number(program.totalSessionCount || program.knowledgePhaseEndSession || 1),
+      );
+      const nextCount = Math.max(1, Number(totalSessionCount || currentCount));
+
+      if (nextCount <= currentCount) {
+        throw new Error('Số buổi mới cần lớn hơn số buổi hiện tại.');
+      }
+
+      return {
+        totalSessionCount: nextCount,
+      };
+    },
+    'Không thể thêm buổi mới cho chương trình này.',
   );
 }
 

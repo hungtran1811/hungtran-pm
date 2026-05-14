@@ -85,7 +85,7 @@ export function isOfficialQuizMode() {
 }
 
 export function getQuizModeLabel() {
-  return 'Kiểm tra chính thức';
+  return 'Kiểm tra';
 }
 
 export function normalizeQuizDifficulty(value = QUIZ_DIFFICULTY_MEDIUM) {
@@ -306,6 +306,12 @@ export function buildQuizAttemptSubmissionId(attemptId, submissionNumber) {
   const normalizedAttemptId = coerceText(attemptId);
   const normalizedSubmissionNumber = Math.max(1, Number(submissionNumber || 1));
   return `${normalizedAttemptId}__submission__${normalizedSubmissionNumber}`;
+}
+
+export function buildQuizLiveAttemptId(attemptId, submissionNumber) {
+  const normalizedAttemptId = coerceText(attemptId);
+  const normalizedSubmissionNumber = Math.max(1, Number(submissionNumber || 1));
+  return `${normalizedAttemptId}__live__${normalizedSubmissionNumber}`;
 }
 
 export function getQuizQuestionLimit(quiz = null) {
@@ -566,16 +572,18 @@ export function buildStudentQuizVariant(
     classCode = '',
     studentId = '',
     sessionNumber = 0,
+    submissionNumber = 1,
     questionLimit = QUIZ_QUESTION_LIMIT,
   } = {},
 ) {
   const normalizedClassCode = coerceText(classCode).toUpperCase();
   const normalizedStudentId = coerceText(studentId);
   const normalizedSessionNumber = Number(sessionNumber || quiz?.sessionNumber || 0);
+  const normalizedSubmissionNumber = Math.max(1, Number(submissionNumber || 1));
   const normalizedQuiz = toPublicQuizConfig(quiz);
   const policy = normalizeQuestionPickPolicy(normalizedQuiz.questionPickPolicy);
   const policyQuestionCount = getQuestionPickPolicyTotal(policy);
-  const baseSeed = `${normalizedClassCode}__${normalizedStudentId}__${normalizedSessionNumber}`;
+  const baseSeed = `${normalizedClassCode}__${normalizedStudentId}__${normalizedSessionNumber}__${normalizedSubmissionNumber}`;
   const usePolicy = Number(questionLimit || QUIZ_QUESTION_LIMIT) >= policyQuestionCount;
   const selectedQuestionSource = usePolicy
     ? selectQuestionsByPolicy(normalizedQuiz.questions, policy, `${baseSeed}__questions`)
@@ -602,6 +610,7 @@ export function buildStudentQuizVariant(
     level: normalizedQuiz.level,
     bankId: normalizedQuiz.bankId,
     sessionNumber: normalizedSessionNumber,
+    submissionNumber: normalizedSubmissionNumber,
     quizMode: QUIZ_MODE_OFFICIAL,
     title: normalizedQuiz.title,
     description: normalizedQuiz.description,
@@ -610,6 +619,66 @@ export function buildStudentQuizVariant(
     poolQuestionCount: normalizedQuiz.questions.length,
     questionIds: selectedQuestions.map((question) => question.id),
     questions: selectedQuestions,
+  };
+}
+
+function getOrderedQuizQuestions(quiz = {}, questionIds = []) {
+  const questions = sortQuizQuestions(coerceArray(quiz?.questions));
+  const selectedQuestionIds = coerceArray(questionIds)
+    .map((questionId) => coerceText(questionId))
+    .filter(Boolean);
+
+  if (selectedQuestionIds.length === 0) {
+    return questions;
+  }
+
+  return selectedQuestionIds
+    .map((questionId) => questions.find((question) => question.id === questionId) || null)
+    .filter(Boolean);
+}
+
+export function gradeQuizAnswerMap(quiz = {}, answers = {}, questionIds = []) {
+  const orderedQuestions = getOrderedQuizQuestions(quiz, questionIds);
+  const gradedQuestions = orderedQuestions.map((question, index) => {
+    const questionType = normalizeQuestionType(question.type);
+    const isBlankQuestion = questionType === QUIZ_QUESTION_TYPE_FILL_BLANK;
+    const answerValue = coerceText(answers?.[question.id]);
+    const options = sortQuizOptions(question.options || []);
+    const selectedOption = isBlankQuestion
+      ? null
+      : options.find((option) => option.id === answerValue) || null;
+    const correctOption = isBlankQuestion
+      ? null
+      : options.find((option) => option.id === question.correctOptionId) || null;
+    const acceptedAnswers = normalizeAcceptedAnswers(question.acceptedAnswers || [], question.caseSensitive);
+    const isCorrect = isBlankQuestion
+      ? isQuizBlankAnswerCorrect(question, answerValue)
+      : Boolean(selectedOption) && selectedOption.id === correctOption?.id;
+
+    return {
+      questionId: question.id,
+      questionType,
+      difficulty: normalizeQuizDifficulty(question.difficulty),
+      prompt: coerceText(question.prompt),
+      imageUrl: coerceText(question.imageUrl),
+      imageAlt: coerceText(question.imageAlt),
+      blankPlaceholder: coerceText(question.blankPlaceholder),
+      order: index + 1,
+      selectedOptionId: isBlankQuestion ? '' : answerValue,
+      selectedOptionText: isBlankQuestion ? answerValue : selectedOption?.text || '',
+      correctOptionId: isBlankQuestion ? '' : correctOption?.id || '',
+      correctOptionText: isBlankQuestion ? acceptedAnswers.join(', ') : correctOption?.text || '',
+      isCorrect,
+    };
+  });
+  const questionCount = gradedQuestions.length;
+  const correctCount = gradedQuestions.filter((question) => question.isCorrect).length;
+
+  return {
+    gradedQuestions,
+    questionCount,
+    correctCount,
+    score: questionCount > 0 ? Math.round((correctCount / questionCount) * 100) : 0,
   };
 }
 

@@ -39,10 +39,16 @@ function normalizeQuizAttemptSubmissionRecord(input = {}, order = 1) {
     quizMode: normalizeQuizMode(input.quizMode || QUIZ_MODE_OFFICIAL),
     submissionNumber: Math.max(1, Number(input.submissionNumber ?? order ?? 1)),
     questionCount: Number(input.questionCount ?? 0),
+    correctCount: Number(input.correctCount ?? 0),
+    score: Number(input.score ?? 0),
     questionIds: Array.isArray(input.questionIds)
       ? input.questionIds.map((questionId) => String(questionId ?? '').trim()).filter(Boolean)
       : [],
     answers: input.answers && typeof input.answers === 'object' ? input.answers : {},
+    gradedQuestions: Array.isArray(input.gradedQuestions)
+      ? input.gradedQuestions.map((item, index) => normalizeGradedQuestionRecord(item, index + 1))
+      : [],
+    gradingReady: Array.isArray(input.gradedQuestions) && input.gradedQuestions.length > 0,
     submittedAt: toDate(input.submittedAt),
     createdAt: toDate(input.createdAt),
   };

@@ -1,4 +1,4 @@
-import { doc, getDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
 import { getFirebaseServices } from '../config/firebase.js';
 import { toClassModel } from '../models/class.model.js';
 import { getCurriculumProgram } from './curriculum.service.js';
@@ -12,6 +12,7 @@ import {
 import {
   buildQuizAttemptId,
   buildQuizAttemptSubmissionId,
+  buildQuizLiveAttemptId,
   buildStudentQuizVariant,
   formatQuizReadinessRequirement,
   getQuizReadiness,
@@ -84,6 +85,31 @@ function canAccessQuizForStudent(classItem, sessionNumber, attemptState = null) 
   );
 }
 
+function canWriteCurrentQuizAttempt(attemptState = null) {
+  return !attemptState || attemptState.status === QUIZ_ATTEMPT_STATUS_REOPENED;
+}
+
+function getNextSubmissionNumber(attemptState = null) {
+  const submissionCount = Math.max(0, Number(attemptState?.submissionCount || 0));
+  return attemptState?.status === QUIZ_ATTEMPT_STATUS_REOPENED
+    ? submissionCount + 1
+    : Math.max(1, submissionCount || 1);
+}
+
+function normalizeDraftAnswers(quiz = {}, answers = {}) {
+  const source = answers && typeof answers === 'object' ? answers : {};
+
+  return (quiz?.questions || []).reduce((result, question) => {
+    const answerValue = normalizeText(source[question.id]);
+
+    if (answerValue) {
+      result[question.id] = answerValue;
+    }
+
+    return result;
+  }, {});
+}
+
 async function getValidatedClass(classCode) {
   const { db } = getFirebaseServices();
   const normalizedClassCode = String(classCode ?? '').trim().toUpperCase();
@@ -141,6 +167,7 @@ async function getQuizAttemptState(classCode, studentId, sessionNumber) {
         ? QUIZ_ATTEMPT_STATUS_REOPENED
         : QUIZ_ATTEMPT_STATUS_SUBMITTED,
     quizMode: normalizeQuizMode(data.quizMode || QUIZ_MODE_OFFICIAL),
+    sessionNumber: Number(data.sessionNumber || sessionNumber || 0),
     submittedAt: data.submittedAt ?? null,
     submissionCount: Math.max(0, Number(data.submissionCount || 0)),
     reopenedAt: data.reopenedAt ?? null,
@@ -148,12 +175,38 @@ async function getQuizAttemptState(classCode, studentId, sessionNumber) {
   };
 }
 
-function buildStartedQuizVariant(quizPool, classItem, studentId = '') {
+async function getQuizLiveAttempt(classCode, studentId, sessionNumber, submissionNumber) {
+  const { db } = getFirebaseServices();
+  const attemptId = buildQuizAttemptId(classCode, studentId, sessionNumber);
+  const liveAttemptSnapshot = await getDoc(
+    doc(db, 'quizLiveAttempts', buildQuizLiveAttemptId(attemptId, submissionNumber)),
+  );
+
+  if (!liveAttemptSnapshot.exists()) {
+    return null;
+  }
+
+  const data = liveAttemptSnapshot.data();
+
+  return {
+    id: liveAttemptSnapshot.id,
+    attemptId,
+    submissionNumber: Math.max(1, Number(data.submissionNumber || submissionNumber || 1)),
+    questionIds: Array.isArray(data.questionIds)
+      ? data.questionIds.map((questionId) => normalizeText(questionId)).filter(Boolean)
+      : [],
+    answers: data.answers && typeof data.answers === 'object' ? data.answers : {},
+    updatedAt: data.updatedAt ?? null,
+  };
+}
+
+function buildStartedQuizVariant(quizPool, classItem, studentId = '', submissionNumber = 1) {
   const variant = studentId
     ? buildStudentQuizVariant(quizPool, {
         classCode: classItem.classCode,
         studentId,
         sessionNumber: Number(classItem.curriculumCurrentSession || 0),
+        submissionNumber,
         questionLimit: QUIZ_QUESTION_LIMIT,
       })
     : {
@@ -161,6 +214,7 @@ function buildStartedQuizVariant(quizPool, classItem, studentId = '') {
         level: quizPool.level || '',
         bankId: quizPool.bankId || '',
         sessionNumber: Number(classItem.curriculumCurrentSession || 0),
+        submissionNumber,
         quizMode: QUIZ_MODE_OFFICIAL,
         title: quizPool.title,
         description: quizPool.description,
@@ -279,6 +333,12 @@ export async function getStudentQuizContext(payloadOrClassCode, studentId = '') 
       );
     }
 
+    const submissionNumber = getNextSubmissionNumber(attemptState);
+    const liveAttempt =
+      request.studentId && canWriteCurrentQuizAttempt(attemptState)
+        ? await getQuizLiveAttempt(classItem.classCode, request.studentId, sessionNumber, submissionNumber)
+        : null;
+
     return {
       classInfo: buildClassInfo(classItem),
       availability: {
@@ -290,11 +350,99 @@ export async function getStudentQuizContext(payloadOrClassCode, studentId = '') 
         level: program.level || '',
         reason: '',
       },
-      quiz: buildStartedQuizVariant({ ...quizPool, quizMode: QUIZ_MODE_OFFICIAL }, classItem, request.studentId),
+      quiz: buildStartedQuizVariant(
+        { ...quizPool, quizMode: QUIZ_MODE_OFFICIAL },
+        classItem,
+        request.studentId,
+        submissionNumber,
+      ),
       attempt: attemptState,
+      liveAttempt,
     };
   } catch (error) {
     throw toAppError(error, 'Không tải được bài kiểm tra trắc nghiệm của lớp này.');
+  }
+}
+
+export async function saveStudentQuizDraft(payload = {}) {
+  const classCode = String(payload.classCode ?? '').trim().toUpperCase();
+  const studentId = normalizeText(payload.studentId);
+
+  try {
+    const classItem = await getValidatedClass(classCode);
+    const resolvedActivity = await resolveClassQuizActivity(classItem);
+    const { sessionNumber, sessionActivity, program } = resolvedActivity;
+
+    if (resolvedActivity.reason || !isCurriculumQuizActivity(sessionActivity?.activityType)) {
+      throw new Error(resolvedActivity.reason || 'Lớp này hiện chưa mở bài kiểm tra.');
+    }
+
+    await getValidatedStudent(studentId, classItem.classCode);
+    const attemptState = await getQuizAttemptState(classItem.classCode, studentId, sessionNumber);
+
+    if (!canWriteCurrentQuizAttempt(attemptState)) {
+      throw new Error('Bạn đã nộp bài kiểm tra này rồi.');
+    }
+
+    if (!canAccessQuizForStudent(classItem, sessionNumber, attemptState)) {
+      throw new Error('Bài kiểm tra hiện chưa mở hoặc đã kết thúc.');
+    }
+
+    const quizPool = await getQuizConfigForProgramSession(program, sessionNumber, { publicOnly: true });
+
+    if (!quizPool || !quizPool.questions.length) {
+      throw new Error('Đề kiểm tra hiện chưa được cấu hình đầy đủ.');
+    }
+
+    const readiness = getQuizReadiness(quizPool);
+
+    if (!readiness.isReady) {
+      throw new Error(`Ngân hàng câu hỏi chưa đủ tỉ lệ 4 dễ, 4 trung bình, 2 khó. ${formatQuizReadinessRequirement(readiness)}`);
+    }
+
+    const submissionNumber = getNextSubmissionNumber(attemptState);
+    const attemptId = buildQuizAttemptId(classItem.classCode, studentId, sessionNumber);
+    const liveAttemptId = buildQuizLiveAttemptId(attemptId, submissionNumber);
+    const quizVariant = buildStartedQuizVariant(
+      { ...quizPool, quizMode: QUIZ_MODE_OFFICIAL },
+      classItem,
+      studentId,
+      submissionNumber,
+    );
+    const answers = normalizeDraftAnswers(quizVariant, payload.answers || {});
+    const { db } = getFirebaseServices();
+    const liveAttemptRef = doc(db, 'quizLiveAttempts', liveAttemptId);
+    const liveAttemptSnapshot = await getDoc(liveAttemptRef);
+    const writePayload = {
+      attemptId,
+      classCode: classItem.classCode,
+      studentId,
+      subject: program.subject || '',
+      level: program.level || '',
+      bankId: quizVariant.bankId || quizPool.bankId || '',
+      sessionNumber,
+      quizMode: QUIZ_MODE_OFFICIAL,
+      submissionNumber,
+      questionCount: quizVariant.questionCount,
+      questionIds: quizVariant.questionIds,
+      answers,
+      status: 'draft',
+      updatedAt: serverTimestamp(),
+    };
+
+    if (!liveAttemptSnapshot.exists()) {
+      writePayload.createdAt = serverTimestamp();
+    }
+
+    await setDoc(liveAttemptRef, writePayload, { merge: true });
+
+    return {
+      success: true,
+      submissionNumber,
+      savedAnswerCount: Object.keys(answers).length,
+    };
+  } catch (error) {
+    throw toAppError(error, 'Không thể lưu tạm bài làm lúc này.');
   }
 }
 
@@ -343,7 +491,13 @@ export async function submitStudentQuiz(payload = {}) {
       throw new Error(`Ngân hàng câu hỏi chưa đủ tỉ lệ 4 dễ, 4 trung bình, 2 khó. ${formatQuizReadinessRequirement(readiness)}`);
     }
 
-    const quizVariant = buildStartedQuizVariant({ ...quizPool, quizMode: QUIZ_MODE_OFFICIAL }, classItem, studentId);
+    const submissionNumber = getNextSubmissionNumber(attemptState);
+    const quizVariant = buildStartedQuizVariant(
+      { ...quizPool, quizMode: QUIZ_MODE_OFFICIAL },
+      classItem,
+      studentId,
+      submissionNumber,
+    );
     const validation = validateQuizAnswerMap(quizVariant, payload.answers || {});
 
     if (!validation.isValid) {
@@ -355,9 +509,7 @@ export async function submitStudentQuiz(payload = {}) {
     }
 
     const submittedAt = serverTimestamp();
-    const submissionCount = attemptStateSnapshot.exists()
-      ? Math.max(1, Number(attemptState?.submissionCount || 0) + 1)
-      : 1;
+    const submissionCount = submissionNumber;
     const baseAttemptPayload = {
       classCode: classItem.classCode,
       className: classItem.className,
@@ -390,6 +542,12 @@ export async function submitStudentQuiz(payload = {}) {
       'quizAttemptSubmissions',
       buildQuizAttemptSubmissionId(attemptId, submissionCount),
     );
+    const liveAttemptRef = doc(
+      db,
+      'quizLiveAttempts',
+      buildQuizLiveAttemptId(attemptId, submissionCount),
+    );
+    const liveAttemptSnapshot = await getDoc(liveAttemptRef);
     const attemptWritePayload = {
       ...baseAttemptPayload,
       submissionCount,
@@ -435,12 +593,23 @@ export async function submitStudentQuiz(payload = {}) {
       submittedAt,
       createdAt: submittedAt,
     });
+    if (liveAttemptSnapshot.exists()) {
+      batch.set(
+        liveAttemptRef,
+        {
+          status: 'submitted',
+          updatedAt: submittedAt,
+        },
+        { merge: true },
+      );
+    }
 
     await batch.commit();
 
     return {
       success: true,
       sessionNumber,
+      submissionNumber,
       quizMode: QUIZ_MODE_OFFICIAL,
     };
   } catch (error) {

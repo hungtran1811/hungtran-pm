@@ -119,6 +119,7 @@ export function getHashRouteState(hash = window.location.hash) {
     programId: normalizeProgramId(params.get('programId')),
     sessionNumber: normalizeSessionNumber(params.get('session') || params.get('sessionNumber')),
     quizMode: normalizeProgramId(params.get('quizMode')),
+    workspace: normalizeProgramId(params.get('workspace')),
     tab: normalizeLibraryTab(params.get('tab')),
   };
 }

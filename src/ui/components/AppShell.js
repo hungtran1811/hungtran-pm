@@ -8,7 +8,7 @@ export function renderAppShell({ title, subtitle = '', content = '', currentRout
       ${renderSidebar(currentRoute)}
       <div class="admin-main">
         ${renderTopbar({ title, subtitle, user })}
-        <main class="admin-content container-fluid py-4">
+        <main class="admin-content container-fluid">
           ${content}
         </main>
       </div>

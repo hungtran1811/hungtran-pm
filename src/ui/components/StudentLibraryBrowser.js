@@ -6,7 +6,17 @@ import {
   renderLessonMarkdownEmptyState,
   renderLessonMarkdownHtml,
 } from '../../utils/lesson-markdown.js';
+import {
+  getCurriculumActivityTypeLabel,
+  getCurriculumSessionActivity,
+  isCurriculumQuizActivity,
+} from '../../utils/curriculum-program.js';
+import { formatDateTime } from '../../utils/date.js';
 import { escapeHtml } from '../../utils/html.js';
+import { renderAlert } from './Alert.js';
+import { renderLoadingOverlay } from './LoadingOverlay.js';
+import { renderQuizForm } from './QuizForm.js';
+import { renderStudentSelect } from './StudentSelect.js';
 
 function getSafeLinkHref(value) {
   const rawValue = String(value ?? '').trim();
@@ -78,6 +88,10 @@ function renderLessonMeta(preview, reportLink = '') {
   const className = preview?.classInfo?.className || '';
   const currentSession = preview?.assignment?.currentSession || 1;
   const isFinal = preview?.assignment?.curriculumPhase === 'final';
+  const currentActivity = getCurriculumSessionActivity(preview?.program, currentSession);
+  const isQuizSession = isCurriculumQuizActivity(currentActivity.activityType);
+  const phaseLabel = isFinal ? 'Giai đoạn cuối khóa' : getCurriculumActivityTypeLabel(currentActivity.activityType);
+  const phaseBadgeClass = isFinal ? 'text-bg-success' : isQuizSession ? 'text-bg-warning text-dark' : 'text-bg-primary';
 
   return `
     <div class="student-library-header student-library-header--compact">
@@ -90,8 +104,8 @@ function renderLessonMeta(preview, reportLink = '') {
       </div>
       <div class="student-library-header__actions">
         <span class="badge text-bg-light text-dark border">Buổi hiện tại: ${currentSession}</span>
-        <span class="badge ${isFinal ? 'text-bg-success' : 'text-bg-primary'}">
-          ${isFinal ? 'Giai đoạn cuối khóa' : 'Học kiến thức'}
+        <span class="badge ${phaseBadgeClass}">
+          ${phaseLabel}
         </span>
         ${
           reportLink
@@ -335,7 +349,169 @@ function renderLessonContentTabs(activeTab, showExercises) {
   `;
 }
 
-function renderLessonArticle(lesson, selectedImageId, activeTab = LESSON_MARKDOWN_TAB_LECTURE) {
+function renderQuizSubmittedState(quizContext) {
+  const quiz = quizContext?.quiz;
+  const attempt = quizContext?.attempt;
+  const sessionNumber = Number(quiz?.sessionNumber || quizContext?.availability?.sessionNumber || attempt?.sessionNumber || 0);
+  const questionCount = Number(quiz?.questionCount || attempt?.questionCount || 0);
+
+  return `
+    <div class="card border-0 shadow-sm">
+      <div class="card-body">
+        ${renderAlert('Bạn đã nộp bài kiểm tra này thành công.', 'success')}
+        <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start">
+          <div>
+            <div class="small text-secondary mb-1">Kiểm tra buổi ${sessionNumber || '?'}</div>
+            <h4 class="h5 mb-1">${escapeHtml(quiz?.title || attempt?.quizTitle || 'Bài kiểm tra đã nộp')}</h4>
+            <p class="text-secondary mb-0">Hệ thống đã ghi nhận bài làm của bạn. Giáo viên sẽ xem kết quả trong khu quản trị.</p>
+          </div>
+          ${questionCount > 0 ? `<span class="badge bg-white text-dark border">${questionCount} câu</span>` : ''}
+        </div>
+        <hr class="my-4">
+        <div class="row g-3">
+          <div class="col-12 col-md-6">
+            <div class="quiz-status-meta">
+              <div class="quiz-status-meta__label">Trạng thái</div>
+              <div class="fw-semibold text-success">Đã nộp</div>
+            </div>
+          </div>
+          <div class="col-12 col-md-6">
+            <div class="quiz-status-meta">
+              <div class="quiz-status-meta__label">Thời gian nộp</div>
+              <div class="fw-semibold">${formatDateTime(attempt?.submittedAt)}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderLessonQuizArticle(lesson, selectedImageId, preview, quizState = {}) {
+  const currentSession = Number(preview?.assignment?.currentSession || 0);
+  const lessonSession = Number(lesson?.sessionNumber || 0);
+  const sessionActivity = getCurriculumSessionActivity(preview?.program, lessonSession);
+  const activityLabel = getCurriculumActivityTypeLabel(sessionActivity.activityType);
+  const selectedStudent = (quizState.students || []).find((student) => student.studentId === quizState.selectedStudentId) || null;
+  const isCurrentSession = currentSession === lessonSession;
+  const quizContext = quizState.quizContext || null;
+  const draftAnswerCount = Object.keys(quizState.answers || {}).filter((questionId) =>
+    String(quizState.answers?.[questionId] ?? '').trim(),
+  ).length;
+
+  return `
+    <section class="student-library-workspace">
+      <div class="student-library-workspace__top">
+        <div>
+          <div class="student-library-detail__label">Buổi ${lessonSession} · ${escapeHtml(activityLabel)}</div>
+          <h3 class="h4 mb-1">${escapeHtml(lesson?.title || `Kiểm tra buổi ${lessonSession}`)}</h3>
+        </div>
+        <div class="student-library-workspace__nav">
+          <button
+            type="button"
+            class="btn btn-outline-secondary btn-sm"
+            data-action="go-to-library-neighbor"
+            data-direction="prev"
+            ${lesson?.previousLessonId ? `data-lesson-id="${escapeHtml(lesson.previousLessonId)}"` : 'disabled'}
+          >
+            <i class="bi bi-chevron-left me-1"></i>Buổi trước
+          </button>
+          <button
+            type="button"
+            class="btn btn-outline-secondary btn-sm"
+            data-action="go-to-library-neighbor"
+            data-direction="next"
+            ${lesson?.nextLessonId ? `data-lesson-id="${escapeHtml(lesson.nextLessonId)}"` : 'disabled'}
+          >
+            Buổi sau<i class="bi bi-chevron-right ms-1"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="student-library-article">
+        ${renderLessonMediaFrame(lesson, selectedImageId)}
+        <div class="student-library-article__body">
+          <div class="student-library-quiz-panel">
+            <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start mb-3">
+              <div>
+                <div class="student-library-detail__label">Kiểm tra trắc nghiệm</div>
+                <h4 class="h5 mb-1">${escapeHtml(quizContext?.quiz?.title || `Bài kiểm tra buổi ${lessonSession}`)}</h4>
+                <p class="text-secondary mb-0">
+                  Học sinh chọn đúng tên rồi làm từng câu một. Sau khi nộp chỉ hiện trạng thái đã nộp, không hiện điểm.
+                </p>
+              </div>
+              ${
+                quizState.isSavingDraft
+                  ? '<span class="badge text-bg-light text-dark border"><span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Đang lưu tạm</span>'
+                  : draftAnswerCount > 0
+                    ? `<span class="badge text-bg-light text-dark border">Đã chọn ${draftAnswerCount} câu</span>`
+                    : ''
+              }
+            </div>
+            ${
+              !isCurrentSession
+                ? renderAlert(
+                    `Bài kiểm tra buổi ${lessonSession} chỉ mở khi lớp đang ở đúng buổi ${lessonSession}. Lớp hiện tại đang ở buổi ${currentSession || '?'}.`,
+                    'info',
+                  )
+                : `
+                  <div class="row g-3 mb-3">
+                    <div class="col-12 col-lg-6">
+                      ${renderStudentSelect(quizState.students || [], quizState.selectedStudentId || '')}
+                    </div>
+                  </div>
+                  ${
+                    quizState.isRosterLoading
+                      ? renderLoadingOverlay('Đang tải danh sách học sinh...')
+                      : quizState.rosterError
+                        ? renderAlert(escapeHtml(quizState.rosterError), 'danger')
+                        : !selectedStudent
+                          ? (
+                              quizContext?.availability && !quizContext.availability.isEligible
+                                ? renderAlert(escapeHtml(quizContext.availability.reason || 'Giáo viên chưa mở bài kiểm tra.'), 'info')
+                                : renderAlert('Hãy chọn đúng tên của bạn để bắt đầu làm bài kiểm tra.', 'info')
+                            )
+                          : quizState.isLoading
+                            ? renderLoadingOverlay('Đang tải bài kiểm tra...')
+                            : quizState.error
+                              ? renderAlert(escapeHtml(quizState.error), 'danger')
+                              : quizContext?.attempt?.status === 'submitted'
+                                  ? renderQuizSubmittedState(quizContext)
+                                  : !quizContext?.availability?.isEligible
+                                    ? renderAlert(escapeHtml(quizContext?.availability?.reason || 'Giáo viên chưa mở bài kiểm tra.'), 'info')
+                                  : quizContext?.quiz
+                                    ? renderQuizForm(quizContext.quiz, quizState.answers || {}, quizState.answerErrors || {}, {
+                                        disabled: Boolean(quizState.isSubmitting),
+                                        helperText:
+                                          quizContext?.attempt?.status === 'reopened'
+                                            ? 'Giáo viên đã mở lại lượt làm. Bạn có thể làm lại và hệ thống sẽ ghi nhận lần nộp mới.'
+                                            : 'Mỗi lần chọn đáp án, hệ thống sẽ lưu tạm để nếu giáo viên kết thúc giữa chừng vẫn ghi nhận phần bạn đã chọn.',
+                                        submitLabel: quizState.isSubmitting ? 'Đang nộp bài...' : 'Nộp bài kiểm tra',
+                                        currentQuestionIndex: quizState.currentQuestionIndex || 0,
+                                      })
+                                    : renderAlert('Bài kiểm tra hiện chưa được cấu hình đầy đủ.', 'warning')
+                  }
+                `
+            }
+          </div>
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderLessonArticle(
+  lesson,
+  selectedImageId,
+  activeTab = LESSON_MARKDOWN_TAB_LECTURE,
+  { preview = null, quizState = null } = {},
+) {
+  const sessionActivity = getCurriculumSessionActivity(preview?.program, lesson?.sessionNumber);
+
+  if (isCurriculumQuizActivity(sessionActivity.activityType)) {
+    return renderLessonQuizArticle(lesson, selectedImageId, preview, quizState || {});
+  }
+
   const showExercises = hasVisibleLessonExercises(lesson);
   const normalizedTab =
     normalizeLessonMarkdownTab(activeTab) === LESSON_MARKDOWN_TAB_EXERCISE && showExercises
@@ -379,14 +555,10 @@ function renderLessonArticle(lesson, selectedImageId, activeTab = LESSON_MARKDOW
 
       <div class="student-library-article">
         ${renderLessonMediaFrame(lesson, selectedImageId)}
-
         <div class="student-library-article__body">
           ${renderLessonContentTabs(normalizedTab, showExercises)}
           <article class="student-library-markdown">
-            ${
-              articleHtml ||
-              renderLessonMarkdownEmptyState(emptyMessage)
-            }
+            ${articleHtml || renderLessonMarkdownEmptyState(emptyMessage)}
           </article>
         </div>
         ${references}
@@ -408,6 +580,7 @@ export function renderStudentLibraryBrowser(
     lessons.find((lesson) => lesson.sessionNumber === preview?.assignment?.currentSession) ||
     lessons[lessons.length - 1] ||
     null;
+  const resolvedActiveLessonIndex = activeLesson ? lessons.findIndex((lesson) => lesson.id === activeLesson.id) : -1;
   const selectedImageId = activeLesson ? selectedImageIds?.[activeLesson.id] || '' : '';
   const reportLink = options.reportLink || '';
   const embedded = Boolean(options.embedded);
@@ -429,10 +602,10 @@ export function renderStudentLibraryBrowser(
   const enrichedLesson = activeLesson
     ? {
         ...activeLesson,
-        previousLessonId: activeLessonIndex > 0 ? lessons[activeLessonIndex - 1]?.id || '' : '',
+        previousLessonId: resolvedActiveLessonIndex > 0 ? lessons[resolvedActiveLessonIndex - 1]?.id || '' : '',
         nextLessonId:
-          activeLessonIndex >= 0 && activeLessonIndex < lessons.length - 1
-            ? lessons[activeLessonIndex + 1]?.id || ''
+          resolvedActiveLessonIndex >= 0 && resolvedActiveLessonIndex < lessons.length - 1
+            ? lessons[resolvedActiveLessonIndex + 1]?.id || ''
             : '',
       }
     : null;
@@ -446,7 +619,10 @@ export function renderStudentLibraryBrowser(
           <div class="student-library-content">
             ${
               enrichedLesson
-                ? renderLessonArticle(enrichedLesson, selectedImageId, activeTab)
+                ? renderLessonArticle(enrichedLesson, selectedImageId, activeTab, {
+                    preview,
+                    quizState: options.quizState || null,
+                  })
                 : `
                   <div class="student-library-empty-panel">
                     Chọn một buổi học để xem nội dung chi tiết.

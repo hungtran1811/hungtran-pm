@@ -11,8 +11,8 @@ export function renderFilterBar({
   showDateRange = false,
 }) {
   return `
-    <form id="${id}" class="card border-0 shadow-sm mb-4">
-      <div class="card-body">
+    <form id="${id}" class="admin-command-bar mb-4">
+      <div class="admin-command-bar__body">
         <div class="row g-3 align-items-end">
           <div class="col-12 col-lg-3">
             <label class="form-label">Lớp</label>
@@ -64,7 +64,7 @@ export function renderFilterBar({
           }
           <div class="col-12 col-lg-auto ms-lg-auto">
             <button type="button" class="btn btn-outline-secondary w-100" data-action="reset-filters">
-              Đặt lại bộ lọc
+              <i class="bi bi-arrow-counterclockwise me-2"></i>Đặt lại
             </button>
           </div>
         </div>

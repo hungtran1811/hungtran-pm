@@ -11,6 +11,7 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
+import { DEFAULT_STAGE } from '../constants/stages.js';
 import { getFirebaseServices } from '../config/firebase.js';
 import { toReportModel } from '../models/report.model.js';
 import { toAppError } from '../utils/firebase-error.js';
@@ -123,7 +124,7 @@ export async function deleteReport(reportId) {
         } else {
           batch.update(studentRef, {
             currentProgressPercent: 0,
-            currentStage: 'Ý tưởng',
+            currentStage: DEFAULT_STAGE,
             currentStatus: 'Chưa bắt đầu',
             currentDifficulties: '',
             lastReportedAt: null,

@@ -42,6 +42,11 @@ function normalizePath() {
   const hashState = window.location.hash ? getHashRouteState(window.location.hash) : null;
   const hashPath = hashState?.path || '';
 
+  if (hashPath === '/admin/quizzes') {
+    window.history.replaceState({}, '', '/#/admin/curriculum?workspace=quiz');
+    return '/admin/curriculum';
+  }
+
   if (ROUTES[hashPath] && !['/student/report', '/student/library', '/student/quiz'].includes(hashPath)) {
     return hashPath;
   }

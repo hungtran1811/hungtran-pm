@@ -1,8 +1,6 @@
-import { STATUSES } from '../../constants/statuses.js';
 import { subscribeClasses } from '../../services/classes.service.js';
 import { createStudent, subscribeStudents, updateStudent } from '../../services/students.service.js';
 import { getAuthState } from '../../state/auth.store.js';
-import { formatDateTime } from '../../utils/date.js';
 import { mapFirebaseError } from '../../utils/firebase-error.js';
 import { escapeHtml, optionList } from '../../utils/html.js';
 import { validateStudentForm } from '../../utils/validators.js';
@@ -10,8 +8,6 @@ import { renderAlert } from '../components/Alert.js';
 import { renderAppShell } from '../components/AppShell.js';
 import { renderEmptyState } from '../components/EmptyState.js';
 import { renderLoadingOverlay } from '../components/LoadingOverlay.js';
-import { renderStageBadge } from '../components/StageBadge.js';
-import { renderStatusBadge } from '../components/StatusBadge.js';
 import { renderStudentFormModal } from '../components/StudentFormModal.js';
 import { showToast } from '../components/ToastStack.js';
 
@@ -25,27 +21,27 @@ function isArchivedStudentClass(classItem) {
 
 function renderStudentLifecycleBadge(student, classItem) {
   if (classItem?.status === 'completed' || classItem?.status === 'archived') {
-    return '<span class="badge text-bg-primary">Đã hoàn thành khóa</span>';
+    return '<span class="admin-soft-badge admin-soft-badge--primary"><i class="bi bi-mortarboard"></i>Đã hoàn thành khóa</span>';
   }
 
   if (!student.active) {
-    return '<span class="badge text-bg-secondary">Đang tắt</span>';
+    return '<span class="admin-soft-badge admin-soft-badge--muted"><i class="bi bi-pause-circle"></i>Bảo lưu khóa</span>';
   }
 
   if (classItem?.hidden) {
-    return '<span class="badge bg-dark-subtle text-dark">Đang ẩn</span>';
+    return '<span class="admin-soft-badge admin-soft-badge--muted"><i class="bi bi-eye-slash"></i>Đang ẩn</span>';
   }
 
-  return '<span class="badge text-bg-success">Đang hoạt động</span>';
+  return '<span class="admin-soft-badge admin-soft-badge--success"><i class="bi bi-check-circle"></i>Đang hoạt động</span>';
 }
 
 function renderStudentFilters({ filters, classes, isArchiveView }) {
   return `
-    <div class="d-flex flex-wrap justify-content-end align-items-center gap-3 mb-3">
-      <div class="btn-group" role="group" aria-label="Chế độ học sinh">
+    <div class="admin-list-switch mb-3">
+      <div class="admin-segmented-tabs" role="group" aria-label="Chế độ học sinh">
         <button
           type="button"
-          class="btn ${isArchiveView ? 'btn-outline-secondary' : 'btn-primary'}"
+          class="admin-segmented-tabs__button ${isArchiveView ? '' : 'admin-segmented-tabs__button--active'}"
           data-action="set-student-scope"
           data-scope="active"
         >
@@ -53,7 +49,7 @@ function renderStudentFilters({ filters, classes, isArchiveView }) {
         </button>
         <button
           type="button"
-          class="btn ${isArchiveView ? 'btn-primary' : 'btn-outline-secondary'}"
+          class="admin-segmented-tabs__button ${isArchiveView ? 'admin-segmented-tabs__button--active' : ''}"
           data-action="set-student-scope"
           data-scope="archive"
         >
@@ -61,34 +57,19 @@ function renderStudentFilters({ filters, classes, isArchiveView }) {
         </button>
       </div>
     </div>
-    <div class="card border-0 shadow-sm mb-4">
-      <div class="card-body">
+    <div class="admin-command-bar mb-4">
+      <div class="admin-command-bar__body">
         <div class="row g-3 align-items-end">
-          <div class="col-12 col-md-4">
+          <div class="col-12 col-md-8 col-xl-5">
             <label class="form-label">Lớp</label>
             <select class="form-select" name="classFilter">
               <option value="">Tất cả lớp</option>
               ${optionList(classes, (item) => item.classCode, (item) => `${item.classCode} - ${item.className}`, filters.classFilter)}
             </select>
           </div>
-          <div class="col-12 col-md-4">
-            <label class="form-label">Hoạt động</label>
-            <select class="form-select" name="activityFilter">
-              <option value="">Tất cả</option>
-              <option value="active" ${filters.activityFilter === 'active' ? 'selected' : ''}>Đang hoạt động</option>
-              <option value="inactive" ${filters.activityFilter === 'inactive' ? 'selected' : ''}>Đang tắt</option>
-            </select>
-          </div>
-          <div class="col-12 col-md-4">
-            <label class="form-label">Trạng thái hiện tại</label>
-            <select class="form-select" name="statusFilter">
-              <option value="">Tất cả trạng thái</option>
-              ${optionList(STATUSES, (item) => item, (item) => item, filters.statusFilter)}
-            </select>
-          </div>
           <div class="col-12 col-md-auto ms-md-auto">
             <button type="button" class="btn btn-outline-secondary w-100" data-action="reset-student-filters">
-              Đặt lại bộ lọc
+              <i class="bi bi-arrow-counterclockwise me-2"></i>Đặt lại
             </button>
           </div>
         </div>
@@ -97,57 +78,56 @@ function renderStudentFilters({ filters, classes, isArchiveView }) {
   `;
 }
 
-function renderStudentsTable(students, classMap) {
+function renderStudentsList(students, classMap) {
   if (students.length === 0) {
     return renderEmptyState({
       icon: 'people',
       title: 'Chưa có học sinh phù hợp',
-      description: 'Hãy thêm học sinh mới hoặc điều chỉnh bộ lọc để xem dữ liệu.',
+      description: 'Thêm học sinh mới hoặc đổi bộ lọc để xem dữ liệu.',
     });
   }
 
-  const rows = students
+  const items = students
     .map((student) => {
       const classItem = classMap.get(student.classId) || null;
+      const progressPercent = Number(student.currentProgressPercent || 0);
 
       return `
-        <tr>
-          <td>
-            <div class="fw-semibold">${escapeHtml(student.fullName)}</div>
-            <div class="small text-secondary">${escapeHtml(student.classCode)}</div>
-          </td>
-          <td>${escapeHtml(student.projectName)}</td>
-          <td>${student.currentProgressPercent}%</td>
-          <td>${renderStatusBadge(student.currentStatus)}</td>
-          <td>${renderStageBadge(student.currentStage)}</td>
-          <td>${escapeHtml(formatDateTime(student.lastReportedAt))}</td>
-          <td>${renderStudentLifecycleBadge(student, classItem)}</td>
-          <td class="text-end">
-            <button class="btn btn-sm btn-outline-primary" data-action="edit-student" data-student-id="${escapeHtml(student.id)}">Sửa</button>
-          </td>
-        </tr>
+        <article class="admin-student-card">
+          <div class="admin-card-main">
+            <div>
+              <div class="admin-card-title">${escapeHtml(student.fullName)}</div>
+              <div class="admin-card-subtitle">${escapeHtml(student.classCode || student.classId)} · ${escapeHtml(
+                student.projectName || 'Chưa có dự án',
+              )}</div>
+            </div>
+          </div>
+
+          <div class="admin-card-progress">
+            <strong>${progressPercent}%</strong>
+            <div class="progress admin-progress">
+              <div class="progress-bar" style="width: ${progressPercent}%;"></div>
+            </div>
+          </div>
+
+          <div class="admin-card-meta">
+            ${renderStudentLifecycleBadge(student, classItem)}
+          </div>
+
+          <div class="admin-card-actions">
+            <button class="btn btn-sm btn-outline-primary" data-action="edit-student" data-student-id="${escapeHtml(student.id)}">
+              <i class="bi bi-pencil-square me-1"></i>Sửa
+            </button>
+          </div>
+        </article>
       `;
     })
     .join('');
 
   return `
-    <div class="card border-0 shadow-sm">
-      <div class="table-responsive">
-        <table class="table align-middle mb-0">
-          <thead class="table-light">
-            <tr>
-              <th>Học sinh</th>
-              <th>Dự án</th>
-              <th>%</th>
-              <th>Trạng thái</th>
-              <th>Giai đoạn</th>
-              <th>Cập nhật gần nhất</th>
-              <th>Hoạt động</th>
-              <th class="text-end">Tác vụ</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
+    <div class="admin-data-card">
+      <div class="admin-student-list">
+        ${items}
       </div>
     </div>
   `;
@@ -164,17 +144,16 @@ export const studentsPage = {
       currentRoute: '/admin/students',
       user: authState.user,
       content: `
-        <div class="d-flex justify-content-between align-items-center mb-4 gap-3">
-          <div>
-            <h2 class="h5 mb-1">Danh sách học sinh</h2>
+        <section class="admin-page admin-page--students">
+          <div class="admin-page__actions">
+            <button type="button" class="btn btn-primary" id="create-student-button">
+              <i class="bi bi-person-plus me-2"></i>Thêm học sinh
+            </button>
           </div>
-          <button type="button" class="btn btn-primary" id="create-student-button">
-            <i class="bi bi-person-plus me-2"></i>Thêm học sinh
-          </button>
-        </div>
-        <div id="students-filter-slot"></div>
-        <div id="students-table-slot">${renderLoadingOverlay()}</div>
-        <div id="students-modal-slot"></div>
+          <div id="students-filter-slot"></div>
+          <div id="students-table-slot">${renderLoadingOverlay()}</div>
+          <div id="students-modal-slot"></div>
+        </section>
       `,
     });
   },
@@ -189,8 +168,6 @@ export const studentsPage = {
     let filters = {
       viewScope: 'active',
       classFilter: '',
-      activityFilter: '',
-      statusFilter: '',
     };
 
     function getScopedClasses(viewScope) {
@@ -206,13 +183,7 @@ export const studentsPage = {
     function getFilteredStudents(viewScope) {
       return getScopedStudents(viewScope).filter((student) => {
         const byClass = !filters.classFilter || student.classId === filters.classFilter;
-        const byActivity =
-          !filters.activityFilter ||
-          (filters.activityFilter === 'active' && student.active) ||
-          (filters.activityFilter === 'inactive' && !student.active);
-        const byStatus = !filters.statusFilter || student.currentStatus === filters.statusFilter;
-
-        return byClass && byActivity && byStatus;
+        return byClass;
       });
     }
 
@@ -234,7 +205,7 @@ export const studentsPage = {
 
     function openModal(student = null) {
       currentStudent = student;
-      modalSlot.innerHTML = renderStudentFormModal(getModalClasses(student), student || {});
+      modalSlot.innerHTML = renderStudentFormModal(getModalClasses(student), student || {}, { isEditing: Boolean(student) });
       const modalEl = document.getElementById('student-form-modal');
       const modal = new window.bootstrap.Modal(modalEl);
       const form = document.getElementById('student-form');
@@ -247,7 +218,7 @@ export const studentsPage = {
           fullName: form.elements.fullName.value,
           classId: form.elements.classId.value,
           projectName: form.elements.projectName.value,
-          active: form.elements.active.checked,
+          active: currentStudent ? !Boolean(form.elements.coursePaused?.checked) : true,
         };
         const validation = validateStudentForm(values);
 
@@ -300,7 +271,7 @@ export const studentsPage = {
       }
 
       filterSlot.innerHTML = renderStudentFilters({ filters, classes: availableClasses, isArchiveView });
-      tableSlot.innerHTML = renderStudentsTable(getFilteredStudents(filters.viewScope), classMap);
+      tableSlot.innerHTML = renderStudentsList(getFilteredStudents(filters.viewScope), classMap);
     }
 
     createButton.addEventListener('click', () => {
@@ -352,8 +323,6 @@ export const studentsPage = {
       filters = {
         viewScope: filters.viewScope,
         classFilter: '',
-        activityFilter: '',
-        statusFilter: '',
       };
       renderView();
     });

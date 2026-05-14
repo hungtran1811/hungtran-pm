@@ -10,6 +10,7 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore';
+import { DEFAULT_STAGE } from '../constants/stages.js';
 import { getFirebaseServices } from '../config/firebase.js';
 import { toStudentModel } from '../models/student.model.js';
 import { toAppError } from '../utils/firebase-error.js';
@@ -74,7 +75,7 @@ export async function createStudent(values) {
       projectName: String(values.projectName ?? '').trim(),
       active: Boolean(values.active ?? true),
       currentProgressPercent: Number(values.currentProgressPercent ?? 0),
-      currentStage: values.currentStage ?? 'Ý tưởng',
+      currentStage: values.currentStage ?? DEFAULT_STAGE,
       currentStatus: values.currentStatus ?? 'Chưa bắt đầu',
       currentDifficulties: values.currentDifficulties ?? '',
       lastReportedAt: values.lastReportedAt ?? null,

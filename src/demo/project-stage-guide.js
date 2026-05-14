@@ -1,71 +1,53 @@
 import { STAGES } from '../constants/stages.js';
 
 const STAGE_KEYS = [
-  'idea',
-  'planning',
-  'design',
-  'build',
-  'testing',
-  'polish',
-  'presentation',
+  'waterfall-analysis',
+  'waterfall-design',
+  'waterfall-implementation',
+  'waterfall-testing',
+  'waterfall-maintenance',
 ];
 
 const PROJECT_STAGE_CONTENT = [
   {
     description:
-      'Chốt rõ sản phẩm sẽ làm gì, dành cho ai và sản phẩm cần có những phần chính nào.',
+      'Tìm hiểu vấn đề thực tế mà sản phẩm muốn giải quyết, người dùng là ai và vì sao họ cần sản phẩm này.',
     studentGuide:
-      'Hãy tự hỏi: sản phẩm của em giải quyết vấn đề gì, người dùng là ai và sản phẩm cần có 2-3 phần quan trọng nào.',
+      'Hãy tự hỏi: sản phẩm của em giúp ai, họ đang gặp khó khăn gì, nếu không có sản phẩm thì vấn đề đó bất tiện như thế nào.',
     exampleOutput:
-      'Ví dụ: Website giới thiệu câu lạc bộ, có trang chủ, trang hoạt động và form đăng ký tham gia.',
+      'Ví dụ: Học sinh hay quên thời khóa biểu, nên em làm app nhắc lịch học và việc cần chuẩn bị cho từng môn.',
   },
   {
     description:
-      'Chia việc theo từng buổi, xác định phần nào làm trước, phần nào làm sau và chuẩn bị tài nguyên cần thiết.',
+      'Biến vấn đề đã phân tích thành giải pháp rõ ràng: màn hình, chức năng chính, dữ liệu cần có và cách người dùng thao tác.',
     studentGuide:
-      'Em nên ghi ra các việc nhỏ như làm giao diện, thêm dữ liệu, làm chức năng, kiểm tra lỗi để biết mình đang ở bước nào.',
+      'Hãy tự hỏi: người dùng sẽ bấm vào đâu, xem thông tin gì, nhập dữ liệu gì và sản phẩm cần có những phần nào để giải quyết vấn đề.',
     exampleOutput:
-      'Ví dụ: Buổi 9 làm bố cục, buổi 10 thêm nội dung, buổi 11 làm chức năng tìm kiếm.',
+      'Ví dụ: Vẽ 3 màn hình: danh sách môn học, chi tiết việc cần làm và nút đánh dấu đã hoàn thành.',
   },
   {
     description:
-      'Phác thảo giao diện, nhân vật, màn hình hoặc luồng sử dụng để khi bắt tay làm sẽ rõ ràng hơn.',
+      'Bắt đầu hiện thực hóa thiết kế thành sản phẩm thật bằng code, nội dung, giao diện, nhân vật, dữ liệu hoặc chức năng.',
     studentGuide:
-      'Nếu em chưa code ngay được, hãy vẽ sơ đồ màn hình, phác thảo nhân vật hoặc mô tả luồng sử dụng trước.',
+      'Em đang ở bước này khi mỗi buổi đều tạo thêm được phần dùng được: giao diện mới, chức năng mới, dữ liệu mới hoặc tương tác mới.',
     exampleOutput:
-      'Ví dụ: Vẽ bố cục trang chủ, trang chi tiết và màn hình đăng nhập trên giấy hoặc Figma.',
+      'Ví dụ: Làm được màn hình thêm việc cần làm, lưu được dữ liệu và hiển thị danh sách việc theo từng ngày.',
   },
   {
     description:
-      'Bắt đầu làm các phần chính của sản phẩm như chức năng, tương tác, nội dung hoặc cách sản phẩm hoạt động.',
+      'Chạy thử sản phẩm như một người dùng thật để tìm lỗi, điểm khó hiểu hoặc phần chưa giải quyết đúng vấn đề ban đầu.',
     studentGuide:
-      'Em đang ở giai đoạn này khi đã bắt đầu dựng sản phẩm thật và mỗi buổi đều thêm được chức năng hoặc nội dung mới.',
+      'Hãy tự hỏi: sản phẩm có chạy đúng không, người khác dùng có hiểu không, có lỗi nào làm người dùng không đạt được mục tiêu không.',
     exampleOutput:
-      'Ví dụ: Thêm đăng nhập, lưu dữ liệu người dùng, điều khiển nhân vật hoặc hoàn thiện các màn hình chính.',
+      'Ví dụ: Nhờ bạn thử thêm lịch học, phát hiện nút lưu chưa rõ ràng rồi sửa lại thông báo sau khi lưu thành công.',
   },
   {
     description:
-      'Chạy thử sản phẩm, phát hiện lỗi hoặc điểm chưa ổn và sửa để sản phẩm hoạt động tốt hơn.',
+      'Sau khi sản phẩm đã dùng được, tiếp tục sửa lỗi, làm rõ nội dung, cải thiện trải nghiệm và bổ sung phần giúp sản phẩm hữu ích hơn.',
     studentGuide:
-      'Nếu em đang thử nhiều lần, ghi ra lỗi và sửa từng phần để sản phẩm bớt lỗi hơn, đó là lúc em ở giai đoạn kiểm thử.',
+      'Hãy tự hỏi: nếu dùng sản phẩm nhiều ngày thì còn điểm nào bất tiện, cần thêm gì, bớt gì hoặc làm thế nào để sản phẩm đáng tin cậy hơn.',
     exampleOutput:
-      'Ví dụ: Sửa lỗi nút không bấm được, trang bị lệch trên điện thoại hoặc game chưa tính điểm đúng.',
-  },
-  {
-    description:
-      'Chỉnh lại giao diện, nội dung, chi tiết nhỏ và làm cho sản phẩm ổn định, dễ dùng hơn.',
-    studentGuide:
-      'Khi chức năng chính đã xong, em tập trung làm đẹp hơn, rõ hơn, mượt hơn thì đó là giai đoạn hoàn thiện.',
-    exampleOutput:
-      'Ví dụ: Sửa màu sắc, căn lề, thay hình đẹp hơn, rút gọn nội dung và tối ưu thao tác người dùng.',
-  },
-  {
-    description:
-      'Chuẩn bị cách giới thiệu sản phẩm, luyện trình bày và sẵn sàng nộp hoặc demo cuối khóa.',
-    studentGuide:
-      'Em nên chuẩn bị bài nói ngắn: sản phẩm làm gì, có điểm mạnh gì, em đã gặp khó khăn gì và đã vượt qua ra sao.',
-    exampleOutput:
-      'Ví dụ: Chuẩn bị 3-5 ý chính để demo sản phẩm và sẵn sàng trả lời câu hỏi từ giáo viên hoặc phụ huynh.',
+      'Ví dụ: Thêm trạng thái ưu tiên, sửa giao diện mobile và ghi lại các lỗi đã sửa để lần sau phát triển tiếp dễ hơn.',
   },
 ];
 

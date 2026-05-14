@@ -1,4 +1,5 @@
 import { toDate } from '../utils/date.js';
+import { DEFAULT_STAGE } from '../constants/stages.js';
 
 export function toStudentModel(snapshot) {
   const data = snapshot.data();
@@ -12,7 +13,7 @@ export function toStudentModel(snapshot) {
     projectName: data.projectName ?? '',
     active: Boolean(data.active ?? true),
     currentProgressPercent: Number(data.currentProgressPercent ?? 0),
-    currentStage: data.currentStage ?? 'Ý tưởng',
+    currentStage: data.currentStage ?? DEFAULT_STAGE,
     currentStatus: data.currentStatus ?? 'Chưa bắt đầu',
     currentDifficulties: data.currentDifficulties ?? '',
     lastReportedAt: toDate(data.lastReportedAt),

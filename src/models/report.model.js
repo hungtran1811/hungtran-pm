@@ -1,4 +1,5 @@
 import { toDate } from '../utils/date.js';
+import { DEFAULT_STAGE } from '../constants/stages.js';
 
 export function toReportModel(snapshot) {
   const data = snapshot.data();
@@ -11,7 +12,7 @@ export function toReportModel(snapshot) {
     studentName: data.studentName ?? '',
     projectName: data.projectName ?? '',
     progressPercent: Number(data.progressPercent ?? 0),
-    stage: data.stage ?? 'Ý tưởng',
+    stage: data.stage ?? DEFAULT_STAGE,
     status: data.status ?? 'Chưa bắt đầu',
     doneToday: data.doneToday ?? '',
     nextGoal: data.nextGoal ?? '',

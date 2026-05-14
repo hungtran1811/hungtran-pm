@@ -3,6 +3,7 @@ import {
   listCurriculumPrograms,
 } from '../../services/curriculum.service.js';
 import {
+  buildCurriculumVisibleLessons,
   getActiveCurriculumLessons,
   getCurriculumActivityTypeLabel,
   getCurriculumSessionActivities,
@@ -21,7 +22,7 @@ import { renderEmptyState } from '../components/EmptyState.js';
 import { renderLoadingOverlay } from '../components/LoadingOverlay.js';
 import { renderStudentLibraryBrowser } from '../components/StudentLibraryBrowser.js';
 
-const QUIZ_UI_ENABLED = false;
+const QUIZ_UI_ENABLED = true;
 
 function resolveSessionNumber(program, requestedSessionNumber) {
   const sessions = getCurriculumSessionActivities(program);
@@ -84,7 +85,10 @@ function buildAdminStudentPreview(program, sessionNumber) {
     ...lesson,
     exerciseVisible: hasLessonExerciseContent(lesson),
   }));
-  const visibleLessons = lessons.filter((lesson) => Number(lesson.sessionNumber || 0) <= Number(sessionNumber || 1));
+  const visibleLessons = buildCurriculumVisibleLessons(program, lessons, {
+    currentSession: sessionNumber,
+    curriculumPhase: 'learning',
+  });
 
   return {
     classInfo: {
@@ -230,7 +234,8 @@ export const adminLessonPreviewPage = {
     }
 
     function setLesson(nextLessonId) {
-      const lessons = getActiveCurriculumLessons(program);
+      const preview = buildAdminStudentPreview(program, sessionNumber);
+      const lessons = preview?.visibleLessons || [];
       const lesson = lessons.find((item) => item.id === nextLessonId) || null;
 
       if (!lesson) {

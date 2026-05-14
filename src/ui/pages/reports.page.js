@@ -5,16 +5,16 @@ import { subscribeStudents } from '../../services/students.service.js';
 import { getAuthState } from '../../state/auth.store.js';
 import { createFilterStore } from '../../state/filter.store.js';
 import { copyTextToClipboard } from '../../utils/clipboard.js';
-import { formatDateTime, toDateKey } from '../../utils/date.js';
+import { formatDateTime } from '../../utils/date.js';
 import { mapFirebaseError } from '../../utils/firebase-error.js';
 import { escapeHtml, nl2br } from '../../utils/html.js';
 import { renderAppShell } from '../components/AppShell.js';
 import { renderEmptyState } from '../components/EmptyState.js';
-import { renderFilterBar } from '../components/FilterBar.js';
 import { renderLoadingOverlay } from '../components/LoadingOverlay.js';
 import { renderReportsTable } from '../components/ReportsTable.js';
 import { renderStageBadge } from '../components/StageBadge.js';
 import { renderStatusBadge } from '../components/StatusBadge.js';
+import { confirmDialog } from '../components/ConfirmDialog.js';
 import { showToast } from '../components/ToastStack.js';
 
 function isReportableClass(classItem) {
@@ -98,12 +98,12 @@ function buildClassReportCopyText(classItem, students, reports) {
   ].join('\n');
 }
 
-function renderDetailPanel(history, studentName = '') {
+function renderReportDetailContent(history, studentName = '') {
   if (!history || history.length === 0) {
     return renderEmptyState({
       icon: 'file-earmark-text',
-      title: 'Chọn một học sinh để xem báo cáo',
-      description: 'Bấm vào tên học sinh để copy nhanh, hoặc bấm "Xem" để mở chi tiết báo cáo và lịch sử.',
+      title: 'Chưa có báo cáo',
+      description: 'Học sinh này chưa có báo cáo phù hợp với bộ lọc hiện tại.',
     });
   }
 
@@ -112,90 +112,169 @@ function renderDetailPanel(history, studentName = '') {
   const difficulties = latestReport.difficulties?.trim() ? latestReport.difficulties : 'Không có';
 
   return `
-    <div class="card border-0 shadow-sm h-100 report-detail-card">
-      <div class="card-header bg-white border-0 pb-0">
-        <h2 class="h5 mb-1">Chi tiết báo cáo</h2>
-        <p class="text-secondary mb-0">${escapeHtml(studentName)}</p>
+    <div class="report-detail-card">
+      <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
+        <div>
+          <div class="fw-semibold">${escapeHtml(latestReport.projectName)}</div>
+          <div class="small text-secondary">${escapeHtml(latestReport.classCode)}</div>
+        </div>
+        <div class="text-md-end">
+          <div class="small text-secondary">${escapeHtml(formatDateTime(latestReport.submittedAt))}</div>
+          <div class="d-flex flex-wrap gap-2 justify-content-md-end mt-2">
+            ${renderStatusBadge(latestReport.status)}
+            ${renderStageBadge(latestReport.stage)}
+            <span class="badge bg-white text-dark border">${latestReport.progressPercent}%</span>
+          </div>
+        </div>
       </div>
-      <div class="card-body">
-        <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
-          <div>
-            <div class="fw-semibold">${escapeHtml(latestReport.projectName)}</div>
-            <div class="small text-secondary">${escapeHtml(latestReport.classCode)}</div>
-          </div>
-          <div class="text-end">
-            <div class="small text-secondary">${escapeHtml(formatDateTime(latestReport.submittedAt))}</div>
-            <div class="d-flex flex-wrap gap-2 justify-content-end mt-2">
-              ${renderStatusBadge(latestReport.status)}
-              ${renderStageBadge(latestReport.stage)}
-              <span class="badge bg-white text-dark border">${latestReport.progressPercent}%</span>
-            </div>
-          </div>
-        </div>
 
-        <div class="report-detail-section">
-          <div class="report-detail-label">Đã làm được</div>
-          <div class="report-detail-content">${nl2br(latestReport.doneToday)}</div>
-        </div>
+      <div class="report-detail-section">
+        <div class="report-detail-label">Đã làm được</div>
+        <div class="report-detail-content">${nl2br(latestReport.doneToday)}</div>
+      </div>
 
-        <div class="report-detail-section">
-          <div class="report-detail-label">Mục tiêu buổi tiếp theo</div>
-          <div class="report-detail-content">${nl2br(latestReport.nextGoal)}</div>
-        </div>
+      <div class="report-detail-section">
+        <div class="report-detail-label">Mục tiêu buổi tiếp theo</div>
+        <div class="report-detail-content">${nl2br(latestReport.nextGoal)}</div>
+      </div>
 
-        <div class="report-detail-section">
-          <div class="report-detail-label">Khó khăn gặp phải</div>
-          <div class="report-detail-content">${nl2br(difficulties)}</div>
-        </div>
+      <div class="report-detail-section">
+        <div class="report-detail-label">Khó khăn gặp phải</div>
+        <div class="report-detail-content">${nl2br(difficulties)}</div>
+      </div>
 
-        <hr class="my-4">
+      <hr class="my-4">
 
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <h3 class="h6 mb-0">Lịch sử gần đây</h3>
-          <span class="small text-secondary">${history.length} báo cáo</span>
-        </div>
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="h6 mb-0">Lịch sử gần đây</h3>
+        <span class="small text-secondary">${history.length} báo cáo</span>
+      </div>
 
-        ${
-          previousReports.length > 0
-            ? `
-              <div class="report-history-list">
-                ${previousReports
-                  .map(
-                    (report) => `
-                      <details class="report-history-item">
-                        <summary class="report-history-summary">
-                          <div class="report-history-summary__main">
-                            <strong>${escapeHtml(formatDateTime(report.submittedAt))}</strong>
-                            <div class="small text-secondary">${escapeHtml(report.projectName)}</div>
-                          </div>
-                          <div class="d-flex flex-wrap gap-2 justify-content-end">
-                            ${renderStatusBadge(report.status)}
-                            ${renderStageBadge(report.stage)}
-                            <span class="badge bg-white text-dark border">${report.progressPercent}%</span>
-                          </div>
-                        </summary>
-                        <div class="report-history-body">
-                          <div class="report-detail-section">
-                            <div class="report-detail-label">Đã làm được</div>
-                            <div class="report-detail-content">${nl2br(report.doneToday)}</div>
-                          </div>
-                          <div class="report-detail-section">
-                            <div class="report-detail-label">Mục tiêu buổi tiếp theo</div>
-                            <div class="report-detail-content">${nl2br(report.nextGoal)}</div>
-                          </div>
-                          <div class="report-detail-section">
-                            <div class="report-detail-label">Khó khăn gặp phải</div>
-                            <div class="report-detail-content">${nl2br(report.difficulties?.trim() ? report.difficulties : 'Không có')}</div>
-                          </div>
+      ${
+        previousReports.length > 0
+          ? `
+            <div class="report-history-list">
+              ${previousReports
+                .map(
+                  (report) => `
+                    <details class="report-history-item">
+                      <summary class="report-history-summary">
+                        <div class="report-history-summary__main">
+                          <strong>${escapeHtml(formatDateTime(report.submittedAt))}</strong>
+                          <div class="small text-secondary">${escapeHtml(report.projectName)}</div>
                         </div>
-                      </details>
-                    `,
-                  )
-                  .join('')}
-              </div>
-            `
-            : '<p class="text-secondary small mb-0">Chưa có báo cáo cũ hơn cho học sinh này.</p>'
-        }
+                        <div class="d-flex flex-wrap gap-2 justify-content-end">
+                          ${renderStatusBadge(report.status)}
+                          ${renderStageBadge(report.stage)}
+                          <span class="badge bg-white text-dark border">${report.progressPercent}%</span>
+                        </div>
+                      </summary>
+                      <div class="report-history-body">
+                        <div class="report-detail-section">
+                          <div class="report-detail-label">Đã làm được</div>
+                          <div class="report-detail-content">${nl2br(report.doneToday)}</div>
+                        </div>
+                        <div class="report-detail-section">
+                          <div class="report-detail-label">Mục tiêu buổi tiếp theo</div>
+                          <div class="report-detail-content">${nl2br(report.nextGoal)}</div>
+                        </div>
+                        <div class="report-detail-section">
+                          <div class="report-detail-label">Khó khăn gặp phải</div>
+                          <div class="report-detail-content">${nl2br(report.difficulties?.trim() ? report.difficulties : 'Không có')}</div>
+                        </div>
+                      </div>
+                    </details>
+                  `,
+                )
+                .join('')}
+            </div>
+          `
+          : '<p class="text-secondary small mb-0">Chưa có báo cáo cũ hơn cho học sinh này.</p>'
+      }
+    </div>
+  `;
+}
+
+function renderReportsClassFilter({ filters, classes, selectedClass, reportCount, isArchiveView }) {
+  const classOptions = classes
+    .map(
+      (item) => `
+        <option value="${escapeHtml(item.classCode)}" ${filters.classId === item.classCode ? 'selected' : ''}>
+          ${escapeHtml(`${item.classCode} - ${item.className}`)}
+        </option>
+      `,
+    )
+    .join('');
+
+  return `
+    <div class="admin-list-switch mb-3 reports-toolbar">
+      <div class="admin-segmented-tabs" role="group" aria-label="Chế độ báo cáo">
+        <button
+          type="button"
+          class="admin-segmented-tabs__button ${isArchiveView ? '' : 'admin-segmented-tabs__button--active'}"
+          data-action="set-report-scope"
+          data-scope="active"
+        >
+          Đang theo dõi
+        </button>
+        <button
+          type="button"
+          class="admin-segmented-tabs__button ${isArchiveView ? 'admin-segmented-tabs__button--active' : ''}"
+          data-action="set-report-scope"
+          data-scope="archive"
+        >
+          Lưu trữ
+        </button>
+      </div>
+      <div class="ms-auto">
+        <button
+          type="button"
+          class="btn btn-outline-primary"
+          data-action="copy-class-report"
+          ${selectedClass ? '' : 'disabled'}
+        >
+          <i class="bi bi-clipboard-check me-2"></i>Copy báo cáo lớp
+        </button>
+      </div>
+    </div>
+    <form id="reports-filter-form" class="admin-command-bar mb-4">
+      <div class="admin-command-bar__body">
+        <div class="row g-3 align-items-end">
+          <div class="col-12 col-md-8 col-xl-5">
+            <label class="form-label">Lớp</label>
+            <select class="form-select" name="classId">
+              <option value="">Tất cả lớp</option>
+              ${classOptions}
+            </select>
+          </div>
+          <div class="col-12 col-md-auto ms-md-auto">
+            <span class="admin-count-pill">${reportCount} báo cáo</span>
+          </div>
+          <div class="col-12 col-md-auto">
+            <button type="button" class="btn btn-outline-secondary w-100" data-action="reset-filters">
+              <i class="bi bi-arrow-counterclockwise me-2"></i>Đặt lại
+            </button>
+          </div>
+        </div>
+      </div>
+    </form>
+  `;
+}
+
+function renderReportDetailModal() {
+  return `
+    <div class="modal fade" id="report-detail-modal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow admin-modal report-detail-modal">
+          <div class="modal-header">
+            <div>
+              <h2 class="modal-title fs-5" id="report-detail-modal-title">Chi tiết báo cáo</h2>
+              <p class="text-secondary mb-0 small" id="report-detail-modal-subtitle"></p>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+          </div>
+          <div class="modal-body" id="report-detail-modal-body"></div>
+        </div>
       </div>
     </div>
   `;
@@ -212,46 +291,39 @@ export const reportsPage = {
       currentRoute: '/admin/reports',
       user: authState.user,
       content: `
-        <div id="reports-filter-slot"></div>
-        <div class="row g-4">
-          <div class="col-12 col-xl-8" id="reports-table-slot">${renderLoadingOverlay()}</div>
-          <div class="col-12 col-xl-4" id="reports-history-slot">${renderDetailPanel([])}</div>
-        </div>
+        <section class="admin-page admin-page--reports">
+          <div id="reports-filter-slot"></div>
+          <div id="reports-table-slot">${renderLoadingOverlay()}</div>
+          <div id="reports-modal-slot"></div>
+        </section>
       `,
     });
   },
   async mount() {
     const filterSlot = document.getElementById('reports-filter-slot');
     const tableSlot = document.getElementById('reports-table-slot');
-    const historySlot = document.getElementById('reports-history-slot');
+    const modalSlot = document.getElementById('reports-modal-slot');
     const filterStore = createFilterStore({
       viewScope: 'active',
       classId: '',
-      studentId: '',
-      status: '',
-      stage: '',
-      dateFrom: '',
-      dateTo: '',
     });
     const state = {
       classes: [],
       students: [],
       reports: [],
-      history: [],
       selectedStudentId: '',
       selectedStudentName: '',
     };
 
+    modalSlot.innerHTML = renderReportDetailModal();
+    const reportModalEl = document.getElementById('report-detail-modal');
+    const reportModal = new window.bootstrap.Modal(reportModalEl);
+    const reportModalTitle = document.getElementById('report-detail-modal-title');
+    const reportModalSubtitle = document.getElementById('report-detail-modal-subtitle');
+    const reportModalBody = document.getElementById('report-detail-modal-body');
+
     function getScopedClasses(viewScope) {
       return state.classes.filter(viewScope === 'archive' ? isArchivedReportClass : isReportableClass);
-    }
-
-    function getScopedStudents(viewScope, classId = '') {
-      const allowedClassCodes = new Set(getScopedClasses(viewScope).map((item) => item.classCode));
-
-      return state.students.filter(
-        (student) => student.active && allowedClassCodes.has(student.classId) && (!classId || student.classId === classId),
-      );
     }
 
     function getScopedReports(viewScope) {
@@ -269,13 +341,6 @@ export const reportsPage = {
         nextFilters.classId = '';
       }
 
-      const effectiveClassId = nextFilters.classId ?? filters.classId;
-      const availableStudents = getScopedStudents(filters.viewScope, effectiveClassId);
-
-      if (filters.studentId && !availableStudents.some((student) => student.id === filters.studentId)) {
-        nextFilters.studentId = '';
-      }
-
       if (Object.keys(nextFilters).length > 0) {
         filterStore.set(nextFilters);
         return null;
@@ -283,20 +348,13 @@ export const reportsPage = {
 
       const latestReports = getLatestReportsByStudent(getScopedReports(filters.viewScope));
       const filteredReports = latestReports.filter((report) => {
-        const reportDateKey = toDateKey(report.submittedAt);
         const byClass = !filters.classId || report.classId === filters.classId;
-        const byStudent = !filters.studentId || report.studentId === filters.studentId;
-        const byStatus = !filters.status || report.status === filters.status;
-        const byStage = !filters.stage || report.stage === filters.stage;
-        const byFrom = !filters.dateFrom || reportDateKey >= filters.dateFrom;
-        const byTo = !filters.dateTo || reportDateKey <= filters.dateTo;
-        return byClass && byStudent && byStatus && byStage && byFrom && byTo;
+        return byClass;
       });
 
       return {
         filters,
         availableClasses,
-        availableStudents,
         filteredReports,
       };
     }
@@ -308,61 +366,22 @@ export const reportsPage = {
         return;
       }
 
-      const { filters, availableClasses, availableStudents, filteredReports } = context;
+      const { filters, availableClasses, filteredReports } = context;
       const selectedClass = availableClasses.find((item) => item.classCode === filters.classId) || null;
       const isArchiveView = filters.viewScope === 'archive';
-      const scopeLabel = isArchiveView ? 'Kho lưu trữ báo cáo' : 'Báo cáo đang theo dõi';
 
       if (state.selectedStudentId && !filteredReports.some((report) => report.studentId === state.selectedStudentId)) {
         state.selectedStudentId = '';
         state.selectedStudentName = '';
-        state.history = [];
       }
 
-      filterSlot.innerHTML = `
-        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3 reports-toolbar">
-          <div class="d-flex flex-wrap gap-2 ms-auto">
-            <div class="btn-group" role="group" aria-label="Chế độ báo cáo">
-              <button
-                type="button"
-                class="btn ${isArchiveView ? 'btn-outline-secondary' : 'btn-primary'}"
-                data-action="set-report-scope"
-                data-scope="active"
-              >
-                Đang theo dõi
-              </button>
-              <button
-                type="button"
-                class="btn ${isArchiveView ? 'btn-primary' : 'btn-outline-secondary'}"
-                data-action="set-report-scope"
-                data-scope="archive"
-              >
-                Lưu trữ
-              </button>
-            </div>
-            <button
-              type="button"
-              class="btn btn-outline-primary"
-              data-action="copy-class-report"
-              ${selectedClass ? '' : 'disabled'}
-            >
-              <i class="bi bi-clipboard-check me-2"></i>Copy báo cáo lớp
-            </button>
-          </div>
-        </div>
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <h3 class="h6 mb-0">${scopeLabel}</h3>
-          <span class="badge text-bg-light text-dark border">${filteredReports.length} báo cáo</span>
-        </div>
-        ${renderFilterBar({
-          id: 'reports-filter-form',
-          classes: availableClasses,
-          students: availableStudents,
-          values: filters,
-          showStudent: true,
-          showDateRange: true,
-        })}
-      `;
+      filterSlot.innerHTML = renderReportsClassFilter({
+        filters,
+        classes: availableClasses,
+        selectedClass,
+        reportCount: filteredReports.length,
+        isArchiveView,
+      });
 
       tableSlot.innerHTML =
         filteredReports.length > 0
@@ -377,17 +396,18 @@ export const reportsPage = {
                 ? 'Hãy điều chỉnh bộ lọc lưu trữ hoặc đánh dấu hoàn thành/lưu trữ lớp khi cần.'
                 : 'Hãy điều chỉnh bộ lọc hoặc chờ học sinh gửi thêm báo cáo mới.',
             });
-
-      historySlot.innerHTML = renderDetailPanel(state.history, state.selectedStudentName);
     }
 
     async function loadStudentDetails(studentId, studentName) {
       state.selectedStudentId = studentId;
       state.selectedStudentName = studentName || '';
-      historySlot.innerHTML = renderLoadingOverlay('Đang tải báo cáo...');
+      reportModalTitle.textContent = 'Chi tiết báo cáo';
+      reportModalSubtitle.textContent = state.selectedStudentName;
+      reportModalBody.innerHTML = renderLoadingOverlay('Đang tải báo cáo...');
+      reportModal.show();
 
       const history = await getStudentReportHistory(studentId);
-      state.history = history;
+      reportModalBody.innerHTML = renderReportDetailContent(history, state.selectedStudentName);
       renderView();
     }
 
@@ -399,7 +419,6 @@ export const reportsPage = {
       if (event.target.name === 'classId') {
         filterStore.set({
           classId: event.target.value,
-          studentId: '',
         });
         return;
       }
@@ -418,7 +437,6 @@ export const reportsPage = {
         filterStore.set({
           viewScope: button.dataset.scope === 'archive' ? 'archive' : 'active',
           classId: '',
-          studentId: '',
         });
         return;
       }
@@ -509,6 +527,11 @@ export const reportsPage = {
         try {
           await loadStudentDetails(button.dataset.studentId, button.dataset.studentName || '');
         } catch (error) {
+          reportModalBody.innerHTML = renderEmptyState({
+            icon: 'exclamation-triangle',
+            title: 'Không tải được báo cáo',
+            description: mapFirebaseError(error, 'Không tải được chi tiết báo cáo của học sinh này.'),
+          });
           showToast({
             title: 'Lỗi tải báo cáo',
             message: mapFirebaseError(error, 'Không tải được chi tiết báo cáo của học sinh này.'),
@@ -535,9 +558,12 @@ export const reportsPage = {
           return;
         }
 
-        const confirmed = window.confirm(
-          `Xóa báo cáo của ${report.studentName} lúc ${formatDateTime(report.submittedAt)}?`,
-        );
+        const confirmed = await confirmDialog({
+          title: 'Xóa báo cáo?',
+          message: `Xóa báo cáo của ${report.studentName} lúc ${formatDateTime(report.submittedAt)}?`,
+          confirmText: 'Xóa báo cáo',
+          variant: 'danger',
+        });
 
         if (!confirmed) {
           return;
@@ -547,7 +573,6 @@ export const reportsPage = {
           await deleteReport(report.id);
 
           if (state.selectedStudentId === report.studentId) {
-            state.history = await getStudentReportHistory(report.studentId);
             state.selectedStudentName = report.studentName;
           }
 

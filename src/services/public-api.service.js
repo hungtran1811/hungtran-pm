@@ -9,6 +9,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import { DEFAULT_STAGE } from '../constants/stages.js';
 import { getFirebaseServices } from '../config/firebase.js';
 import { toDateKey } from '../utils/date.js';
 import { toAppError } from '../utils/firebase-error.js';
@@ -52,7 +53,7 @@ function mapRosterStudent(snapshot) {
     lastReportedAt: data.lastReportedAt ?? null,
     latestReportId: data.latestReportId ?? '',
     currentProgressPercent: Number(data.currentProgressPercent ?? 0),
-    currentStage: data.currentStage ?? 'Ý tưởng',
+    currentStage: data.currentStage ?? DEFAULT_STAGE,
     currentStatus: data.currentStatus ?? 'Chưa bắt đầu',
   };
 }

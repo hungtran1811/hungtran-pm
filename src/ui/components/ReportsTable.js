@@ -4,77 +4,77 @@ import { renderStageBadge } from './StageBadge.js';
 import { renderStatusBadge } from './StatusBadge.js';
 
 export function renderReportsTable(reports, { selectedStudentId = '', showDeleteAction = false } = {}) {
-  const rows = reports
-    .map(
-      (report) => `
-        <tr class="${selectedStudentId === report.studentId ? 'table-active' : ''}">
-          <td>
+  const items = reports
+    .map((report) => {
+      const progressPercent = Number(report.progressPercent || 0);
+
+      return `
+        <article
+          class="admin-report-card ${selectedStudentId === report.studentId ? 'admin-report-card--active' : ''}"
+          data-action="select-student"
+          data-report-id="${escapeHtml(report.id)}"
+          data-student-id="${escapeHtml(report.studentId)}"
+          data-student-name="${escapeHtml(report.studentName)}"
+          title="Bấm vào card để xem báo cáo"
+        >
+          <div class="admin-card-main">
+            <div>
+              <div class="admin-card-title">${escapeHtml(report.studentName)}</div>
+              <div class="admin-card-subtitle">${escapeHtml(report.projectName || 'Chưa có tên dự án')}</div>
+              <div class="admin-card-subtitle">${escapeHtml(report.classCode)}</div>
+            </div>
+          </div>
+
+          <div class="admin-card-progress">
+            <strong>${progressPercent}%</strong>
+            <div class="progress admin-progress">
+              <div class="progress-bar" style="width: ${progressPercent}%;"></div>
+            </div>
+          </div>
+
+          <div class="admin-card-meta">
+            ${renderStatusBadge(report.status)}
+            ${renderStageBadge(report.stage)}
+            <span class="admin-soft-badge admin-soft-badge--muted">
+              <i class="bi bi-clock"></i>${escapeHtml(formatDateTime(report.submittedAt))}
+            </span>
+          </div>
+
+          <div class="admin-card-actions">
             <button
-              type="button"
-              class="btn btn-link p-0 text-start text-decoration-none report-student-button"
+              class="btn btn-sm btn-primary"
               data-action="copy-student-report"
               data-report-id="${escapeHtml(report.id)}"
               data-student-id="${escapeHtml(report.studentId)}"
               data-student-name="${escapeHtml(report.studentName)}"
             >
-              <div class="fw-semibold">${escapeHtml(report.studentName)}</div>
-              <div class="small text-secondary">${escapeHtml(report.projectName)}</div>
+              <i class="bi bi-clipboard me-1"></i>Copy báo cáo
             </button>
-          </td>
-          <td>${escapeHtml(report.classCode)}</td>
-          <td>${report.progressPercent}%</td>
-          <td>${renderStatusBadge(report.status)}</td>
-          <td>${renderStageBadge(report.stage)}</td>
-          <td>${escapeHtml(formatDateTime(report.submittedAt))}</td>
-          <td class="text-end">
-            <div class="d-flex flex-wrap gap-2 justify-content-end">
-              <button
-                class="btn btn-sm btn-outline-secondary"
-                data-action="select-student"
-                data-student-id="${escapeHtml(report.studentId)}"
-                data-student-name="${escapeHtml(report.studentName)}"
-              >
-                Xem
-              </button>
-              ${
-                showDeleteAction
-                  ? `
-                    <button
-                      class="btn btn-sm btn-outline-danger"
-                      data-action="delete-report"
-                      data-report-id="${escapeHtml(report.id)}"
-                      data-student-id="${escapeHtml(report.studentId)}"
-                      data-student-name="${escapeHtml(report.studentName)}"
-                    >
-                      Xóa
-                    </button>
-                  `
-                  : ''
-              }
-            </div>
-          </td>
-        </tr>
-      `,
-    )
+            ${
+              showDeleteAction
+                ? `
+                  <button
+                    class="btn btn-sm btn-outline-danger"
+                    data-action="delete-report"
+                    data-report-id="${escapeHtml(report.id)}"
+                    data-student-id="${escapeHtml(report.studentId)}"
+                    data-student-name="${escapeHtml(report.studentName)}"
+                  >
+                    <i class="bi bi-trash me-1"></i>Xóa
+                  </button>
+                `
+                : ''
+            }
+          </div>
+        </article>
+      `;
+    })
     .join('');
 
   return `
-    <div class="card border-0 shadow-sm">
-      <div class="table-responsive">
-        <table class="table align-middle mb-0 reports-table">
-          <thead class="table-light">
-            <tr>
-              <th>Học sinh / Dự án</th>
-              <th>Lớp</th>
-              <th>%</th>
-              <th>Trạng thái</th>
-              <th>Giai đoạn</th>
-              <th>Cập nhật</th>
-              <th class="text-end">Tác vụ</th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
+    <div class="admin-data-card">
+      <div class="admin-report-list">
+        ${items}
       </div>
     </div>
   `;

@@ -1,6 +1,7 @@
 ﻿import { subscribeClasses } from '../../services/classes.service.js';
 import { subscribeCurriculumPrograms } from '../../services/curriculum.service.js';
 import {
+  getQuizLiveAttemptsByClass,
   getQuizAttemptsByClass,
   listQuizConfigs,
   reopenQuizAttempt,
@@ -685,7 +686,7 @@ function renderQuestionInsight(title, question, mode = 'wrong') {
   `;
 }
 
-function renderAttemptOverviewReport(attempts = []) {
+function renderAttemptOverviewReport(attempts = [], liveAttemptCount = 0) {
   const summary = buildAttemptReportSummary(attempts);
 
   return `
@@ -699,11 +700,20 @@ function renderAttemptOverviewReport(attempts = []) {
           summary.totalAttempts === 0
             ? renderEmptyState({
                 icon: 'clipboard2-data',
-                title: 'Chưa có dữ liệu để tổng hợp',
-                description: 'Khi học sinh nộp bài, thống kê điểm và câu khó/dễ sẽ hiển thị ở đây.',
+                title: liveAttemptCount > 0 ? `${liveAttemptCount} học sinh đang làm bài` : 'Chưa có dữ liệu để tổng hợp',
+                description:
+                  liveAttemptCount > 0
+                    ? 'Khi học sinh nộp hoặc admin kết thúc bài kiểm tra, thống kê điểm và câu đúng/sai sẽ hiển thị ở đây.'
+                    : 'Khi học sinh nộp bài, thống kê điểm và câu khó/dễ sẽ hiển thị ở đây.',
               })
             : `
               <div class="quiz-summary-grid mb-4">
+                ${renderAttemptSummaryCard({
+                  title: 'Đang làm',
+                  value: String(liveAttemptCount),
+                  description: 'Số học sinh đã chọn ít nhất một đáp án và đang có bản nháp.',
+                  tone: 'primary',
+                })}
                 ${renderAttemptSummaryCard({
                   title: 'Số bài đã nộp',
                   value: String(summary.totalAttempts),
@@ -809,6 +819,7 @@ function renderClassQuizLaunchControl({
   selectedClass,
   currentQuizConfig,
   sessionActivity,
+  liveAttemptCount = 0,
   isUpdating,
   error,
 }) {
@@ -870,6 +881,12 @@ function renderClassQuizLaunchControl({
               <div class="fw-semibold">Buổi ${currentSession} · ${escapeHtml(activityLabel)} · ${QUIZ_QUESTION_LIMIT} câu / học sinh</div>
             </div>
           </div>
+          <div class="col-12 col-md-6">
+            <div class="quiz-status-meta">
+              <div class="quiz-status-meta__label">Đang làm</div>
+              <div class="fw-semibold">${Number(liveAttemptCount || 0)} học sinh</div>
+            </div>
+          </div>
         </div>
         <button
           type="button"
@@ -903,6 +920,7 @@ function renderQuizEditor({
   uploadingQuestionId,
   imageUploadEnabled,
   error,
+  contextLocked = false,
 }) {
   if (!programs.length) {
     return renderEmptyState({
@@ -962,17 +980,28 @@ function renderQuizEditor({
         <div class="row g-3">
           <div class="col-12">
             <label class="form-label">Chương trình nguồn</label>
-            <select class="form-select" id="quiz-program-select" ${isLoading ? 'disabled' : ''}>
-              ${programs
-                .map(
-                  (program) => `
-                    <option value="${escapeHtml(program.id)}" ${program.id === selectedProgramId ? 'selected' : ''}>
-                      ${escapeHtml(program.name)}
-                    </option>
-                  `,
-                )
-                .join('')}
-            </select>
+            ${
+              contextLocked
+                ? `
+                  <div class="quiz-status-meta">
+                    <div class="fw-semibold">${escapeHtml(selectedProgram?.name || 'Chưa chọn chương trình')}</div>
+                    <div class="small text-secondary mt-1">${escapeHtml(scopeSubject)} · ${escapeHtml(scopeLevel)}</div>
+                  </div>
+                `
+                : `
+                  <select class="form-select" id="quiz-program-select" ${isLoading ? 'disabled' : ''}>
+                    ${programs
+                      .map(
+                        (program) => `
+                          <option value="${escapeHtml(program.id)}" ${program.id === selectedProgramId ? 'selected' : ''}>
+                            ${escapeHtml(program.name)}
+                          </option>
+                        `,
+                      )
+                      .join('')}
+                  </select>
+                `
+            }
           </div>
           <div class="col-12 col-lg-7">
             <label class="form-label">Tiêu đề bài kiểm tra</label>
@@ -980,17 +1009,28 @@ function renderQuizEditor({
           </div>
           <div class="col-12 col-lg-5">
             <label class="form-label">Buổi áp dụng</label>
-            <select class="form-select" id="quiz-session-select" ${isLoading ? 'disabled' : ''}>
-              ${sessionOptions
-                .map(
-                  (item) => `
-                    <option value="${item.sessionNumber}" ${item.sessionNumber === selectedSessionNumber ? 'selected' : ''}>
-                      Buổi ${item.sessionNumber} - ${escapeHtml(getCurriculumActivityTypeLabel(item.activityType))}
-                    </option>
-                  `,
-                )
-                .join('')}
-            </select>
+            ${
+              contextLocked
+                ? `
+                  <div class="quiz-status-meta">
+                    <div class="fw-semibold">Buổi ${Number(selectedSessionNumber || 0)}</div>
+                    <div class="small text-secondary mt-1">${escapeHtml(selectedActivityLabel)}</div>
+                  </div>
+                `
+                : `
+                  <select class="form-select" id="quiz-session-select" ${isLoading ? 'disabled' : ''}>
+                    ${sessionOptions
+                      .map(
+                        (item) => `
+                          <option value="${item.sessionNumber}" ${item.sessionNumber === selectedSessionNumber ? 'selected' : ''}>
+                            Buổi ${item.sessionNumber} - ${escapeHtml(getCurriculumActivityTypeLabel(item.activityType))}
+                          </option>
+                        `,
+                      )
+                      .join('')}
+                  </select>
+                `
+            }
             <div class="form-text">Bộ đề sẽ được lưu theo môn + level của chương trình này, ví dụ ${escapeHtml(scopeSubject)} + ${escapeHtml(scopeLevel)} + buổi ${selectedSessionNumber}.</div>
           </div>
           <div class="col-12">
@@ -1742,13 +1782,16 @@ function renderAttemptDetailModal(attempt, isOpen = false, options = {}) {
   `;
 }
 
-export function renderQuizManagementContent() {
+export function renderQuizManagementContent({
+  hideTabs = false,
+  showBothPanels = false,
+} = {}) {
   return `
-    <div id="quiz-tabs-slot">${renderQuizPageTabs('editor')}</div>
+    <div id="quiz-tabs-slot">${hideTabs ? '' : renderQuizPageTabs('editor')}</div>
     <section id="quiz-editor-panel">
       <div id="quiz-editor-slot">${renderLoadingOverlay('Đang tải cấu hình trắc nghiệm...')}</div>
     </section>
-    <section id="quiz-operations-panel" class="d-none">
+    <section id="quiz-operations-panel" class="${showBothPanels ? 'mt-4' : 'd-none'}">
       <div class="row g-4">
         <div class="col-12 col-xl-5">
           <div class="d-grid gap-4">
@@ -1783,7 +1826,15 @@ export const quizzesPage = {
   },
 };
 
-export async function mountQuizManagement({ defaultActiveTab = 'editor', forceDefaultTab = false } = {}) {
+export async function mountQuizManagement({
+  defaultActiveTab = 'editor',
+  forceDefaultTab = false,
+  lockedProgramId = '',
+  lockedSessionNumber = 0,
+  lockedClassCode = '',
+  hideTabs = false,
+  showBothPanels = false,
+} = {}) {
     const savedUiState = {
       activeTab: forceDefaultTab ? defaultActiveTab : loadQuizAdminUiState().activeTab || defaultActiveTab,
     };
@@ -1799,8 +1850,8 @@ export async function mountQuizManagement({ defaultActiveTab = 'editor', forceDe
     const state = {
       classes: [],
       programs: [],
-      selectedProgramId: '',
-      selectedSessionNumber: QUIZ_DEFAULT_OFFICIAL_SESSION_NUMBERS[0],
+      selectedProgramId: lockedProgramId || '',
+      selectedSessionNumber: Number(lockedSessionNumber || QUIZ_DEFAULT_OFFICIAL_SESSION_NUMBERS[0]),
       quizConfigs: [],
       draft: createEmptyQuizDraft(QUIZ_DEFAULT_OFFICIAL_SESSION_NUMBERS[0]),
       quizLoading: true,
@@ -1811,10 +1862,11 @@ export async function mountQuizManagement({ defaultActiveTab = 'editor', forceDe
       isUpdatingClassQuiz: false,
       classQuizError: '',
       attempts: [],
+      liveAttempts: [],
       attemptConfigs: [],
       attemptsLoading: false,
       attemptsError: '',
-      selectedClassCode: '',
+      selectedClassCode: lockedClassCode || '',
       selectedSessionFilter: 'all',
       selectedAttemptId: '',
       markdownDraft: '',
@@ -1823,6 +1875,8 @@ export async function mountQuizManagement({ defaultActiveTab = 'editor', forceDe
       reopeningAttemptId: '',
       attemptModalInfo: '',
       attemptModalError: '',
+      hasLoadedQuizConfigs: false,
+      hasLoadedAttempts: false,
     };
     let pendingQuestionImageId = '';
 
@@ -1852,6 +1906,16 @@ export async function mountQuizManagement({ defaultActiveTab = 'editor', forceDe
       });
     }
 
+    function getFilteredLiveAttempts(liveAttempts = state.liveAttempts) {
+      return liveAttempts.filter((attempt) => {
+        if (state.selectedSessionFilter === 'all') {
+          return true;
+        }
+
+        return Number(attempt.sessionNumber) === Number(state.selectedSessionFilter);
+      });
+    }
+
     function getSelectedAttempt(filteredAttempts = getFilteredAttempts()) {
       return filteredAttempts.find((attempt) => attempt.id === state.selectedAttemptId) || null;
     }
@@ -1868,9 +1932,16 @@ export async function mountQuizManagement({ defaultActiveTab = 'editor', forceDe
 
     function renderView() {
       persistQuizAdminUiState(state);
-      tabsSlot.innerHTML = renderQuizPageTabs(state.activeTab);
-      editorPanel.classList.toggle('d-none', state.activeTab !== 'editor');
-      operationsPanel.classList.toggle('d-none', state.activeTab !== 'operations');
+      tabsSlot.innerHTML = hideTabs ? '' : renderQuizPageTabs(state.activeTab);
+
+      if (showBothPanels) {
+        editorPanel.classList.remove('d-none');
+        operationsPanel.classList.remove('d-none');
+        operationsPanel.classList.add('mt-4');
+      } else {
+        editorPanel.classList.toggle('d-none', state.activeTab !== 'editor');
+        operationsPanel.classList.toggle('d-none', state.activeTab !== 'operations');
+      }
 
       const manageableClasses = getQuizManageableClasses(state.classes);
       const selectedClass = getSelectedClass(manageableClasses, state.selectedClassCode);
@@ -1887,6 +1958,7 @@ export async function mountQuizManagement({ defaultActiveTab = 'editor', forceDe
       const currentQuizConfig = getSelectedClassQuizConfig(selectedClass, activeClassConfigs);
       const decoratedAttempts = state.attempts.map((attempt) => decorateAttemptByBestScore(attempt, activeClassConfigs));
       const filteredAttempts = getFilteredAttempts(decoratedAttempts);
+      const filteredLiveAttempts = getFilteredLiveAttempts();
       const selectedAttempt = getSelectedAttempt(filteredAttempts);
       const officialReportAttempts = filteredAttempts.filter((attempt) => isOfficialQuizMode(attempt.quizMode));
 
@@ -1903,12 +1975,14 @@ export async function mountQuizManagement({ defaultActiveTab = 'editor', forceDe
         uploadingQuestionId: state.uploadingQuestionId,
         imageUploadEnabled: isCloudinaryConfigured(),
         error: state.quizError,
+        contextLocked: Boolean(lockedProgramId || lockedSessionNumber),
       });
 
       launchControlSlot.innerHTML = renderClassQuizLaunchControl({
         selectedClass,
         currentQuizConfig,
         sessionActivity: selectedClassActivity,
+        liveAttemptCount: filteredLiveAttempts.length,
         isUpdating: state.isUpdatingClassQuiz,
         error: state.classQuizError,
       });
@@ -1924,7 +1998,7 @@ export async function mountQuizManagement({ defaultActiveTab = 'editor', forceDe
         selectedAttemptId: selectedAttempt?.id || '',
       });
 
-      reportSlot.innerHTML = renderAttemptOverviewReport(officialReportAttempts);
+      reportSlot.innerHTML = renderAttemptOverviewReport(officialReportAttempts, filteredLiveAttempts.length);
       attemptModalSlot.innerHTML = renderAttemptDetailModal(selectedAttempt, state.isAttemptModalOpen, {
         submissionHistory: getAttemptSubmissionHistory(selectedAttempt),
         bestSubmission: getBestAttemptSubmission(selectedAttempt),
@@ -1941,6 +2015,7 @@ export async function mountQuizManagement({ defaultActiveTab = 'editor', forceDe
         state.quizConfigs = [];
         state.quizLoading = false;
         state.quizError = '';
+        state.hasLoadedQuizConfigs = true;
         syncDraftFromConfigs();
         renderView();
         return;
@@ -1954,6 +2029,7 @@ export async function mountQuizManagement({ defaultActiveTab = 'editor', forceDe
         const selectedProgram = state.programs.find((program) => program.id === state.selectedProgramId) || null;
         state.quizConfigs = selectedProgram ? await listQuizConfigs(selectedProgram) : [];
         syncDraftFromConfigs();
+        state.hasLoadedQuizConfigs = true;
       } catch (error) {
         state.quizConfigs = [];
         state.quizError = getErrorMessage(error, 'Không tải được cấu hình trắc nghiệm của chương trình này.');
@@ -1972,6 +2048,7 @@ export async function mountQuizManagement({ defaultActiveTab = 'editor', forceDe
 
       if (!preserveSelection) {
         state.attempts = [];
+        state.liveAttempts = [];
         state.attemptConfigs = [];
       }
       state.attemptsError = '';
@@ -1988,6 +2065,7 @@ export async function mountQuizManagement({ defaultActiveTab = 'editor', forceDe
 
       if (!state.selectedClassCode) {
         state.attemptsLoading = false;
+        state.hasLoadedAttempts = true;
         renderView();
         return;
       }
@@ -1998,13 +2076,16 @@ export async function mountQuizManagement({ defaultActiveTab = 'editor', forceDe
       try {
         const selectedClass = getSelectedClass(getQuizManageableClasses(state.classes), state.selectedClassCode);
         const selectedClassProgram = getClassProgram(selectedClass, state.programs);
-        const [attempts, attemptConfigs] = await Promise.all([
+        const [attempts, liveAttempts, attemptConfigs] = await Promise.all([
           getQuizAttemptsByClass(state.selectedClassCode),
+          getQuizLiveAttemptsByClass(state.selectedClassCode),
           selectedClassProgram ? listQuizConfigs(selectedClassProgram) : Promise.resolve([]),
         ]);
 
         state.attemptConfigs = attemptConfigs;
         state.attempts = attempts;
+        state.liveAttempts = liveAttempts;
+        state.hasLoadedAttempts = true;
 
         if (preserveSelection) {
           const hasPreviousAttempt = attempts.some((attempt) => attempt.id === previousSelectedAttemptId);
@@ -2014,6 +2095,7 @@ export async function mountQuizManagement({ defaultActiveTab = 'editor', forceDe
       } catch (error) {
         if (!preserveSelection) {
           state.attempts = [];
+          state.liveAttempts = [];
           state.attemptConfigs = [];
         }
         state.attemptsError = getErrorMessage(error, 'Không tải được danh sách bài nộp trắc nghiệm.');
@@ -2104,9 +2186,18 @@ export async function mountQuizManagement({ defaultActiveTab = 'editor', forceDe
     const unsubscribePrograms = subscribeCurriculumPrograms(
       async (programs) => {
         state.programs = programs;
+        const lockedProgramExists = lockedProgramId && programs.some((program) => program.id === lockedProgramId);
+        const nextProgramId = lockedProgramExists
+          ? lockedProgramId
+          : (
+              state.selectedProgramId && programs.some((program) => program.id === state.selectedProgramId)
+                ? state.selectedProgramId
+                : programs[0]?.id || ''
+            );
 
-        if (!state.selectedProgramId || !programs.some((program) => program.id === state.selectedProgramId)) {
-          state.selectedProgramId = programs[0]?.id || '';
+        if (state.selectedProgramId !== nextProgramId || !state.hasLoadedQuizConfigs) {
+          state.selectedProgramId = nextProgramId;
+          state.selectedSessionNumber = Number(lockedSessionNumber || state.selectedSessionNumber || QUIZ_DEFAULT_OFFICIAL_SESSION_NUMBERS[0]);
           await loadQuizConfigs();
           return;
         }
@@ -2125,12 +2216,19 @@ export async function mountQuizManagement({ defaultActiveTab = 'editor', forceDe
       async (classes) => {
         state.classes = classes;
         const manageableClasses = getQuizManageableClasses(classes);
+        const lockedClassExists = lockedClassCode
+          && manageableClasses.some((classItem) => classItem.classCode === lockedClassCode);
+        const nextClassCode = lockedClassExists
+          ? lockedClassCode
+          : (
+              state.selectedClassCode
+              && manageableClasses.some((classItem) => classItem.classCode === state.selectedClassCode)
+                ? state.selectedClassCode
+                : manageableClasses[0]?.classCode || ''
+            );
 
-        if (
-          !state.selectedClassCode
-          || !manageableClasses.some((classItem) => classItem.classCode === state.selectedClassCode)
-        ) {
-          state.selectedClassCode = manageableClasses[0]?.classCode || '';
+        if (state.selectedClassCode !== nextClassCode || !state.hasLoadedAttempts) {
+          state.selectedClassCode = nextClassCode;
           await loadAttempts();
           return;
         }
@@ -2600,7 +2698,7 @@ export async function mountQuizManagement({ defaultActiveTab = 'editor', forceDe
 
       try {
         const nextIsStarted = Boolean(startButton);
-        await setClassQuizStatus(state.selectedClassCode, {
+        const statusResult = await setClassQuizStatus(state.selectedClassCode, {
           sessionNumber: currentSession,
           quizMode: QUIZ_MODE_OFFICIAL,
           isStarted: nextIsStarted,
@@ -2619,9 +2717,10 @@ export async function mountQuizManagement({ defaultActiveTab = 'editor', forceDe
           title: nextIsStarted ? 'Đã bắt đầu bài kiểm tra' : 'Đã kết thúc bài kiểm tra',
           message: nextIsStarted
             ? 'Học sinh trong lớp này bây giờ có thể vào làm bài.'
-            : 'Đề đã được ẩn khỏi phía học sinh.',
+            : `Đề đã được ẩn khỏi phía học sinh. Đã ghi nhận ${Number(statusResult?.finalizedCount || 0)} bài đang làm.`,
           variant: 'success',
         });
+        await loadAttempts({ preserveSelection: true, keepModalOpen: true });
       } catch (error) {
         state.classQuizError = getErrorMessage(
           error,

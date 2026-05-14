@@ -2,6 +2,7 @@ import { getClassCurriculumView } from '../../services/curriculum.service.js';
 import { getClassRoster, listActiveClasses, submitStudentReport } from '../../services/public-api.service.js';
 import { attachHiddenAdminShortcut } from '../../utils/admin-shortcut.js';
 import { isToday } from '../../utils/date.js';
+import { escapeHtml } from '../../utils/html.js';
 import { getLockedReportClassCode } from '../../utils/route.js';
 import { validateReportForm } from '../../utils/validators.js';
 import { renderAlert } from '../components/Alert.js';
@@ -9,6 +10,7 @@ import { renderBrandLogo } from '../components/BrandLogo.js';
 import { renderClassSelect } from '../components/ClassSelect.js';
 import { renderLoadingOverlay } from '../components/LoadingOverlay.js';
 import { renderProjectSummary } from '../components/ProjectSummary.js';
+import { renderProjectWaterfallGuide } from '../components/ProjectWaterfallGuide.js';
 import { renderReportForm } from '../components/ReportForm.js';
 import { renderStudentLibraryCta } from '../components/StudentLibraryCta.js';
 import { renderStudentSelect } from '../components/StudentSelect.js';
@@ -34,10 +36,12 @@ function renderLockedClassField(classInfo) {
   const className = classInfo?.className || 'Lớp này đang được mở theo đường dẫn riêng.';
 
   return `
-    <label class="form-label">Mã lớp</label>
-    <div class="form-control locked-class-field bg-body-tertiary">
-      <div class="locked-class-field__code" title="${classCode}">${classCode}</div>
-      <div class="locked-class-field__name">${className}</div>
+    <div class="student-report-field">
+      <label class="form-label">Mã lớp</label>
+      <div class="student-report-locked-class">
+        <strong title="${escapeHtml(classCode)}">${escapeHtml(classCode)}</strong>
+        <span>${escapeHtml(className)}</span>
+      </div>
     </div>
   `;
 }
@@ -77,77 +81,59 @@ function renderCurriculumSlot(curriculumPreview, selectedClassInfo, curriculumLo
     return '';
   }
 
-  if (curriculumLoading) {
-    return renderLoadingOverlay('Đang tải học liệu...');
-  }
-
-  if (curriculumError) {
-    return renderAlert(curriculumError, 'warning');
-  }
-
-  const libraryCta = renderStudentLibraryCta(curriculumPreview, selectedClassInfo, curriculumLoading, curriculumError);
-  const cards = [libraryCta].filter(Boolean);
-
-  if (cards.length === 0) {
-    return '';
-  }
-
-  return `<div class="d-grid gap-3">${cards.join('')}</div>`;
+  return renderStudentLibraryCta(curriculumPreview, selectedClassInfo, curriculumLoading, curriculumError);
 }
 
 export const studentReportPage = {
   title: 'Gửi báo cáo tiến độ',
   async render() {
     return `
-      <div class="student-layout">
-        <section class="student-hero">
-          <div class="container-fluid student-page-shell py-4 py-lg-5">
-            <div class="row justify-content-center">
-              <div class="col-12">
-                <div class="student-hero-card shadow-lg border-0">
-                  <div class="row g-0">
-                    <div class="col-12 col-lg-4 col-xl-3 student-hero-panel">
-                      ${renderBrandLogo({
-                        id: 'student-brand-trigger',
-                        className: 'student-brand-lockup mb-4',
-                        tone: 'light',
-                        compact: true,
-                      })}
-                      <h1 class="student-hero-title fw-semibold mb-3">Báo cáo tiến độ sản phẩm</h1>
-                      <p class="student-hero-copy mb-0 text-white-50">
-                        Chọn đúng tên của mình và điền thật rõ để giáo viên nắm tiến độ, hỗ trợ bạn nhanh hơn và để phần học liệu có thêm nhiều không gian xem lại.
-                      </p>
-                    </div>
-                    <div class="col-12 col-lg-8 col-xl-9 p-4 p-xl-5 bg-white student-main-panel">
-                      <div id="student-page-alert"></div>
-                      <div class="row g-3 mb-3">
-                        <div class="col-12 col-md-6">
-                          <div id="class-select-slot">${renderLoadingOverlay('Đang tải thông tin lớp...')}</div>
-                        </div>
-                        <div class="col-12 col-md-6">
-                          <div id="student-select-slot">${renderStudentSelect([])}</div>
-                        </div>
-                      </div>
-                      <div id="project-summary-slot" class="mb-3">${renderProjectSummary(null)}</div>
-                      <div id="curriculum-review-slot" class="mb-3"></div>
-                      <div id="student-report-form-slot">${renderReportForm({}, { disabled: true })}</div>
-                    </div>
-                  </div>
-                </div>
+      <div class="student-layout student-report-layout">
+        <main class="student-report-page">
+          <div class="container-fluid student-page-shell">
+            <header class="student-report-header">
+              ${renderBrandLogo({
+                id: 'student-brand-trigger',
+                className: 'student-report-brand',
+                tone: 'dark',
+                compact: true,
+              })}
+              <div>
+                <div class="student-report-eyebrow">Học sinh</div>
+                <h1>Báo cáo tiến độ sản phẩm</h1>
               </div>
-            </div>
+            </header>
+
+            <div id="student-page-alert"></div>
+
+            <section class="student-report-command-card" aria-label="Chọn lớp và học sinh">
+              <div class="student-report-command-grid">
+                <div id="class-select-slot">${renderLoadingOverlay('Đang tải thông tin lớp...')}</div>
+                <div id="student-select-slot">${renderStudentSelect([])}</div>
+              </div>
+            </section>
+
+            <section class="student-report-context-card" aria-label="Tóm tắt học sinh">
+              <div id="project-summary-slot">${renderProjectSummary(null)}</div>
+              <div id="curriculum-review-slot"></div>
+            </section>
+
+            <div id="project-waterfall-slot"></div>
+
+            <div id="student-report-form-slot">${renderReportForm({}, { disabled: true })}</div>
           </div>
-        </section>
+        </main>
         ${renderToastStack()}
       </div>
     `;
   },
-  async mount({ navigate }) {
+  async mount() {
     const pageAlert = document.getElementById('student-page-alert');
     const classSlot = document.getElementById('class-select-slot');
     const studentSlot = document.getElementById('student-select-slot');
     const summarySlot = document.getElementById('project-summary-slot');
     const reviewSlot = document.getElementById('curriculum-review-slot');
+    const waterfallSlot = document.getElementById('project-waterfall-slot');
     const formSlot = document.getElementById('student-report-form-slot');
     const brandTrigger = document.getElementById('student-brand-trigger');
     const lockedClassCode = getLockedReportClassCode();
@@ -203,6 +189,7 @@ export const studentReportPage = {
         curriculumLoading,
         curriculumError,
       );
+      waterfallSlot.innerHTML = renderProjectWaterfallGuide(curriculumPreview, selectedStudent);
       formSlot.innerHTML = canShowReportForm
         ? renderReportForm(getFormDefaults(selectedStudent), {
             disabled: !selectedStudent,
@@ -235,13 +222,13 @@ export const studentReportPage = {
       const selectedStudent = getSelectedStudent();
 
       if (!selectedStudent) {
-        pageAlert.innerHTML = renderAlert('Hãy chọn đúng tên của mình để xem dự án và bắt đầu gửi báo cáo.', 'info');
+        pageAlert.innerHTML = renderAlert('Chọn đúng tên của bạn để mở form báo cáo.', 'info');
         return;
       }
 
       if (selectedStudent.lastReportedAt && isToday(selectedStudent.lastReportedAt)) {
         pageAlert.innerHTML = renderAlert(
-          'Hôm nay bạn đã gửi báo cáo. Nếu có cập nhật mới, bạn vẫn có thể gửi thêm để giáo viên nắm được.',
+          'Hôm nay bạn đã gửi báo cáo. Nếu có cập nhật mới, bạn vẫn có thể gửi thêm.',
           'warning',
         );
         return;
@@ -264,7 +251,7 @@ export const studentReportPage = {
       }
 
       studentSlot.innerHTML = renderLoadingOverlay('Đang tải danh sách học sinh...');
-      reviewSlot.innerHTML = renderLoadingOverlay('Đang tải học liệu...');
+      reviewSlot.innerHTML = renderStudentLibraryCta(null, { classCode: selectedClassCode }, true);
       curriculumLoading = true;
       curriculumError = '';
       rosterError = '';
@@ -299,10 +286,7 @@ export const studentReportPage = {
         curriculumError = '';
       } else {
         curriculumPreview = null;
-        curriculumError = getErrorMessage(
-          curriculumResult.reason,
-          'Không tải được phần học liệu của lớp này.',
-        );
+        curriculumError = getErrorMessage(curriculumResult.reason, 'Không tải được phần học liệu của lớp này.');
       }
 
       curriculumLoading = false;
@@ -393,9 +377,11 @@ export const studentReportPage = {
         return;
       }
 
-      const submitButton = form.querySelector('button[type="submit"]');
-      submitButton.disabled = true;
-      submitButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Đang gửi...';
+      const submitButtons = [...form.querySelectorAll('button[type="submit"]')];
+      submitButtons.forEach((button) => {
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Đang gửi...';
+      });
 
       try {
         await submitStudentReport(payload);
@@ -412,18 +398,18 @@ export const studentReportPage = {
       } catch (error) {
         alertSlot.innerHTML = renderAlert(getErrorMessage(error, 'Không thể gửi báo cáo lúc này.'), 'danger');
       } finally {
-        submitButton.disabled = false;
-        submitButton.innerHTML = '<i class="bi bi-send me-2"></i>Gửi báo cáo';
+        submitButtons.forEach((button) => {
+          button.disabled = false;
+          button.innerHTML = '<i class="bi bi-send me-2"></i>Gửi báo cáo';
+        });
       }
     });
 
-    const openAdminLogin = () => {
-      window.location.assign('/#/admin/login');
-    };
-
     const cleanupShortcut = attachHiddenAdminShortcut({
       brandElement: brandTrigger,
-      onTrigger: openAdminLogin,
+      onTrigger: () => {
+        window.location.assign('/#/admin/login');
+      },
     });
 
     renderSelections();
