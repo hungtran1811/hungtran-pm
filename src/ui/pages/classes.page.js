@@ -268,6 +268,8 @@ export const classesPage = {
       form.elements.classCode.value = values.classCode || '';
       form.elements.classCode.readOnly = isEditing;
       form.elements.className.value = values.className || '';
+      form.elements.startDate.value = values.startDate || '';
+      form.elements.endDate.value = values.endDate || '';
       form.elements.status.value = values.status || 'active';
       form.elements.hidden.checked = Boolean(values.hidden);
       document.getElementById('class-form-alert').innerHTML = '';
@@ -459,8 +461,8 @@ export const classesPage = {
         classCode: form.elements.classCode.value,
         className: form.elements.className.value,
         status: form.elements.status.value,
-        startDate: editingClass?.startDate || '',
-        endDate: editingClass?.endDate || '',
+        startDate: form.elements.startDate.value,
+        endDate: form.elements.endDate.value,
         hidden: form.elements.hidden.checked,
       };
       const validation = validateClassForm(values);

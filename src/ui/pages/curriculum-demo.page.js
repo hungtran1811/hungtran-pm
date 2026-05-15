@@ -3658,39 +3658,6 @@ function renderArchivedLessonVault(program, busyKey = '') {
   `;
 }
 
-function getSessionStudentVisibilityMeta(program, lesson, assignment, sessionNumber) {
-  if (!lesson) {
-    return {
-      label: 'Chưa có nội dung',
-      className: 'curriculum-session-strip__status--empty',
-    };
-  }
-
-  if (!assignment) {
-    return {
-      label: 'Chưa chọn lớp',
-      className: 'curriculum-session-strip__status--muted',
-    };
-  }
-
-  const visibleSessionNumbers = new Set(
-    buildCurriculumVisibleLessons(program, getActiveCurriculumLessons(program), assignment)
-      .map((item) => Number(item.sessionNumber || 0)),
-  );
-
-  if (visibleSessionNumbers.has(Number(sessionNumber || 0))) {
-    return {
-      label: 'Đang hiện',
-      className: 'curriculum-session-strip__status--visible',
-    };
-  }
-
-  return {
-    label: 'Chưa mở',
-    className: 'curriculum-session-strip__status--hidden',
-  };
-}
-
 function renderContentWorkspaceTabs(activeTab = 'lessons', archivedCount = 0) {
   const normalizedTab = activeTab === 'archived' ? 'archived' : 'lessons';
 
@@ -3735,7 +3702,6 @@ function renderSessionPickerStrip(program, selectedSessionNumber, assignment = n
           const activityLabel = QUIZ_UI_ENABLED
             ? getCurriculumActivityTypeLabel(session.activityType)
             : 'Học kiến thức';
-          const visibility = getSessionStudentVisibilityMeta(program, lesson, assignment, sessionNumber);
 
           return `
             <button
@@ -3746,7 +3712,6 @@ function renderSessionPickerStrip(program, selectedSessionNumber, assignment = n
             >
               <span class="d-flex justify-content-between gap-2 align-items-start">
                 <span class="fw-semibold">Buổi ${sessionNumber}</span>
-                <span class="curriculum-session-strip__status ${visibility.className}">${escapeHtml(visibility.label)}</span>
               </span>
               <span class="small">
                 <i class="bi bi-${isQuiz ? 'patch-question' : 'journal-richtext'} me-1"></i>${escapeHtml(activityLabel)}

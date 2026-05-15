@@ -85,7 +85,7 @@ function renderCurriculumSlot(curriculumPreview, selectedClassInfo, curriculumLo
 }
 
 export const studentReportPage = {
-  title: 'Gửi báo cáo tiến độ',
+  title: 'Học tập & báo cáo dự án',
   async render() {
     return `
       <div class="student-layout student-report-layout">
@@ -98,10 +98,6 @@ export const studentReportPage = {
                 tone: 'dark',
                 compact: true,
               })}
-              <div>
-                <div class="student-report-eyebrow">Học sinh</div>
-                <h1>Báo cáo tiến độ sản phẩm</h1>
-              </div>
             </header>
 
             <div id="student-page-alert"></div>

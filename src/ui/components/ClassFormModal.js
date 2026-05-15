@@ -22,6 +22,14 @@ export function renderClassFormModal(values = {}) {
                   <label class="form-label">Tên lớp</label>
                   <input class="form-control" name="className" value="${escapeHtml(values.className || '')}" required />
                 </div>
+                <div class="col-12 col-md-6">
+                  <label class="form-label">Ngày bắt đầu</label>
+                  <input class="form-control" type="date" name="startDate" value="${escapeHtml(values.startDate || '')}" />
+                </div>
+                <div class="col-12 col-md-6">
+                  <label class="form-label">Ngày kết thúc</label>
+                  <input class="form-control" type="date" name="endDate" value="${escapeHtml(values.endDate || '')}" />
+                </div>
                 <div class="col-12">
                   <label class="form-label">Trạng thái</label>
                   <select class="form-select" name="status">
