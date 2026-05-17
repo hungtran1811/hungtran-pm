@@ -211,8 +211,8 @@ export async function submitStudentReport(payload) {
     try {
       const response = await callable('submitStudentReport')(payload);
       return response.data;
-    } catch {
-      throw toAppError(directError, 'Không thể gửi báo cáo lúc này.');
+    } catch (callableError) {
+      throw toAppError(callableError, 'Không thể gửi báo cáo lúc này.');
     }
   }
 }

@@ -1,13 +1,11 @@
 'use strict';
 
 const STAGES = [
-  'Ý tưởng',
-  'Lên kế hoạch',
-  'Thiết kế',
-  'Xây dựng chức năng',
-  'Kiểm thử',
-  'Hoàn thiện',
-  'Thuyết trình / Nộp sản phẩm',
+  'Phân tích vấn đề',
+  'Thiết kế giải pháp',
+  'Xây dựng sản phẩm',
+  'Kiểm thử sản phẩm',
+  'Bảo trì & cải tiến',
 ];
 
 const STATUSES = [

@@ -37,13 +37,11 @@ service cloud.firestore {
     }
 
     function isValidStage(stage) {
-      return stage == 'Ý tưởng'
-        || stage == 'Lên kế hoạch'
-        || stage == 'Thiết kế'
-        || stage == 'Xây dựng chức năng'
-        || stage == 'Kiểm thử'
-        || stage == 'Hoàn thiện'
-        || stage == 'Thuyết trình / Nộp sản phẩm';
+      return stage == 'Phân tích vấn đề'
+        || stage == 'Thiết kế giải pháp'
+        || stage == 'Xây dựng sản phẩm'
+        || stage == 'Kiểm thử sản phẩm'
+        || stage == 'Bảo trì & cải tiến';
     }
 
     function isValidStatus(status) {
