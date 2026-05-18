@@ -4,3 +4,4 @@ dist/
 functions/node_modules/
 .firebase/
 firebase-debug.log
+data/

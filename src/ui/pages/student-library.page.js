@@ -5,6 +5,7 @@ import {
   saveStudentQuizDraft,
   submitStudentQuiz,
 } from '../../services/student-quiz.service.js';
+import { QUIZ_STUDENT_ENABLED } from '../../config/features.js';
 import { attachHiddenAdminShortcut } from '../../utils/admin-shortcut.js';
 import {
   getCurriculumSessionActivity,
@@ -153,6 +154,7 @@ export const studentLibraryPage = {
     function isActiveLessonCurrentQuiz() {
       const activeLesson = getActiveLesson();
       return (
+        QUIZ_STUDENT_ENABLED &&
         Boolean(activeLesson) &&
         isActiveLessonQuiz() &&
         Number(activeLesson.sessionNumber || 0) === Number(preview?.assignment?.currentSession || 0)
@@ -491,7 +493,7 @@ export const studentLibraryPage = {
     }
 
     async function loadRoster() {
-      if (!lockedClassCode) {
+      if (!QUIZ_STUDENT_ENABLED || !lockedClassCode) {
         students = [];
         selectedStudentId = '';
         return;
@@ -752,7 +754,7 @@ export const studentLibraryPage = {
       renderView();
     }
 
-    if (preview?.program) {
+    if (preview?.program && QUIZ_STUDENT_ENABLED) {
       await loadRoster();
       await refreshQuizForActiveLesson();
     }

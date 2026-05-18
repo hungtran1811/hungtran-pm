@@ -25,11 +25,21 @@ import {
   getHashRouteState,
 } from '../../utils/route.js';
 import { renderAlert } from '../components/Alert.js';
-import { renderAppShell } from '../components/AppShell.js';
+import { renderBrandLogo } from '../components/BrandLogo.js';
 import { renderEmptyState } from '../components/EmptyState.js';
 import { renderLoadingOverlay } from '../components/LoadingOverlay.js';
 import { renderQuizForm } from '../components/QuizForm.js';
-import { showToast } from '../components/ToastStack.js';
+import { renderToastStack, showToast } from '../components/ToastStack.js';
+
+const ADMIN_PREVIEW_CLASS = {
+  classCode: 'ADMIN-QUIZ-DEMO',
+  className: 'Lớp mẫu kiểm tra',
+};
+
+const ADMIN_PREVIEW_STUDENT = {
+  studentId: 'ADMIN-STUDENT-DEMO',
+  fullName: 'Học sinh mẫu',
+};
 
 function resolveSessionNumber(program, requestedSessionNumber) {
   const sessions = getCurriculumSessionActivities(program);
@@ -46,29 +56,37 @@ function renderMultilineText(value) {
   return escapeHtml(String(value ?? '').trim()).replaceAll('\n', '<br>');
 }
 
+function renderReadonlyField(label, primary, secondary = '') {
+  return `
+    <label class="form-label">${escapeHtml(label)}</label>
+    <div class="form-control locked-class-field bg-body-tertiary admin-quiz-preview-field">
+      <div class="locked-class-field__code">${escapeHtml(primary)}</div>
+      ${secondary ? `<div class="locked-class-field__name">${escapeHtml(secondary)}</div>` : ''}
+    </div>
+  `;
+}
+
 function renderProgramShortcutList(programs = []) {
   if (!programs.length) {
     return renderEmptyState({
       icon: 'diagram-3',
       title: 'Chưa có chương trình học',
-      description: 'Hãy tạo hoặc seed chương trình học trước khi dùng đường dẫn test quiz admin.',
+      description: 'Hãy tạo hoặc seed chương trình học trước khi test quiz admin.',
     });
   }
 
   return `
     <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white border-0">
-        <h2 class="h5 mb-1">Chọn chương trình để làm thử quiz</h2>
-        <p class="text-secondary mb-0">Trang này chỉ dành cho admin, không cần mã lớp hoặc học sinh.</p>
-      </div>
-      <div class="card-body">
+      <div class="card-body p-4">
+        <h2 class="h5 mb-2">Chọn chương trình để test quiz</h2>
+        <p class="text-secondary mb-4">Trang này chỉ dùng lớp mẫu và học sinh mẫu, không lấy dữ liệu lớp thật.</p>
         <div class="row g-3">
           ${programs
             .map((program) => {
               const firstSession = getCurriculumSessionActivities(program)[0]?.sessionNumber || 1;
 
               return `
-                <div class="col-12 col-md-6 col-xl-4">
+                <div class="col-12 col-md-6">
                   <a class="text-decoration-none" href="${escapeHtml(buildAdminQuizPreviewPath(program.id, firstSession))}">
                     <div class="card h-100 border-0 bg-light-subtle">
                       <div class="card-body">
@@ -141,12 +159,12 @@ function renderPreviewResult(result) {
   }
 
   return `
-    <section class="card border-0 shadow-sm mt-3">
+    <section class="card border-0 shadow-sm mt-3 admin-quiz-result">
       <div class="card-header bg-white border-0">
         <div class="d-flex flex-wrap justify-content-between gap-2 align-items-center">
           <div>
             <h3 class="h5 mb-1">Kết quả chấm thử</h3>
-            <p class="text-secondary mb-0">Kết quả này chỉ hiển thị cho admin và không ghi vào Firestore.</p>
+            <p class="text-secondary mb-0">Chỉ admin thấy phần này, dữ liệu không ghi vào bài nộp thật.</p>
           </div>
           <span class="badge ${result.score >= 70 ? 'text-bg-success' : 'text-bg-warning text-dark'}">
             ${result.correctCount}/${result.questionCount} (${result.score}%)
@@ -188,7 +206,7 @@ function renderPreviewResult(result) {
                       <div class="row g-3">
                         <div class="col-12 col-md-6">
                           <div class="quiz-status-meta h-100">
-                            <div class="quiz-status-meta__label">Admin chọn</div>
+                            <div class="quiz-status-meta__label">Học sinh mẫu chọn</div>
                             <div class="fw-semibold">${escapeHtml(question.selectedText || 'Chưa trả lời')}</div>
                           </div>
                         </div>
@@ -212,7 +230,6 @@ function renderPreviewResult(result) {
 }
 
 function renderQuizPreviewShell({
-  programs,
   program,
   sessionNumber,
   quizConfig,
@@ -222,71 +239,39 @@ function renderQuizPreviewShell({
   currentQuestionIndex,
   result,
 }) {
-  const sessions = getCurriculumSessionActivities(program);
   const selectedActivity = getCurriculumSessionActivity(program, sessionNumber);
   const questionPoolCount = Number(quizConfig?.questions?.length || 0);
   const readiness = quizConfig ? getQuizReadiness(quizConfig) : null;
 
   return `
-    <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start mb-3">
+    <div class="admin-quiz-preview-toolbar mb-3">
       <div>
-        <div class="text-secondary small mb-1">Admin test</div>
-        <h2 class="h4 mb-1">${escapeHtml(program.name)}</h2>
-        <div class="text-secondary">
-          Buổi ${sessionNumber} · ${escapeHtml(getCurriculumActivityTypeLabel(selectedActivity.activityType))}
-        </div>
+        <div class="small text-secondary mb-1">Màn test admin</div>
+        <h2 class="h5 mb-0">${escapeHtml(program.name)} · Buổi ${Number(sessionNumber || 0)}</h2>
       </div>
       <div class="d-flex flex-wrap gap-2">
-        <a class="btn btn-outline-secondary" href="#/admin/curriculum">
-          <i class="bi bi-arrow-left me-2"></i>Quay lại Học liệu
+        <a class="btn btn-outline-secondary btn-sm" href="#/admin/curriculum?workspace=editor&session=${Number(sessionNumber || 0)}">
+          <i class="bi bi-arrow-left me-1"></i>Về Học liệu
         </a>
-        <a class="btn btn-outline-primary" href="${escapeHtml(buildAdminLessonPreviewPath(program.id, sessionNumber))}">
-          <i class="bi bi-journal-richtext me-2"></i>Xem học liệu
+        <a class="btn btn-outline-secondary btn-sm" href="${escapeHtml(buildAdminLessonPreviewPath(program.id, sessionNumber))}">
+          <i class="bi bi-journal-richtext me-1"></i>Xem học liệu
         </a>
+        <button type="button" class="btn btn-outline-primary btn-sm" data-action="refresh-admin-quiz-variant" ${quizConfig ? '' : 'disabled'}>
+          <i class="bi bi-shuffle me-1"></i>Đề thử khác
+        </button>
       </div>
     </div>
 
-    <div class="card border-0 shadow-sm mb-3">
-      <div class="card-body">
-        <div class="row g-3 align-items-end">
-          <div class="col-12 col-lg-5">
-            <label class="form-label">Chương trình</label>
-            <select class="form-select" id="admin-quiz-preview-program">
-              ${programs
-                .map(
-                  (item) => `
-                    <option value="${escapeHtml(item.id)}" ${item.id === program.id ? 'selected' : ''}>
-                      ${escapeHtml(item.name)}
-                    </option>
-                  `,
-                )
-                .join('')}
-            </select>
-          </div>
-          <div class="col-12 col-lg-4">
-            <label class="form-label">Buổi muốn test</label>
-            <select class="form-select" id="admin-quiz-preview-session">
-              ${sessions
-                .map(
-                  (item) => `
-                    <option value="${item.sessionNumber}" ${item.sessionNumber === sessionNumber ? 'selected' : ''}>
-                      Buổi ${item.sessionNumber} - ${escapeHtml(getCurriculumActivityTypeLabel(item.activityType))}
-                    </option>
-                  `,
-                )
-                .join('')}
-            </select>
-          </div>
-          <div class="col-12 col-lg-3">
-            <button type="button" class="btn btn-outline-primary w-100" data-action="refresh-admin-quiz-variant" ${quizConfig ? '' : 'disabled'}>
-              <i class="bi bi-shuffle me-2"></i>Tạo đề thử khác
-            </button>
-          </div>
-        </div>
+    <div class="row g-3 mb-4">
+      <div class="col-12 col-md-6">
+        ${renderReadonlyField('Mã lớp', ADMIN_PREVIEW_CLASS.classCode, `${ADMIN_PREVIEW_CLASS.className} · ${getCurriculumActivityTypeLabel(selectedActivity.activityType)}`)}
+      </div>
+      <div class="col-12 col-md-6">
+        ${renderReadonlyField('Họ và tên', ADMIN_PREVIEW_STUDENT.fullName, 'Tài khoản mẫu chỉ dùng để test giao diện')}
       </div>
     </div>
 
-    ${renderAlert('Đây là môi trường test riêng cho admin: không cần mã lớp, không cần học sinh và không lưu điểm.', 'info')}
+    ${renderAlert('Đây là lớp mẫu nội bộ để admin xem đúng giao diện học sinh. Không hiển thị cho học sinh, không nằm trong danh sách lớp và không lưu điểm.', 'info')}
     ${
       quizConfig && !readiness?.isReady
         ? renderAlert(`Bộ đề hiện có ${questionPoolCount} câu nhưng chưa đủ tỉ lệ 4 dễ, 4 trung bình, 2 khó. ${formatQuizReadinessRequirement(readiness)}`, 'warning')
@@ -297,13 +282,13 @@ function renderQuizPreviewShell({
       quizConfig && quizVariant
         ? `
           ${renderQuizForm(quizVariant, answers, errors, {
-            helperText: 'Bạn đang làm thử bằng tài khoản admin. Bấm “Chấm thử” để xem đúng/sai ngay, dữ liệu sẽ không được ghi nhận vào bài nộp.',
+            helperText: 'Bạn đang xem giao diện giống học sinh. Bấm “Chấm thử” để admin xem kết quả, dữ liệu không được lưu.',
             submitLabel: 'Chấm thử',
             currentQuestionIndex,
           })}
           <div class="d-flex justify-content-end mt-2">
             <button type="button" class="btn btn-link text-secondary" data-action="reset-admin-quiz-preview">
-              Làm lại form test
+              Làm lại lượt test
             </button>
           </div>
           ${renderPreviewResult(result)}
@@ -312,21 +297,46 @@ function renderQuizPreviewShell({
             icon: 'patch-question',
             title: 'Buổi này chưa có đề quiz',
             description:
-              'Hãy quay lại Học liệu > Điều khiển & thống kê hoặc tab soạn đề để nạp bộ câu hỏi mẫu, sau đó quay lại đường dẫn test này.',
+              'Hãy quay lại Học liệu, chọn buổi kiểm tra và thêm câu hỏi trước khi mở màn test này.',
           })
     }
   `;
 }
 
 export const adminQuizPreviewPage = {
-  async render({ authState }) {
-    return renderAppShell({
-      title: 'Test quiz admin',
-      subtitle: 'Làm thử quiz không cần mã lớp, chỉ dùng để kiểm tra đề và đáp án.',
-      currentRoute: '/admin/curriculum',
-      user: authState.user,
-      content: '<div id="admin-quiz-preview-root"></div>',
-    });
+  async render() {
+    return `
+      <div class="student-layout admin-quiz-preview-layout">
+        <section class="student-hero admin-quiz-preview-hero">
+          <div class="container-fluid student-page-shell py-4 py-lg-5">
+            <div class="row justify-content-center">
+              <div class="col-12">
+                <div class="student-hero-card shadow-lg border-0">
+                  <div class="row g-0">
+                    <div class="col-12 col-lg-4 col-xl-3 student-hero-panel">
+                      ${renderBrandLogo({
+                        id: 'admin-quiz-preview-brand',
+                        className: 'student-brand-lockup mb-4',
+                        tone: 'light',
+                        compact: true,
+                      })}
+                      <h1 class="student-hero-title fw-semibold mb-3">Kiểm tra trắc nghiệm</h1>
+                      <p class="student-hero-copy mb-0 text-white-50">
+                        Đây là màn giả lập học sinh cho admin kiểm tra đề, thứ tự câu hỏi và trải nghiệm làm bài.
+                      </p>
+                    </div>
+                    <div class="col-12 col-lg-8 col-xl-9 p-4 p-xl-5 bg-white student-main-panel">
+                      <div id="admin-quiz-preview-root">${renderLoadingOverlay('Đang tải đề quiz preview...')}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        ${renderToastStack()}
+      </div>
+    `;
   },
 
   async mount() {
@@ -360,8 +370,8 @@ export const adminQuizPreviewPage = {
       }
 
       state.quizVariant = buildStudentQuizVariant(state.quizConfig, {
-        classCode: 'ADMIN-PREVIEW',
-        studentId: `ADMIN-TESTER-${state.previewSeed}`,
+        classCode: ADMIN_PREVIEW_CLASS.classCode,
+        studentId: `${ADMIN_PREVIEW_STUDENT.studentId}-${state.previewSeed}`,
         sessionNumber: state.sessionNumber,
         questionLimit: QUIZ_QUESTION_LIMIT,
       });
@@ -410,34 +420,22 @@ export const adminQuizPreviewPage = {
     }
 
     root.addEventListener('change', (event) => {
-      const programSelect = event.target.closest('#admin-quiz-preview-program');
-      const sessionSelect = event.target.closest('#admin-quiz-preview-session');
       const choiceInput = event.target.closest('[data-answer-kind="choice"]');
 
-      if (programSelect) {
-        const selectedProgram = state.programs.find((item) => item.id === programSelect.value) || null;
-        const firstSession = selectedProgram ? getCurriculumSessionActivities(selectedProgram)[0]?.sessionNumber || 1 : 1;
-        window.location.hash = buildAdminQuizPreviewPath(programSelect.value, firstSession);
+      if (!choiceInput) {
         return;
       }
 
-      if (sessionSelect && state.program) {
-        window.location.hash = buildAdminQuizPreviewPath(state.program.id, Number(sessionSelect.value || 1));
-        return;
-      }
-
-      if (choiceInput) {
-        state.answers = {
-          ...state.answers,
-          [choiceInput.dataset.questionId]: choiceInput.value,
-        };
-        state.errors = {
-          ...state.errors,
-          [choiceInput.dataset.questionId]: '',
-        };
-        state.result = null;
-        renderView();
-      }
+      state.answers = {
+        ...state.answers,
+        [choiceInput.dataset.questionId]: choiceInput.value,
+      };
+      state.errors = {
+        ...state.errors,
+        [choiceInput.dataset.questionId]: '',
+      };
+      state.result = null;
+      renderView();
     });
 
     root.addEventListener('input', (event) => {
@@ -489,7 +487,7 @@ export const adminQuizPreviewPage = {
         renderView();
         showToast({
           title: 'Đã tạo đề thử mới',
-          message: 'Bộ câu hỏi/đáp án đã được random lại cho phiên test admin này.',
+          message: 'Bộ câu hỏi/đáp án đã được random lại cho lượt test admin này.',
           variant: 'success',
         });
         return;

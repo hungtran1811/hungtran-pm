@@ -1,5 +1,6 @@
 import { listActiveClasses, getClassRoster } from '../../services/public-api.service.js';
 import { getStudentQuizContext, submitStudentQuiz } from '../../services/student-quiz.service.js';
+import { QUIZ_STUDENT_ENABLED } from '../../config/features.js';
 import { attachHiddenAdminShortcut } from '../../utils/admin-shortcut.js';
 import { formatDateTime } from '../../utils/date.js';
 import { escapeHtml } from '../../utils/html.js';
@@ -37,36 +38,35 @@ function renderSubmittedState(quizContext) {
   const quiz = quizContext?.quiz;
 
   return `
-    <div class="card border-0 shadow-sm">
-      <div class="card-body">
-        ${renderAlert('Bạn đã nộp bài kiểm tra này thành công.', 'success')}
-        <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start">
-          <div>
-            <div class="small text-secondary mb-1">Trắc nghiệm buổi ${Number(quiz?.sessionNumber || 0)}</div>
-            <h2 class="h4 mb-1">${escapeHtml(quiz?.title || 'Bài kiểm tra đã nộp')}</h2>
-            <p class="text-secondary mb-0">
-              Hệ thống đã ghi nhận bài làm của bạn. Giáo viên sẽ xem kết quả trong khu quản trị.
-            </p>
-          </div>
-          <span class="badge bg-white text-dark border">${Number(quiz?.questionCount || 0)} câu</span>
+    <section class="student-quiz-card student-quiz-submitted">
+      ${renderAlert('Bạn đã nộp bài kiểm tra thành công.', 'success')}
+      <div class="student-quiz-submitted__main">
+        <div class="student-quiz-submitted__icon">
+          <i class="bi bi-check2-circle"></i>
         </div>
-        <hr class="my-4">
-        <div class="row g-3">
-          <div class="col-12 col-md-6">
-            <div class="quiz-status-meta">
-              <div class="quiz-status-meta__label">Trạng thái</div>
-              <div class="fw-semibold text-success">Đã nộp</div>
-            </div>
-          </div>
-          <div class="col-12 col-md-6">
-            <div class="quiz-status-meta">
-              <div class="quiz-status-meta__label">Thời gian nộp</div>
-              <div class="fw-semibold">${formatDateTime(attempt?.submittedAt)}</div>
-            </div>
-          </div>
+        <div>
+          <div class="student-quiz-eyebrow">Kiểm tra buổi ${Number(quiz?.sessionNumber || 0) || '?'}</div>
+          <h2 class="student-quiz-title">${escapeHtml(quiz?.title || 'Bài kiểm tra đã nộp')}</h2>
+          <p class="student-quiz-description">
+            Hệ thống đã ghi nhận bài làm của bạn. Giáo viên sẽ xem kết quả và thông báo lại khi cần.
+          </p>
         </div>
       </div>
-    </div>
+      <div class="student-quiz-submitted__meta">
+        <div class="quiz-status-meta">
+          <div class="quiz-status-meta__label">Trạng thái</div>
+          <div class="fw-semibold text-success">Đã nộp</div>
+        </div>
+        <div class="quiz-status-meta">
+          <div class="quiz-status-meta__label">Thời gian nộp</div>
+          <div class="fw-semibold">${formatDateTime(attempt?.submittedAt)}</div>
+        </div>
+        <div class="quiz-status-meta">
+          <div class="quiz-status-meta__label">Số câu</div>
+          <div class="fw-semibold">${Number(quiz?.questionCount || 0)} câu</div>
+        </div>
+      </div>
+    </section>
   `;
 }
 
@@ -139,6 +139,40 @@ function renderQuizState({
 export const studentQuizPage = {
   title: 'Làm bài trắc nghiệm',
   async render() {
+    if (!QUIZ_STUDENT_ENABLED) {
+      return `
+        <div class="student-layout">
+          <section class="student-hero">
+            <div class="container-fluid student-page-shell py-4 py-lg-5">
+              <div class="row justify-content-center">
+                <div class="col-12 col-lg-8 col-xl-6">
+                  <div class="card border-0 shadow-lg">
+                    <div class="card-body p-4 p-lg-5">
+                      ${renderBrandLogo({
+                        id: 'student-quiz-brand-trigger',
+                        className: 'student-brand-lockup mb-4',
+                        tone: 'dark',
+                        compact: true,
+                      })}
+                      <h1 class="h3 mb-3">Bài kiểm tra chưa mở cho học sinh</h1>
+                      ${renderAlert(
+                        'Giáo viên đang chuẩn bị ngân hàng câu hỏi. Khi chức năng kiểm tra được bật, bài làm sẽ hiển thị trong trang Học liệu.',
+                        'info',
+                      )}
+                      <a class="btn btn-primary mt-2" href="#/student/report">
+                        Về trang học sinh
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+          ${renderToastStack()}
+        </div>
+      `;
+    }
+
     return `
       <div class="student-layout">
         <section class="student-hero">
@@ -182,6 +216,18 @@ export const studentQuizPage = {
     `;
   },
   async mount() {
+    if (!QUIZ_STUDENT_ENABLED) {
+      const brandTrigger = document.getElementById('student-quiz-brand-trigger');
+      const cleanupShortcut = attachHiddenAdminShortcut({
+        brandElement: brandTrigger,
+        onTrigger: () => {
+          window.location.assign('/#/admin/login');
+        },
+      });
+
+      return () => cleanupShortcut?.();
+    }
+
     const pageAlert = document.getElementById('student-quiz-alert');
     const classSlot = document.getElementById('student-quiz-class-slot');
     const studentSlot = document.getElementById('student-quiz-student-slot');

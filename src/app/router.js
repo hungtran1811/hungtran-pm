@@ -43,7 +43,7 @@ function normalizePath() {
   const hashPath = hashState?.path || '';
 
   if (hashPath === '/admin/quizzes') {
-    window.history.replaceState({}, '', '/#/admin/curriculum?workspace=quiz');
+    window.history.replaceState({}, '', '/#/admin/curriculum?workspace=editor&session=5');
     return '/admin/curriculum';
   }
 

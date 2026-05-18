@@ -17,6 +17,10 @@
 } from '../../services/curriculum.service.js';
 import { isCloudinaryConfigured, uploadCurriculumLessonImage } from '../../services/cloudinary.service.js';
 import { subscribeClasses } from '../../services/classes.service.js';
+import {
+  QUIZ_ADMIN_TEST_ENABLED,
+  QUIZ_OPERATIONS_ENABLED,
+} from '../../config/features.js';
 import { getAuthState } from '../../state/auth.store.js';
 import { mapFirebaseError } from '../../utils/firebase-error.js';
 import { escapeHtml } from '../../utils/html.js';
@@ -81,7 +85,7 @@ const FINAL_MODE_BADGE_CLASSES = {
   exam: 'text-bg-info',
 };
 
-const QUIZ_UI_ENABLED = false;
+const QUIZ_UI_ENABLED = QUIZ_ADMIN_TEST_ENABLED;
 
 function getOperationalClasses(classes) {
   return classes.filter((item) => item.status === 'active' && !item.hidden);
@@ -3014,20 +3018,6 @@ function renderCurriculumWorkspaceSwitch(activeSection) {
       >
         <i class="bi bi-pencil-square me-2"></i>Nội dung theo buổi
       </button>
-      ${
-        QUIZ_UI_ENABLED
-          ? `
-            <button
-              type="button"
-              class="curriculum-workspace-switch__button ${activeSection === 'quiz' ? 'curriculum-workspace-switch__button--active' : ''}"
-              data-action="switch-workspace"
-              data-workspace="quiz"
-            >
-              <i class="bi bi-bar-chart-steps me-2"></i>Điều khiển & thống kê
-            </button>
-          `
-          : ''
-      }
     </div>
   `;
 }
@@ -3357,7 +3347,7 @@ function renderQuizActionPanel(program, sessionNumber) {
               adminQuizPreviewPath
                 ? `
                   <a class="btn btn-outline-primary" href="${escapeHtml(adminQuizPreviewPath)}" target="_blank" rel="noreferrer">
-                    <i class="bi bi-play-circle me-2"></i>Test quiz admin
+                    <i class="bi bi-play-circle me-2"></i>Test quiz
                   </a>
                 `
                 : ''
@@ -3929,13 +3919,14 @@ function renderCompactCurriculumPageV3(state) {
                     state.editorTab,
                     assignment,
                   )
-                : QUIZ_UI_ENABLED
-                  ? renderQuizOperationsWorkspace(
-                      programGroups,
-                      state.selectedProgramId,
-                      selectedSessionNumber,
-                    )
-                  : ''
+                : renderContentWorkspaceHorizontal(
+                    programGroups,
+                    state.selectedProgramId,
+                    selectedSessionNumber,
+                    state.busyKey,
+                    state.editorTab,
+                    assignment,
+                  )
     }
   `;
 }
@@ -3956,8 +3947,9 @@ export const curriculumDemoPage = {
   async mount() {
     const root = document.getElementById('curriculum-demo-root');
     const routeState = getHashRouteState();
-    const initialWorkspaceSection = QUIZ_UI_ENABLED && routeState.workspace === 'quiz' ? 'quiz' : 'assignment';
-    const initialSessionNumber = initialWorkspaceSection === 'quiz' ? 5 : 1;
+    const initialWorkspaceSection =
+      routeState.workspace === 'editor' || routeState.workspace === 'quiz' ? 'editor' : 'assignment';
+    const initialSessionNumber = routeState.sessionNumber || (routeState.workspace === 'quiz' ? 5 : 1);
     const state = {
       classes: [],
       programs: [],
@@ -3971,7 +3963,7 @@ export const curriculumDemoPage = {
       workspaceSection: initialWorkspaceSection,
       editorTab: 'lessons',
       selectedActivitySessionNumber: initialSessionNumber,
-      didInitializeActivitySession: false,
+      didInitializeActivitySession: Boolean(routeState.sessionNumber || routeState.workspace === 'quiz'),
       previewLessonId: '',
       previewTab: LESSON_MARKDOWN_TAB_LECTURE,
       previewImageSelections: {},
@@ -4147,17 +4139,15 @@ export const curriculumDemoPage = {
       const shouldMountQuiz =
         QUIZ_UI_ENABLED
         && selectedProgram
-        && (
-          state.workspaceSection === 'quiz'
-          || (state.workspaceSection === 'editor' && isCurriculumQuizActivity(selectedActivity?.activityType))
-        );
+        && state.workspaceSection === 'editor'
+        && isCurriculumQuizActivity(selectedActivity?.activityType);
 
       if (!shouldMountQuiz || !document.getElementById('quiz-editor-slot')) {
         return;
       }
 
       const mountToken = quizManagementMountToken;
-      const defaultActiveTab = state.workspaceSection === 'quiz' ? 'operations' : 'editor';
+      const defaultActiveTab = 'editor';
 
       void mountQuizManagement({
         embedded: true,
@@ -4168,6 +4158,7 @@ export const curriculumDemoPage = {
         lockedClassCode: state.selectedClassCode,
         hideTabs: true,
         showBothPanels: false,
+        enableOperations: QUIZ_OPERATIONS_ENABLED,
       }).then((cleanup) => {
         if (mountToken !== quizManagementMountToken) {
           cleanup?.();
@@ -4179,7 +4170,7 @@ export const curriculumDemoPage = {
     }
 
     function renderView() {
-      if (!QUIZ_UI_ENABLED && state.workspaceSection === 'quiz') {
+      if (!['assignment', 'editor'].includes(state.workspaceSection)) {
         state.workspaceSection = 'editor';
       }
 
@@ -4231,10 +4222,11 @@ export const curriculumDemoPage = {
       const selectedProgram = getSelectedProgram();
 
       if (button.dataset.action === 'switch-workspace') {
-        const allowedWorkspaces = QUIZ_UI_ENABLED ? ['assignment', 'editor', 'quiz'] : ['assignment', 'editor'];
+        const allowedWorkspaces = ['assignment', 'editor'];
         state.workspaceSection = allowedWorkspaces.includes(button.dataset.workspace)
           ? button.dataset.workspace
           : 'assignment';
+
         renderView();
         return;
       }

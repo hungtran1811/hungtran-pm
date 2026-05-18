@@ -212,6 +212,16 @@ export async function submitStudentReport(payload) {
       const response = await callable('submitStudentReport')(payload);
       return response.data;
     } catch (callableError) {
+      const directCode = String(directError?.code ?? '');
+      const callableCode = String(callableError?.code ?? '');
+
+      if (
+        directCode.includes('permission-denied')
+        && (callableCode.includes('internal') || callableCode.includes('unavailable') || !callableCode)
+      ) {
+        throw toAppError(directError, 'Không thể gửi báo cáo lúc này.');
+      }
+
       throw toAppError(callableError, 'Không thể gửi báo cáo lúc này.');
     }
   }

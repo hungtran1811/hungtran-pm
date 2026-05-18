@@ -11,6 +11,7 @@ import {
   getCurriculumSessionActivity,
   isCurriculumQuizActivity,
 } from '../../utils/curriculum-program.js';
+import { QUIZ_STUDENT_ENABLED } from '../../config/features.js';
 import { formatDateTime } from '../../utils/date.js';
 import { escapeHtml } from '../../utils/html.js';
 import { renderAlert } from './Alert.js';
@@ -356,34 +357,41 @@ function renderQuizSubmittedState(quizContext) {
   const questionCount = Number(quiz?.questionCount || attempt?.questionCount || 0);
 
   return `
-    <div class="card border-0 shadow-sm">
-      <div class="card-body">
-        ${renderAlert('Bạn đã nộp bài kiểm tra này thành công.', 'success')}
-        <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start">
-          <div>
-            <div class="small text-secondary mb-1">Kiểm tra buổi ${sessionNumber || '?'}</div>
-            <h4 class="h5 mb-1">${escapeHtml(quiz?.title || attempt?.quizTitle || 'Bài kiểm tra đã nộp')}</h4>
-            <p class="text-secondary mb-0">Hệ thống đã ghi nhận bài làm của bạn. Giáo viên sẽ xem kết quả trong khu quản trị.</p>
-          </div>
-          ${questionCount > 0 ? `<span class="badge bg-white text-dark border">${questionCount} câu</span>` : ''}
+    <section class="student-quiz-card student-quiz-submitted">
+      ${renderAlert('Bạn đã nộp bài kiểm tra thành công.', 'success')}
+      <div class="student-quiz-submitted__main">
+        <div class="student-quiz-submitted__icon">
+          <i class="bi bi-check2-circle"></i>
         </div>
-        <hr class="my-4">
-        <div class="row g-3">
-          <div class="col-12 col-md-6">
-            <div class="quiz-status-meta">
-              <div class="quiz-status-meta__label">Trạng thái</div>
-              <div class="fw-semibold text-success">Đã nộp</div>
-            </div>
-          </div>
-          <div class="col-12 col-md-6">
-            <div class="quiz-status-meta">
-              <div class="quiz-status-meta__label">Thời gian nộp</div>
-              <div class="fw-semibold">${formatDateTime(attempt?.submittedAt)}</div>
-            </div>
-          </div>
+        <div>
+          <div class="student-quiz-eyebrow">Kiểm tra buổi ${sessionNumber || '?'}</div>
+          <h4 class="student-quiz-title">${escapeHtml(quiz?.title || attempt?.quizTitle || 'Bài kiểm tra đã nộp')}</h4>
+          <p class="student-quiz-description">
+            Hệ thống đã ghi nhận bài làm của bạn. Giáo viên sẽ xem kết quả và thông báo lại khi cần.
+          </p>
         </div>
       </div>
-    </div>
+      <div class="student-quiz-submitted__meta">
+        <div class="quiz-status-meta">
+          <div class="quiz-status-meta__label">Trạng thái</div>
+          <div class="fw-semibold text-success">Đã nộp</div>
+        </div>
+        <div class="quiz-status-meta">
+          <div class="quiz-status-meta__label">Thời gian nộp</div>
+          <div class="fw-semibold">${formatDateTime(attempt?.submittedAt)}</div>
+        </div>
+        ${
+          questionCount > 0
+            ? `
+              <div class="quiz-status-meta">
+                <div class="quiz-status-meta__label">Số câu</div>
+                <div class="fw-semibold">${questionCount} câu</div>
+              </div>
+            `
+            : ''
+        }
+      </div>
+    </section>
   `;
 }
 
@@ -392,6 +400,51 @@ function renderLessonQuizArticle(lesson, selectedImageId, preview, quizState = {
   const lessonSession = Number(lesson?.sessionNumber || 0);
   const sessionActivity = getCurriculumSessionActivity(preview?.program, lessonSession);
   const activityLabel = getCurriculumActivityTypeLabel(sessionActivity.activityType);
+  if (!QUIZ_STUDENT_ENABLED) {
+    return `
+      <section class="student-library-workspace">
+        <div class="student-library-workspace__top">
+          <div>
+            <div class="student-library-detail__label">Buổi ${lessonSession} · ${escapeHtml(activityLabel)}</div>
+            <h3 class="h4 mb-1">${escapeHtml(lesson?.title || `Kiểm tra buổi ${lessonSession}`)}</h3>
+          </div>
+          <div class="student-library-workspace__nav">
+            <button
+              type="button"
+              class="btn btn-outline-secondary btn-sm"
+              data-action="go-to-library-neighbor"
+              data-direction="prev"
+              ${lesson?.previousLessonId ? `data-lesson-id="${escapeHtml(lesson.previousLessonId)}"` : 'disabled'}
+            >
+              <i class="bi bi-chevron-left me-1"></i>Buổi trước
+            </button>
+            <button
+              type="button"
+              class="btn btn-outline-secondary btn-sm"
+              data-action="go-to-library-neighbor"
+              data-direction="next"
+              ${lesson?.nextLessonId ? `data-lesson-id="${escapeHtml(lesson.nextLessonId)}"` : 'disabled'}
+            >
+              Buổi sau<i class="bi bi-chevron-right ms-1"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="student-library-article">
+          ${renderLessonMediaFrame(lesson, selectedImageId)}
+          <div class="student-library-article__body">
+            <div class="student-library-quiz-panel">
+              ${renderAlert(
+                'Bài kiểm tra đang được giáo viên chuẩn bị và chưa mở cho học sinh trên website.',
+                'info',
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
   const selectedStudent = (quizState.students || []).find((student) => student.studentId === quizState.selectedStudentId) || null;
   const isCurrentSession = currentSession === lessonSession;
   const quizContext = quizState.quizContext || null;

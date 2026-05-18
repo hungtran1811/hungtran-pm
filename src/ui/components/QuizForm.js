@@ -19,6 +19,10 @@ function renderMultilineText(value) {
   return escapeHtml(String(value ?? '').trim()).replaceAll('\n', '<br>');
 }
 
+function getOptionLetter(index) {
+  return String.fromCharCode(65 + Number(index || 0));
+}
+
 function renderQuestionImage(question) {
   if (!question?.imageUrl) {
     return '';
@@ -36,19 +40,49 @@ function renderQuestionImage(question) {
   `;
 }
 
+function renderProgressDots(quiz, answers, activeIndex) {
+  const questions = quiz?.questions || [];
+
+  if (questions.length <= 0) {
+    return '';
+  }
+
+  return `
+    <div class="student-quiz-dots" aria-label="Tiến độ câu hỏi">
+      ${questions
+        .map((question, index) => {
+          const isAnswered = isQuizQuestionAnswered(question, answers[question.id]);
+          const stateClass = [
+            'student-quiz-dot',
+            index === activeIndex ? 'student-quiz-dot--active' : '',
+            isAnswered ? 'student-quiz-dot--answered' : '',
+          ]
+            .filter(Boolean)
+            .join(' ');
+
+          return `<span class="${stateClass}" title="Câu ${index + 1}${isAnswered ? ' đã trả lời' : ''}"></span>`;
+        })
+        .join('')}
+    </div>
+  `;
+}
+
 function renderAnswerInput(question, answerValue, disabledAttr) {
   if (isFillBlankQuestion(question)) {
     return `
       <div class="quiz-blank-answer">
-        <label class="form-label fw-semibold" for="quiz-answer-${escapeHtml(question.id)}">Câu trả lời của bạn</label>
+        <label class="form-label fw-semibold" for="quiz-answer-${escapeHtml(question.id)}">
+          Câu trả lời của bạn
+        </label>
         <input
           id="quiz-answer-${escapeHtml(question.id)}"
           type="text"
-          class="form-control form-control-lg"
+          class="form-control form-control-lg quiz-blank-answer__input"
           value="${escapeHtml(answerValue || '')}"
           placeholder="${escapeHtml(question.blankPlaceholder || 'Nhập câu trả lời')}"
           data-question-id="${escapeHtml(question.id)}"
           data-answer-kind="blank"
+          autocomplete="off"
           ${disabledAttr}
         />
       </div>
@@ -60,9 +94,11 @@ function renderAnswerInput(question, answerValue, disabledAttr) {
   return `
     <div class="quiz-option-list">
       ${(question.options || [])
-        .map(
-          (option) => `
-            <label class="quiz-option ${selectedOptionId === option.id ? 'quiz-option--selected' : ''}">
+        .map((option, index) => {
+          const isSelected = selectedOptionId === option.id;
+
+          return `
+            <label class="quiz-option ${isSelected ? 'quiz-option--selected' : ''} ${disabledAttr ? 'quiz-option--disabled' : ''}">
               <input
                 type="radio"
                 class="form-check-input mt-0"
@@ -70,13 +106,14 @@ function renderAnswerInput(question, answerValue, disabledAttr) {
                 value="${escapeHtml(option.id)}"
                 data-question-id="${escapeHtml(question.id)}"
                 data-answer-kind="choice"
-                ${selectedOptionId === option.id ? 'checked' : ''}
+                ${isSelected ? 'checked' : ''}
                 ${disabledAttr}
               />
-              <span>${renderMultilineText(option.text)}</span>
+              <span class="quiz-option__letter">${getOptionLetter(index)}</span>
+              <span class="quiz-option__content">${renderMultilineText(option.text)}</span>
             </label>
-          `,
-        )
+          `;
+        })
         .join('')}
     </div>
   `;
@@ -94,91 +131,96 @@ export function renderQuizForm(
   } = {},
 ) {
   const disabledAttr = disabled ? 'disabled' : '';
-  const helperMarkup = helperText ? `<p class="text-secondary small mb-4">${escapeHtml(helperText)}</p>` : '';
-  const questionCount = Number(quiz?.questionCount || (quiz?.questions || []).length || 0);
+  const questionCount = Number((quiz?.questions || []).length || quiz?.questionCount || 0);
   const activeIndex = clampQuestionIndex(questionCount, currentQuestionIndex);
   const currentQuestion = quiz?.questions?.[activeIndex] || null;
   const currentAnswerValue = currentQuestion ? answers[currentQuestion.id] : '';
   const answeredCount = countAnsweredQuestions(quiz, answers);
+  const progressPercent = questionCount > 0 ? Math.round((answeredCount / questionCount) * 100) : 0;
   const isLastQuestion = activeIndex >= questionCount - 1;
+  const sessionNumber = Number(quiz?.sessionNumber || 0);
 
   return `
-    <form id="student-quiz-form" class="card border-0 shadow-sm">
-      <div class="card-body">
-        <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start mb-3">
-          <div>
-            <div class="small text-secondary mb-1">Quiz buổi ${Number(quiz?.sessionNumber || 0)}</div>
-            <h2 class="h4 mb-2">${escapeHtml(quiz?.title || 'Bài kiểm tra')}</h2>
-            ${
-              quiz?.description
-                ? `<p class="text-secondary mb-0">${renderMultilineText(quiz.description)}</p>`
-                : ''
-            }
-          </div>
-          <div class="d-grid gap-2">
-            <span class="badge bg-white text-dark border">${questionCount} câu</span>
-            <span class="badge text-bg-light text-dark border">Đã trả lời ${answeredCount}/${questionCount}</span>
-          </div>
-        </div>
-        ${helperMarkup}
-        ${
-          currentQuestion
-            ? `
-              <div class="quiz-status-meta mb-4">
-                <div class="quiz-status-meta__label">Tiến độ</div>
-                <div class="fw-semibold">Câu ${activeIndex + 1} / ${questionCount}</div>
-              </div>
-              <section class="quiz-question-card">
-                <div class="quiz-question-card__head">
-                  <div class="d-flex flex-wrap justify-content-between gap-2 align-items-start">
-                    <span class="badge text-bg-light text-dark border">Câu ${activeIndex + 1}</span>
-                    <span class="badge bg-white text-dark border">
-                      ${isFillBlankQuestion(currentQuestion) ? 'Điền vào chỗ trống' : 'Chọn 1 đáp án'}
-                    </span>
-                  </div>
-                  <div class="fw-semibold">${renderMultilineText(currentQuestion.prompt)}</div>
-                  ${renderQuestionImage(currentQuestion)}
-                </div>
-                ${renderAnswerInput(currentQuestion, currentAnswerValue, disabledAttr)}
-                ${
-                  errors[currentQuestion.id]
-                    ? `<div class="text-danger small mt-2">${escapeHtml(errors[currentQuestion.id])}</div>`
-                    : ''
-                }
-              </section>
-            `
-            : '<div class="text-secondary">Chưa có câu hỏi để hiển thị.</div>'
-        }
-      </div>
-      <div class="card-footer bg-white border-0 pt-0 pb-4 px-4">
-        <div class="d-flex flex-wrap justify-content-between gap-2">
-          <button
-            type="button"
-            class="btn btn-outline-secondary"
-            data-action="previous-question"
-            ${activeIndex <= 0 || disabled ? 'disabled' : ''}
-          >
-            <i class="bi bi-arrow-left me-2"></i>Câu trước
-          </button>
+    <form id="student-quiz-form" class="student-quiz-card" style="--quiz-progress: ${progressPercent}%;">
+      <div class="student-quiz-card__header">
+        <div>
+          <div class="student-quiz-eyebrow">Kiểm tra buổi ${sessionNumber || '?'}</div>
+          <h2 class="student-quiz-title">${escapeHtml(quiz?.title || 'Bài kiểm tra')}</h2>
           ${
-            isLastQuestion
-              ? `
-                <button type="submit" class="btn btn-primary px-4" ${disabledAttr}>
-                  <i class="bi bi-send-check me-2"></i>${escapeHtml(submitLabel)}
-                </button>
-              `
-              : `
-                <button
-                  type="button"
-                  class="btn btn-primary px-4"
-                  data-action="next-question"
-                  ${disabled ? 'disabled' : ''}
-                >
-                  Câu tiếp theo<i class="bi bi-arrow-right ms-2"></i>
-                </button>
-              `
+            quiz?.description
+              ? `<p class="student-quiz-description">${renderMultilineText(quiz.description)}</p>`
+              : ''
           }
         </div>
+        <div class="student-quiz-summary" aria-label="Tổng quan bài làm">
+          <span>${questionCount} câu</span>
+          <strong>${answeredCount}/${questionCount}</strong>
+        </div>
+      </div>
+
+      <div class="student-quiz-progress" role="progressbar" aria-valuemin="0" aria-valuemax="${questionCount}" aria-valuenow="${answeredCount}">
+        <div class="student-quiz-progress__track">
+          <div class="student-quiz-progress__bar"></div>
+        </div>
+        ${renderProgressDots(quiz, answers, activeIndex)}
+      </div>
+
+      ${
+        helperText
+          ? `<p class="student-quiz-helper">${escapeHtml(helperText)}</p>`
+          : ''
+      }
+
+      ${
+        currentQuestion
+          ? `
+            <section class="student-quiz-question quiz-question-card" data-question-index="${activeIndex}">
+              <div class="student-quiz-question__top">
+                <span class="student-quiz-question__number">Câu ${activeIndex + 1}</span>
+                <span class="student-quiz-question__type">
+                  ${isFillBlankQuestion(currentQuestion) ? 'Điền vào chỗ trống' : 'Chọn 1 đáp án'}
+                </span>
+              </div>
+              <div class="student-quiz-question__prompt">${renderMultilineText(currentQuestion.prompt)}</div>
+              ${renderQuestionImage(currentQuestion)}
+              ${renderAnswerInput(currentQuestion, currentAnswerValue, disabledAttr)}
+              ${
+                errors[currentQuestion.id]
+                  ? `<div class="student-quiz-error">${escapeHtml(errors[currentQuestion.id])}</div>`
+                  : ''
+              }
+            </section>
+          `
+          : '<div class="student-quiz-empty">Chưa có câu hỏi để hiển thị.</div>'
+      }
+
+      <div class="student-quiz-card__footer">
+        <button
+          type="button"
+          class="btn btn-outline-secondary student-quiz-nav-button"
+          data-action="previous-question"
+          ${activeIndex <= 0 || disabled ? 'disabled' : ''}
+        >
+          <i class="bi bi-arrow-left me-2"></i>Câu trước
+        </button>
+        ${
+          isLastQuestion
+            ? `
+              <button type="submit" class="btn btn-primary student-quiz-submit-button" ${disabledAttr}>
+                <i class="bi bi-send-check me-2"></i>${escapeHtml(submitLabel)}
+              </button>
+            `
+            : `
+              <button
+                type="button"
+                class="btn btn-primary student-quiz-nav-button"
+                data-action="next-question"
+                ${disabled ? 'disabled' : ''}
+              >
+                Câu tiếp theo<i class="bi bi-arrow-right ms-2"></i>
+              </button>
+            `
+        }
       </div>
     </form>
   `;

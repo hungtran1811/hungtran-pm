@@ -1,5 +1,6 @@
 ﻿import { subscribeClasses } from '../../services/classes.service.js';
 import { subscribeCurriculumPrograms } from '../../services/curriculum.service.js';
+import { QUIZ_OPERATIONS_ENABLED } from '../../config/features.js';
 import {
   getQuizLiveAttemptsByClass,
   getQuizAttemptsByClass,
@@ -18,12 +19,6 @@ import {
   isCurriculumQuizActivity,
 } from '../../utils/curriculum-program.js';
 import { escapeHtml, nl2br } from '../../utils/html.js';
-import {
-  parseQuizMarkdown,
-  QUIZ_MARKDOWN_IMPORT_TEMPLATE,
-  QUIZ_MARKDOWN_SAMPLE_SETS,
-} from '../../utils/quiz-markdown.js';
-import { buildAdminQuizPreviewPath } from '../../utils/route.js';
 import {
   createQuizItemId,
   formatQuizReadinessRequirement,
@@ -210,29 +205,6 @@ function renderQuestionImagePreview(imageUrl = '', imageAlt = '', prompt = '') {
       />
     </figure>
   `;
-}
-
-function mergeImportedQuizDraft(currentDraft, importedDraft, sessionNumber, program = null) {
-  const currentQuestions = Array.isArray(currentDraft?.questions) ? currentDraft.questions : [];
-  const importedQuestions = Array.isArray(importedDraft?.questions) ? importedDraft.questions : [];
-  const currentTitle = String(currentDraft?.title || '').trim();
-  const currentDescription = String(currentDraft?.description || '').trim();
-  const defaultTitle = String(createEmptyQuizDraft(sessionNumber, program).title || '').trim();
-
-  return normalizeQuizConfigRecord(
-    {
-      sessionNumber,
-      quizMode: QUIZ_MODE_OFFICIAL,
-      subject: program?.subject || currentDraft?.subject || importedDraft?.subject || '',
-      level: program?.level || currentDraft?.level || importedDraft?.level || '',
-      questionPickPolicy: currentDraft?.questionPickPolicy || importedDraft?.questionPickPolicy || QUIZ_DEFAULT_PICK_POLICY,
-      title: !currentTitle || (currentTitle === defaultTitle && currentQuestions.length === 0) ? importedDraft.title : currentTitle,
-      description: currentDescription || importedDraft.description,
-      questions: [...currentQuestions, ...importedQuestions],
-    },
-    sessionNumber,
-    program || {},
-  );
 }
 
 function hasAttemptRetakeAfterReopen(attempt) {
@@ -913,10 +885,8 @@ function renderQuizEditor({
   selectedSessionNumber,
   selectedProgram,
   draft,
-  markdownDraft,
   isLoading,
   isSaving,
-  isImportingMarkdown,
   uploadingQuestionId,
   imageUploadEnabled,
   error,
@@ -930,8 +900,7 @@ function renderQuizEditor({
     });
   }
 
-  const importDisabled = isLoading || isSaving || isImportingMarkdown;
-  const questionActionDisabled = isLoading || isSaving || isImportingMarkdown || Boolean(uploadingQuestionId);
+  const questionActionDisabled = isLoading || isSaving || Boolean(uploadingQuestionId);
   const sessionOptions = getProgramSessionOptions(selectedProgram);
   const selectedSessionActivity = selectedProgram
     ? getCurriculumSessionActivity(selectedProgram, selectedSessionNumber)
@@ -939,9 +908,6 @@ function renderQuizEditor({
   const selectedActivityLabel = selectedSessionActivity
     ? getCurriculumActivityTypeLabel(selectedSessionActivity.activityType)
     : 'Kiểm tra';
-  const adminQuizPreviewPath = selectedProgramId
-    ? buildAdminQuizPreviewPath(selectedProgramId, selectedSessionNumber)
-    : '';
   const scopeSubject = String(draft?.subject || selectedProgram?.subject || 'Chưa rõ môn').trim();
   const scopeLevel = String(draft?.level || selectedProgram?.level || 'Chưa rõ level').trim();
   const readiness = getQuizReadiness(draft || {});
@@ -954,42 +920,28 @@ function renderQuizEditor({
   ).join(' · ');
 
   return `
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-header bg-white border-0">
-        <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start">
-          <div>
-            <h2 class="h5 mb-1">Cấu hình đề trắc nghiệm</h2>
-            <p class="text-secondary mb-0">Tạo ngân hàng câu hỏi theo môn, level và buổi. Khi mở kiểm tra, hệ thống lấy ngẫu nhiên đúng tỉ lệ 4 dễ, 4 trung bình, 2 khó.</p>
-          </div>
-          <div class="d-flex flex-wrap gap-2 align-items-center">
-            <span class="badge text-bg-light text-dark border">${escapeHtml(selectedActivityLabel)}</span>
-            ${
-              adminQuizPreviewPath
-                ? `
-                  <a class="btn btn-outline-primary btn-sm" href="${escapeHtml(adminQuizPreviewPath)}" target="_blank" rel="noreferrer">
-                    <i class="bi bi-play-circle me-1"></i>Test quiz admin
-                  </a>
-                `
-                : ''
-            }
+    <div class="card border-0 shadow-sm h-100 quiz-editor-card">
+      <div class="card-header bg-white border-0 quiz-editor-card__header">
+        <div>
+          <h2 class="h5 mb-0">Cấu hình đề trắc nghiệm</h2>
+          <div class="quiz-editor-context mt-2">
+            <span><i class="bi bi-journal-code me-1"></i>${escapeHtml(selectedProgram?.name || 'Chưa chọn chương trình')}</span>
+            <span>${escapeHtml(scopeSubject)} · ${escapeHtml(scopeLevel)}</span>
+            <span>Buổi ${Number(selectedSessionNumber || 0)}</span>
+            <span>${escapeHtml(selectedActivityLabel)}</span>
           </div>
         </div>
       </div>
       <div class="card-body">
         ${error ? `<div class="mb-3">${renderAlert(escapeHtml(error), 'danger')}</div>` : ''}
-        <div class="row g-3">
-          <div class="col-12">
-            <label class="form-label">Chương trình nguồn</label>
-            ${
-              contextLocked
-                ? `
-                  <div class="quiz-status-meta">
-                    <div class="fw-semibold">${escapeHtml(selectedProgram?.name || 'Chưa chọn chương trình')}</div>
-                    <div class="small text-secondary mt-1">${escapeHtml(scopeSubject)} · ${escapeHtml(scopeLevel)}</div>
-                  </div>
-                `
-                : `
-                  <select class="form-select" id="quiz-program-select" ${isLoading ? 'disabled' : ''}>
+        <div class="quiz-editor-setup ${contextLocked ? 'quiz-editor-setup--locked' : ''}">
+          ${
+            contextLocked
+              ? ''
+              : `
+                <div class="quiz-editor-setup__source">
+                  <label class="form-label">Chương trình nguồn</label>
+                  <select class="form-select form-select-sm" id="quiz-program-select" ${isLoading ? 'disabled' : ''}>
                     ${programs
                       .map(
                         (program) => `
@@ -1000,25 +952,20 @@ function renderQuizEditor({
                       )
                       .join('')}
                   </select>
-                `
-            }
+                </div>
+              `
+          }
+          <div class="quiz-editor-setup__title">
+            <label class="form-label">Tiêu đề</label>
+            <input class="form-control form-control-sm" id="quiz-title-input" value="${escapeHtml(draft?.title || '')}" ${isLoading ? 'disabled' : ''} />
           </div>
-          <div class="col-12 col-lg-7">
-            <label class="form-label">Tiêu đề bài kiểm tra</label>
-            <input class="form-control" id="quiz-title-input" value="${escapeHtml(draft?.title || '')}" ${isLoading ? 'disabled' : ''} />
-          </div>
-          <div class="col-12 col-lg-5">
-            <label class="form-label">Buổi áp dụng</label>
-            ${
-              contextLocked
-                ? `
-                  <div class="quiz-status-meta">
-                    <div class="fw-semibold">Buổi ${Number(selectedSessionNumber || 0)}</div>
-                    <div class="small text-secondary mt-1">${escapeHtml(selectedActivityLabel)}</div>
-                  </div>
-                `
-                : `
-                  <select class="form-select" id="quiz-session-select" ${isLoading ? 'disabled' : ''}>
+          ${
+            contextLocked
+              ? ''
+              : `
+                <div class="quiz-editor-setup__session">
+                  <label class="form-label">Buổi</label>
+                  <select class="form-select form-select-sm" id="quiz-session-select" ${isLoading ? 'disabled' : ''}>
                     ${sessionOptions
                       .map(
                         (item) => `
@@ -1029,145 +976,38 @@ function renderQuizEditor({
                       )
                       .join('')}
                   </select>
-                `
-            }
-            <div class="form-text">Bộ đề sẽ được lưu theo môn + level của chương trình này, ví dụ ${escapeHtml(scopeSubject)} + ${escapeHtml(scopeLevel)} + buổi ${selectedSessionNumber}.</div>
-          </div>
-          <div class="col-12">
+                </div>
+              `
+          }
+          <div class="quiz-editor-setup__description">
             <label class="form-label">Mô tả ngắn</label>
-            <textarea class="form-control" id="quiz-description-input" rows="3" ${isLoading ? 'disabled' : ''}>${escapeHtml(
+            <textarea class="form-control form-control-sm" id="quiz-description-input" rows="2" ${isLoading ? 'disabled' : ''}>${escapeHtml(
               draft?.description || '',
             )}</textarea>
           </div>
         </div>
-        <div class="row g-3 mt-1">
-          <div class="col-12 col-xl-7">
-            <div class="quiz-status-meta h-100">
-              <div class="quiz-status-meta__label">Ngân hàng đang sửa</div>
-              <div class="fw-semibold">
-                ${escapeHtml(scopeSubject)} · ${escapeHtml(scopeLevel)} · Buổi ${Number(selectedSessionNumber || 0)}
-              </div>
-              <div class="small text-secondary mt-1">Loại buổi: ${escapeHtml(selectedActivityLabel)}</div>
-            </div>
+        <div class="quiz-editor-readiness ${readiness.isReady ? 'quiz-editor-readiness--ready' : 'quiz-editor-readiness--warning'}">
+          <div>
+            <div class="quiz-editor-readiness__label">Ngân hàng</div>
+            <div class="fw-semibold">${escapeHtml(scopeSubject)} · ${escapeHtml(scopeLevel)} · Buổi ${Number(selectedSessionNumber || 0)}</div>
           </div>
-          <div class="col-12 col-xl-5">
-            <div class="quiz-status-meta h-100">
-              <div class="quiz-status-meta__label">Tỉ lệ phát đề</div>
-              <div class="fw-semibold">${escapeHtml(policySummary)}</div>
-              <div class="small text-secondary mt-1">Hiện có: ${escapeHtml(countSummary)}</div>
-            </div>
+          <div>
+            <div class="quiz-editor-readiness__label">Tỉ lệ cần</div>
+            <div class="fw-semibold">${escapeHtml(policySummary)}</div>
           </div>
-          <div class="col-12">
-            ${renderAlert(
+          <div>
+            <div class="quiz-editor-readiness__label">Hiện có</div>
+            <div class="fw-semibold">${escapeHtml(countSummary)}</div>
+          </div>
+          <div class="quiz-editor-readiness__status">
+            ${
               readiness.isReady
-                ? `Ngân hàng đã đủ điều kiện mở kiểm tra: ${escapeHtml(policySummary)}.`
-                : `Chưa đủ điều kiện mở kiểm tra. ${formatQuizReadinessRequirement(readiness)}`,
-              readiness.isReady ? 'success' : 'warning',
-            )}
+                ? '<i class="bi bi-check-circle-fill me-1"></i>Đủ điều kiện'
+                : `<i class="bi bi-exclamation-triangle-fill me-1"></i>${escapeHtml(formatQuizReadinessRequirement(readiness))}`
+            }
           </div>
         </div>
-        <div class="quiz-import-panel mt-4">
-          <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start mb-3">
-            <div>
-              <h3 class="h6 mb-1">Nhập nhanh bằng file .md</h3>
-              <div class="small text-secondary">
-                Dùng markdown để thêm nhiều câu hỏi cùng lúc. Mỗi đáp án đúng đánh dấu bằng <code>[x]</code>, ảnh minh họa dùng
-                dòng <code>Image:</code> hoặc cú pháp <code>![alt](url)</code>. Câu điền khuyết dùng
-                <code>Type: fill_blank</code>, <code>Answers:</code> và <code>Difficulty:</code> hoặc <code>Độ khó:</code>.
-              </div>
-            </div>
-          </div>
-          <div class="row g-3">
-            <div class="col-12 col-xl-6">
-              <label class="form-label mb-2">Mẫu markdown</label>
-              <textarea
-                class="form-control font-monospace"
-                rows="14"
-                readonly
-              >${escapeHtml(QUIZ_MARKDOWN_IMPORT_TEMPLATE)}</textarea>
-              <div class="form-text">Đây là form mẫu để bạn copy và điều chỉnh theo bộ đề của mình.</div>
-            </div>
-            <div class="col-12 col-xl-6">
-              <div class="d-flex flex-wrap justify-content-between gap-2 align-items-center mb-2">
-                <label class="form-label mb-0" for="quiz-markdown-textarea">Nội dung markdown để áp dụng</label>
-                <div class="d-flex flex-wrap gap-2">
-                  <select
-                    id="quiz-sample-set-select"
-                    class="form-select form-select-sm w-auto"
-                    aria-label="Chọn bộ câu hỏi mẫu"
-                    ${importDisabled ? 'disabled' : ''}
-                  >
-                    ${QUIZ_MARKDOWN_SAMPLE_SETS.map(
-                      (sampleSet) => `
-                        <option value="${escapeHtml(sampleSet.id)}">${escapeHtml(sampleSet.title)}</option>
-                      `,
-                    ).join('')}
-                  </select>
-                  <button
-                    type="button"
-                    class="btn btn-outline-primary btn-sm"
-                    data-action="use-quiz-sample-set"
-                    ${importDisabled ? 'disabled' : ''}
-                  >
-                    <i class="bi bi-stars me-1"></i>Dùng bộ mẫu
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-outline-secondary btn-sm"
-                    data-action="use-quiz-markdown-template"
-                    ${importDisabled ? 'disabled' : ''}
-                  >
-                    <i class="bi bi-clipboard-plus me-1"></i>Dùng mẫu
-                  </button>
-                  <button
-                    type="button"
-                    class="btn btn-outline-secondary btn-sm"
-                    data-action="import-quiz-markdown"
-                    ${importDisabled ? 'disabled' : ''}
-                  >
-                    ${
-                      isImportingMarkdown
-                        ? '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Đang xử lý...'
-                        : '<i class="bi bi-file-earmark-arrow-up me-1"></i>Nạp file .md'
-                    }
-                  </button>
-                </div>
-              </div>
-              <textarea
-                id="quiz-markdown-textarea"
-                class="form-control font-monospace"
-                rows="14"
-                placeholder="# Kiểm tra trắc nghiệm buổi 9&#10;&#10;Dán nội dung markdown vào đây, hoặc bấm &quot;Nạp file .md&quot; để đổ nội dung vào editor."
-                ${importDisabled ? 'disabled' : ''}
-              >${escapeHtml(markdownDraft || '')}</textarea>
-              <div class="form-text">Bạn có thể nạp file markdown rồi chỉnh sửa trực tiếp trong ô này trước khi áp dụng vào bộ đề.</div>
-              <div class="d-flex flex-wrap gap-2 mt-3">
-                <button
-                  type="button"
-                  class="btn btn-primary"
-                  data-action="apply-quiz-markdown"
-                  ${importDisabled ? 'disabled' : ''}
-                >
-                  ${
-                    isImportingMarkdown
-                      ? '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Đang áp dụng...'
-                      : '<i class="bi bi-box-arrow-in-down me-2"></i>Áp dụng vào bộ đề'
-                  }
-                </button>
-                <button
-                  type="button"
-                  class="btn btn-outline-danger"
-                  data-action="clear-quiz-markdown"
-                  ${importDisabled || !markdownDraft ? 'disabled' : ''}
-                >
-                  <i class="bi bi-eraser me-2"></i>Xóa editor
-                </button>
-              </div>
-            </div>
-          </div>
-          <input type="file" id="quiz-markdown-import-input" class="d-none" accept=".md,text/markdown,text/plain" />
-          <input type="file" id="quiz-question-image-input" class="d-none" accept="image/*" />
-        </div>
+        <input type="file" id="quiz-question-image-input" class="d-none" accept="image/*" />
         <hr class="my-4">
         <div class="d-flex flex-wrap justify-content-between gap-3 align-items-center mb-3">
           <div>
@@ -1412,7 +1252,7 @@ function renderQuizEditor({
           type="button"
           class="btn btn-primary w-100"
           data-action="save-quiz"
-          ${isSaving || isImportingMarkdown || Boolean(uploadingQuestionId) ? 'disabled' : ''}
+          ${isSaving || Boolean(uploadingQuestionId) ? 'disabled' : ''}
         >
           ${
             isSaving
@@ -1785,25 +1625,34 @@ function renderAttemptDetailModal(attempt, isOpen = false, options = {}) {
 export function renderQuizManagementContent({
   hideTabs = false,
   showBothPanels = false,
+  enableOperations = QUIZ_OPERATIONS_ENABLED,
 } = {}) {
+  const operationsEnabled = Boolean(enableOperations);
+
   return `
-    <div id="quiz-tabs-slot">${hideTabs ? '' : renderQuizPageTabs('editor')}</div>
+    <div id="quiz-tabs-slot">${hideTabs || !operationsEnabled ? '' : renderQuizPageTabs('editor')}</div>
     <section id="quiz-editor-panel">
       <div id="quiz-editor-slot">${renderLoadingOverlay('Đang tải cấu hình trắc nghiệm...')}</div>
     </section>
-    <section id="quiz-operations-panel" class="${showBothPanels ? 'mt-4' : 'd-none'}">
-      <div class="row g-4">
-        <div class="col-12 col-xl-5">
-          <div class="d-grid gap-4">
-            <div id="quiz-launch-control-slot">${renderLoadingOverlay('Đang tải điều khiển bài kiểm tra...')}</div>
-            <div id="quiz-attempt-list-slot">${renderLoadingOverlay('Đang tải danh sách lớp...')}</div>
-          </div>
-        </div>
-        <div class="col-12 col-xl-7">
-          <div id="quiz-report-slot">${renderLoadingOverlay('Đang tổng hợp báo cáo nhanh...')}</div>
-        </div>
-      </div>
-    </section>
+    ${
+      operationsEnabled
+        ? `
+          <section id="quiz-operations-panel" class="${showBothPanels ? 'mt-4' : 'd-none'}">
+            <div class="row g-4">
+              <div class="col-12 col-xl-5">
+                <div class="d-grid gap-4">
+                  <div id="quiz-launch-control-slot">${renderLoadingOverlay('Đang tải điều khiển bài kiểm tra...')}</div>
+                  <div id="quiz-attempt-list-slot">${renderLoadingOverlay('Đang tải danh sách lớp...')}</div>
+                </div>
+              </div>
+              <div class="col-12 col-xl-7">
+                <div id="quiz-report-slot">${renderLoadingOverlay('Đang tổng hợp báo cáo nhanh...')}</div>
+              </div>
+            </div>
+          </section>
+        `
+        : ''
+    }
     <div id="quiz-attempt-modal-slot"></div>
   `;
 }
@@ -1815,14 +1664,18 @@ export const quizzesPage = {
 
     return renderAppShell({
       title: 'Quản lý trắc nghiệm',
-      subtitle: 'Soạn đề theo buổi, điều khiển kiểm tra và xem bài học sinh đã nộp.',
+      subtitle: 'Soạn đề theo buổi, test quiz admin và chuẩn bị ngân hàng câu hỏi.',
       currentRoute: '/admin/quizzes',
       user: authState.user,
-      content: renderQuizManagementContent(),
+      content: renderQuizManagementContent({
+        enableOperations: QUIZ_OPERATIONS_ENABLED,
+      }),
     });
   },
   async mount() {
-    return mountQuizManagement();
+    return mountQuizManagement({
+      enableOperations: QUIZ_OPERATIONS_ENABLED,
+    });
   },
 };
 
@@ -1834,9 +1687,13 @@ export async function mountQuizManagement({
   lockedClassCode = '',
   hideTabs = false,
   showBothPanels = false,
+  enableOperations = QUIZ_OPERATIONS_ENABLED,
 } = {}) {
+    const operationsEnabled = Boolean(enableOperations);
     const savedUiState = {
-      activeTab: forceDefaultTab ? defaultActiveTab : loadQuizAdminUiState().activeTab || defaultActiveTab,
+      activeTab: operationsEnabled && !forceDefaultTab
+        ? loadQuizAdminUiState().activeTab || defaultActiveTab
+        : defaultActiveTab,
     };
     const tabsSlot = document.getElementById('quiz-tabs-slot');
     const editorPanel = document.getElementById('quiz-editor-panel');
@@ -1846,6 +1703,10 @@ export async function mountQuizManagement({
     const attemptListSlot = document.getElementById('quiz-attempt-list-slot');
     const reportSlot = document.getElementById('quiz-report-slot');
     const attemptModalSlot = document.getElementById('quiz-attempt-modal-slot');
+
+    if (!editorSlot) {
+      return null;
+    }
 
     const state = {
       classes: [],
@@ -1857,7 +1718,6 @@ export async function mountQuizManagement({
       quizLoading: true,
       quizError: '',
       isSavingQuiz: false,
-      isImportingMarkdown: false,
       uploadingQuestionId: '',
       isUpdatingClassQuiz: false,
       classQuizError: '',
@@ -1869,14 +1729,13 @@ export async function mountQuizManagement({
       selectedClassCode: lockedClassCode || '',
       selectedSessionFilter: 'all',
       selectedAttemptId: '',
-      markdownDraft: '',
-      activeTab: savedUiState.activeTab === 'operations' ? 'operations' : 'editor',
+      activeTab: operationsEnabled && savedUiState.activeTab === 'operations' ? 'operations' : 'editor',
       isAttemptModalOpen: false,
       reopeningAttemptId: '',
       attemptModalInfo: '',
       attemptModalError: '',
       hasLoadedQuizConfigs: false,
-      hasLoadedAttempts: false,
+      hasLoadedAttempts: !operationsEnabled,
     };
     let pendingQuestionImageId = '';
 
@@ -1932,9 +1791,14 @@ export async function mountQuizManagement({
 
     function renderView() {
       persistQuizAdminUiState(state);
-      tabsSlot.innerHTML = hideTabs ? '' : renderQuizPageTabs(state.activeTab);
+      if (tabsSlot) {
+        tabsSlot.innerHTML = hideTabs || !operationsEnabled ? '' : renderQuizPageTabs(state.activeTab);
+      }
 
-      if (showBothPanels) {
+      if (!operationsEnabled) {
+        editorPanel?.classList.remove('d-none');
+        operationsPanel?.classList.add('d-none');
+      } else if (showBothPanels) {
         editorPanel.classList.remove('d-none');
         operationsPanel.classList.remove('d-none');
         operationsPanel.classList.add('mt-4');
@@ -1968,46 +1832,51 @@ export async function mountQuizManagement({
         selectedSessionNumber: state.selectedSessionNumber,
         selectedProgram,
         draft: state.draft,
-        markdownDraft: state.markdownDraft,
         isLoading: state.quizLoading,
         isSaving: state.isSavingQuiz,
-        isImportingMarkdown: state.isImportingMarkdown,
         uploadingQuestionId: state.uploadingQuestionId,
         imageUploadEnabled: isCloudinaryConfigured(),
         error: state.quizError,
         contextLocked: Boolean(lockedProgramId || lockedSessionNumber),
       });
 
-      launchControlSlot.innerHTML = renderClassQuizLaunchControl({
-        selectedClass,
-        currentQuizConfig,
-        sessionActivity: selectedClassActivity,
-        liveAttemptCount: filteredLiveAttempts.length,
-        isUpdating: state.isUpdatingClassQuiz,
-        error: state.classQuizError,
-      });
+      if (operationsEnabled && launchControlSlot && attemptListSlot && reportSlot) {
+        launchControlSlot.innerHTML = renderClassQuizLaunchControl({
+          selectedClass,
+          currentQuizConfig,
+          sessionActivity: selectedClassActivity,
+          liveAttemptCount: filteredLiveAttempts.length,
+          isUpdating: state.isUpdatingClassQuiz,
+          error: state.classQuizError,
+        });
 
-      attemptListSlot.innerHTML = renderAttemptList({
-        classes: manageableClasses,
-        selectedClassCode: state.selectedClassCode,
-        selectedSessionFilter: state.selectedSessionFilter,
-        sessionFilterOptions,
-        attempts: filteredAttempts,
-        isLoading: state.attemptsLoading,
-        error: state.attemptsError,
-        selectedAttemptId: selectedAttempt?.id || '',
-      });
+        attemptListSlot.innerHTML = renderAttemptList({
+          classes: manageableClasses,
+          selectedClassCode: state.selectedClassCode,
+          selectedSessionFilter: state.selectedSessionFilter,
+          sessionFilterOptions,
+          attempts: filteredAttempts,
+          isLoading: state.attemptsLoading,
+          error: state.attemptsError,
+          selectedAttemptId: selectedAttempt?.id || '',
+        });
 
-      reportSlot.innerHTML = renderAttemptOverviewReport(officialReportAttempts, filteredLiveAttempts.length);
-      attemptModalSlot.innerHTML = renderAttemptDetailModal(selectedAttempt, state.isAttemptModalOpen, {
-        submissionHistory: getAttemptSubmissionHistory(selectedAttempt),
-        bestSubmission: getBestAttemptSubmission(selectedAttempt),
-        latestSubmission: getLatestAttemptSubmission(selectedAttempt),
-        isReopening:
-          Boolean(state.reopeningAttemptId) && state.reopeningAttemptId === (selectedAttempt?.id || ''),
-        info: state.attemptModalInfo,
-        error: state.attemptModalError,
-      });
+        reportSlot.innerHTML = renderAttemptOverviewReport(officialReportAttempts, filteredLiveAttempts.length);
+      }
+
+      if (attemptModalSlot) {
+        attemptModalSlot.innerHTML = operationsEnabled
+          ? renderAttemptDetailModal(selectedAttempt, state.isAttemptModalOpen, {
+              submissionHistory: getAttemptSubmissionHistory(selectedAttempt),
+              bestSubmission: getBestAttemptSubmission(selectedAttempt),
+              latestSubmission: getLatestAttemptSubmission(selectedAttempt),
+              isReopening:
+                Boolean(state.reopeningAttemptId) && state.reopeningAttemptId === (selectedAttempt?.id || ''),
+              info: state.attemptModalInfo,
+              error: state.attemptModalError,
+            })
+          : '';
+      }
     }
 
     async function loadQuizConfigs() {
@@ -2041,6 +1910,16 @@ export async function mountQuizManagement({
     }
 
     async function loadAttempts(options = {}) {
+      if (!operationsEnabled) {
+        state.attempts = [];
+        state.liveAttempts = [];
+        state.attemptConfigs = [];
+        state.attemptsLoading = false;
+        state.attemptsError = '';
+        state.hasLoadedAttempts = true;
+        return;
+      }
+
       const preserveSelection = Boolean(options.preserveSelection);
       const keepModalOpen = Boolean(options.keepModalOpen);
       const previousSelectedAttemptId = state.selectedAttemptId;
@@ -2212,41 +2091,43 @@ export async function mountQuizManagement({
       },
     );
 
-    const unsubscribeClasses = subscribeClasses(
-      async (classes) => {
-        state.classes = classes;
-        const manageableClasses = getQuizManageableClasses(classes);
-        const lockedClassExists = lockedClassCode
-          && manageableClasses.some((classItem) => classItem.classCode === lockedClassCode);
-        const nextClassCode = lockedClassExists
-          ? lockedClassCode
-          : (
-              state.selectedClassCode
-              && manageableClasses.some((classItem) => classItem.classCode === state.selectedClassCode)
-                ? state.selectedClassCode
-                : manageableClasses[0]?.classCode || ''
-            );
+    const unsubscribeClasses = operationsEnabled
+      ? subscribeClasses(
+          async (classes) => {
+            state.classes = classes;
+            const manageableClasses = getQuizManageableClasses(classes);
+            const lockedClassExists = lockedClassCode
+              && manageableClasses.some((classItem) => classItem.classCode === lockedClassCode);
+            const nextClassCode = lockedClassExists
+              ? lockedClassCode
+              : (
+                  state.selectedClassCode
+                  && manageableClasses.some((classItem) => classItem.classCode === state.selectedClassCode)
+                    ? state.selectedClassCode
+                    : manageableClasses[0]?.classCode || ''
+                );
 
-        if (state.selectedClassCode !== nextClassCode || !state.hasLoadedAttempts) {
-          state.selectedClassCode = nextClassCode;
-          await loadAttempts();
-          return;
-        }
+            if (state.selectedClassCode !== nextClassCode || !state.hasLoadedAttempts) {
+              state.selectedClassCode = nextClassCode;
+              await loadAttempts();
+              return;
+            }
 
-        renderView();
-      },
-      (error) => {
-        state.classes = [];
-        state.attemptsLoading = false;
-        state.attemptsError = getErrorMessage(error, 'Không tải được danh sách lớp học.');
-        renderView();
-      },
-    );
+            renderView();
+          },
+          (error) => {
+            state.classes = [];
+            state.attemptsLoading = false;
+            state.attemptsError = getErrorMessage(error, 'Không tải được danh sách lớp học.');
+            renderView();
+          },
+        )
+      : () => {};
 
-    tabsSlot.addEventListener('click', (event) => {
+    tabsSlot?.addEventListener('click', (event) => {
       const tabButton = event.target.closest('[data-action="switch-quiz-tab"]');
 
-      if (!tabButton) {
+      if (!operationsEnabled || !tabButton) {
         return;
       }
 
@@ -2257,7 +2138,6 @@ export async function mountQuizManagement({
     editorSlot.addEventListener('change', async (event) => {
       const programSelect = event.target.closest('#quiz-program-select');
       const sessionSelect = event.target.closest('#quiz-session-select');
-      const markdownImportInput = event.target.closest('#quiz-markdown-import-input');
       const questionImageInput = event.target.closest('#quiz-question-image-input');
       const questionImageField = event.target.closest('[data-field="image-url"], [data-field="image-alt"]');
       const questionTypeSelect = event.target.closest('[data-field="question-type"]');
@@ -2276,35 +2156,6 @@ export async function mountQuizManagement({
         state.selectedSessionNumber = Number(sessionSelect.value || QUIZ_DEFAULT_OFFICIAL_SESSION_NUMBERS[0]);
         syncDraftFromConfigs();
         renderView();
-        return;
-      }
-
-      if (markdownImportInput) {
-        const [file] = Array.from(markdownImportInput.files || []);
-        markdownImportInput.value = '';
-
-        if (!file) {
-          return;
-        }
-
-        state.isImportingMarkdown = true;
-        state.quizError = '';
-        renderView();
-
-        try {
-          const source = await file.text();
-          state.markdownDraft = source;
-          showToast({
-            title: 'Đã nạp file markdown',
-            message: `Nội dung từ file ${file.name} đã được đưa vào editor. Hãy kiểm tra lại rồi bấm "Áp dụng vào bộ đề".`,
-            variant: 'success',
-          });
-        } catch (error) {
-          state.quizError = getErrorMessage(error, 'Không thể đọc file markdown này.');
-        } finally {
-          state.isImportingMarkdown = false;
-          renderView();
-        }
         return;
       }
 
@@ -2390,7 +2241,6 @@ export async function mountQuizManagement({
     editorSlot.addEventListener('input', (event) => {
       const titleInput = event.target.closest('#quiz-title-input');
       const descriptionInput = event.target.closest('#quiz-description-input');
-      const markdownTextarea = event.target.closest('#quiz-markdown-textarea');
       const promptInput = event.target.closest('[data-field="prompt"]');
       const imageUrlInput = event.target.closest('[data-field="image-url"]');
       const imageAltInput = event.target.closest('[data-field="image-alt"]');
@@ -2411,11 +2261,6 @@ export async function mountQuizManagement({
           ...state.draft,
           description: descriptionInput.value,
         };
-        return;
-      }
-
-      if (markdownTextarea) {
-        state.markdownDraft = markdownTextarea.value;
         return;
       }
 
@@ -2478,11 +2323,6 @@ export async function mountQuizManagement({
 
     editorSlot.addEventListener('click', async (event) => {
       const sessionButton = event.target.closest('[data-action="select-session"]');
-      const importMarkdownButton = event.target.closest('[data-action="import-quiz-markdown"]');
-      const useSampleSetButton = event.target.closest('[data-action="use-quiz-sample-set"]');
-      const useMarkdownTemplateButton = event.target.closest('[data-action="use-quiz-markdown-template"]');
-      const applyMarkdownButton = event.target.closest('[data-action="apply-quiz-markdown"]');
-      const clearMarkdownButton = event.target.closest('[data-action="clear-quiz-markdown"]');
       const addQuestionButton = event.target.closest('[data-action="add-question"]');
       const removeQuestionButton = event.target.closest('[data-action="remove-question"]');
       const pickQuestionImageButton = event.target.closest('[data-action="pick-question-image"]');
@@ -2497,76 +2337,6 @@ export async function mountQuizManagement({
         );
         syncDraftFromConfigs();
         renderView();
-        return;
-      }
-
-      if (importMarkdownButton) {
-        const fileInput = editorSlot.querySelector('#quiz-markdown-import-input');
-        fileInput?.click();
-        return;
-      }
-
-      if (useSampleSetButton) {
-        const sampleSelect = editorSlot.querySelector('#quiz-sample-set-select');
-        const sampleSet =
-          QUIZ_MARKDOWN_SAMPLE_SETS.find((item) => item.id === sampleSelect?.value) ||
-          QUIZ_MARKDOWN_SAMPLE_SETS[0];
-
-        if (sampleSet) {
-          state.markdownDraft = sampleSet.markdown;
-          showToast({
-            title: 'Đã đưa bộ mẫu vào editor',
-            message: `${sampleSet.title} đã sẵn sàng để bạn kiểm tra và áp dụng vào bộ đề.`,
-            variant: 'success',
-          });
-          renderView();
-        }
-        return;
-      }
-
-      if (useMarkdownTemplateButton) {
-        state.markdownDraft = QUIZ_MARKDOWN_IMPORT_TEMPLATE;
-        renderView();
-        return;
-      }
-
-      if (clearMarkdownButton) {
-        state.markdownDraft = '';
-        renderView();
-        return;
-      }
-
-      if (applyMarkdownButton) {
-        if (!String(state.markdownDraft || '').trim()) {
-          state.quizError = 'Hãy dán nội dung markdown vào editor trước khi áp dụng.';
-          renderView();
-          return;
-        }
-
-        state.isImportingMarkdown = true;
-        state.quizError = '';
-        renderView();
-
-        try {
-          const selectedProgram = state.programs.find((program) => program.id === state.selectedProgramId) || null;
-          const importedDraft = parseQuizMarkdown(state.markdownDraft, {
-            sessionNumber: state.selectedSessionNumber,
-            subject: selectedProgram?.subject || '',
-            level: selectedProgram?.level || '',
-          });
-          state.draft = mergeImportedQuizDraft(state.draft, importedDraft, state.selectedSessionNumber, selectedProgram);
-          state.markdownDraft = '';
-          showToast({
-            title: 'Đã áp dụng markdown',
-            message: `Đã thêm ${importedDraft.questions.length} câu hỏi vào bộ đề hiện tại.`,
-            variant: 'success',
-          });
-        } catch (error) {
-          state.quizError = getErrorMessage(error, 'Không thể phân tích nội dung markdown này.');
-        } finally {
-          state.isImportingMarkdown = false;
-          renderView();
-        }
         return;
       }
 
@@ -2660,7 +2430,11 @@ export async function mountQuizManagement({
       }
     });
 
-    launchControlSlot.addEventListener('click', async (event) => {
+    launchControlSlot?.addEventListener('click', async (event) => {
+      if (!operationsEnabled) {
+        return;
+      }
+
       const startButton = event.target.closest('[data-action="start-class-quiz"]');
       const stopButton = event.target.closest('[data-action="stop-class-quiz"]');
       const selectedClass = getSelectedClass(getQuizManageableClasses(state.classes), state.selectedClassCode);
@@ -2732,7 +2506,11 @@ export async function mountQuizManagement({
       }
     });
 
-    attemptListSlot.addEventListener('change', async (event) => {
+    attemptListSlot?.addEventListener('change', async (event) => {
+      if (!operationsEnabled) {
+        return;
+      }
+
       const classSelect = event.target.closest('#quiz-attempt-class-select');
       const sessionFilterSelect = event.target.closest('#quiz-attempt-session-filter');
 
@@ -2756,7 +2534,11 @@ export async function mountQuizManagement({
       }
     });
 
-    attemptListSlot.addEventListener('click', (event) => {
+    attemptListSlot?.addEventListener('click', (event) => {
+      if (!operationsEnabled) {
+        return;
+      }
+
       const openAttemptButton = event.target.closest('[data-action="open-attempt-modal"]');
 
       if (!openAttemptButton) {
@@ -2770,7 +2552,11 @@ export async function mountQuizManagement({
       renderView();
     });
 
-    attemptModalSlot.addEventListener('click', async (event) => {
+    attemptModalSlot?.addEventListener('click', async (event) => {
+      if (!operationsEnabled) {
+        return;
+      }
+
       const closeButton = event.target.closest('[data-action="close-attempt-modal"]');
       const modalBackdrop = attemptModalSlot.firstElementChild;
 

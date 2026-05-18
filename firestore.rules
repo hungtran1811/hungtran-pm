@@ -206,7 +206,6 @@ service cloud.firestore {
           'updatedAt'
         ])
         && resource.data.active == true
-        && resource.data.progressStalledCount is int
         && isOpenClass(resource.data.classId)
         && isValidProgress(request.resource.data.currentProgressPercent)
         && isValidStage(request.resource.data.currentStage)
@@ -219,7 +218,16 @@ service cloud.firestore {
         && request.resource.data.latestReportId.size() > 0
         && request.resource.data.progressStalledCount is int
         && request.resource.data.progressStalledCount >= 0
-        && request.resource.data.progressStalledCount <= resource.data.progressStalledCount + 1
+        && (
+          (
+            resource.data.progressStalledCount is int
+            && request.resource.data.progressStalledCount <= resource.data.progressStalledCount + 1
+          )
+          || (
+            !resource.data.keys().hasAny(['progressStalledCount'])
+            && request.resource.data.progressStalledCount <= 1
+          )
+        )
         && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data != null
         && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.studentId == studentId
         && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.classCode == resource.data.classId
@@ -679,8 +687,8 @@ service cloud.firestore {
 
     match /quizLiveAttempts/{liveAttemptId} {
       allow read: if isAdmin();
-      allow create: if isAdmin() || isValidQuizLiveAttemptCreate(liveAttemptId);
-      allow update: if isAdmin() || isValidQuizLiveAttemptUpdate(liveAttemptId);
+      allow create: if isAdmin();
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
@@ -700,21 +708,21 @@ service cloud.firestore {
 
     match /quizAttempts/{attemptId} {
       allow read: if isAdmin();
-      allow create: if isAdmin() || isValidQuizAttemptCreate(attemptId);
-      allow update: if isAdmin() || isValidQuizAttemptUpdate(attemptId);
+      allow create: if isAdmin();
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /quizAttemptStates/{attemptId} {
-      allow read: if isAdmin() || resource == null || isReadableQuizAttemptState(attemptId, resource.data);
-      allow create: if isAdmin() || isValidQuizAttemptStateCreate(attemptId);
-      allow update: if isAdmin() || isValidQuizAttemptStateUpdate(attemptId);
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /quizAttemptSubmissions/{attemptSubmissionId} {
       allow read: if isAdmin();
-      allow create: if isAdmin() || isValidQuizAttemptSubmissionCreate(attemptSubmissionId);
+      allow create: if isAdmin();
       allow update: if false;
       allow delete: if isAdmin();
     }
