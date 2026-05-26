@@ -1,4 +1,4 @@
-import { escapeHtml } from '../../utils/html.js';
+import { escapeHtml, renderInlineRichText, renderTextWithCodeBlocks } from '../../utils/html.js';
 import { isFillBlankQuestion, isQuizQuestionAnswered } from '../../utils/quiz.js';
 
 function clampQuestionIndex(questionCount, questionIndex) {
@@ -13,10 +13,6 @@ function countAnsweredQuestions(quiz, answers = {}) {
   return (quiz?.questions || []).filter((question) =>
     isQuizQuestionAnswered(question, answers[question.id]),
   ).length;
-}
-
-function renderMultilineText(value) {
-  return escapeHtml(String(value ?? '').trim()).replaceAll('\n', '<br>');
 }
 
 function getOptionLetter(index) {
@@ -110,7 +106,7 @@ function renderAnswerInput(question, answerValue, disabledAttr) {
                 ${disabledAttr}
               />
               <span class="quiz-option__letter">${getOptionLetter(index)}</span>
-              <span class="quiz-option__content">${renderMultilineText(option.text)}</span>
+              <span class="quiz-option__content">${renderInlineRichText(option.text)}</span>
             </label>
           `;
         })
@@ -148,7 +144,7 @@ export function renderQuizForm(
           <h2 class="student-quiz-title">${escapeHtml(quiz?.title || 'Bài kiểm tra')}</h2>
           ${
             quiz?.description
-              ? `<p class="student-quiz-description">${renderMultilineText(quiz.description)}</p>`
+              ? `<p class="student-quiz-description">${renderInlineRichText(quiz.description)}</p>`
               : ''
           }
         </div>
@@ -181,7 +177,7 @@ export function renderQuizForm(
                   ${isFillBlankQuestion(currentQuestion) ? 'Điền vào chỗ trống' : 'Chọn 1 đáp án'}
                 </span>
               </div>
-              <div class="student-quiz-question__prompt">${renderMultilineText(currentQuestion.prompt)}</div>
+              <div class="student-quiz-question__prompt">${renderTextWithCodeBlocks(currentQuestion.prompt)}</div>
               ${renderQuestionImage(currentQuestion)}
               ${renderAnswerInput(currentQuestion, currentAnswerValue, disabledAttr)}
               ${

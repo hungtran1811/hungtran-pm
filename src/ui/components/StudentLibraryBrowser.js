@@ -430,8 +430,7 @@ function renderLessonQuizArticle(lesson, selectedImageId, preview, quizState = {
           </div>
         </div>
 
-        <div class="student-library-article">
-          ${renderLessonMediaFrame(lesson, selectedImageId)}
+        <div class="student-library-article student-library-article--quiz">
           <div class="student-library-article__body">
             <div class="student-library-quiz-panel">
               ${renderAlert(
@@ -481,8 +480,7 @@ function renderLessonQuizArticle(lesson, selectedImageId, preview, quizState = {
         </div>
       </div>
 
-      <div class="student-library-article">
-        ${renderLessonMediaFrame(lesson, selectedImageId)}
+      <div class="student-library-article student-library-article--quiz">
         <div class="student-library-article__body">
           <div class="student-library-quiz-panel">
             <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start mb-3">

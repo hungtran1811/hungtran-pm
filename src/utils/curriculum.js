@@ -128,6 +128,29 @@ export function setCurriculumExerciseVisibleForSession(assignment = {}, sessionN
   return [...visibleSessions].sort((left, right) => left - right);
 }
 
+export function getEffectiveCurriculumPhase(classInfo = null, program = null) {
+  if (classInfo?.curriculumPhase === 'final') {
+    return 'final';
+  }
+
+  const currentSession = Number(classInfo?.curriculumCurrentSession || 1);
+  const knowledgePhaseEndSession = Number(program?.knowledgePhaseEndSession || 0);
+  const totalSessionCount = Number(program?.totalSessionCount || 0);
+
+  if (
+    Number.isFinite(currentSession) &&
+    Number.isFinite(knowledgePhaseEndSession) &&
+    Number.isFinite(totalSessionCount) &&
+    knowledgePhaseEndSession > 1 &&
+    totalSessionCount > knowledgePhaseEndSession &&
+    currentSession >= knowledgePhaseEndSession
+  ) {
+    return 'final';
+  }
+
+  return 'learning';
+}
+
 export function suggestCurriculumProgramIdForClass(programs = [], classInfo = null) {
   const fallbackProgramId = getDefaultCurriculumProgramId(programs);
   const haystack = normalizeCurriculumText(`${classInfo?.classCode || ''} ${classInfo?.className || ''}`);
@@ -173,7 +196,7 @@ export function getSuggestedCurriculumAssignment(classInfo = null, programs = []
   return {
     programId,
     currentSession: clampCurriculumSession(program, classInfo?.curriculumCurrentSession || 1),
-    curriculumPhase: classInfo?.curriculumPhase === 'final' ? 'final' : 'learning',
+    curriculumPhase: getEffectiveCurriculumPhase(classInfo, program),
     exerciseVisibleSessions: normalizeCurriculumExerciseVisibleSessions(
       classInfo?.curriculumExerciseVisibleSessions,
       program,

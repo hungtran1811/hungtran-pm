@@ -41,6 +41,8 @@ function normalizeQuizAttemptSubmissionRecord(input = {}, order = 1) {
     questionCount: Number(input.questionCount ?? 0),
     correctCount: Number(input.correctCount ?? 0),
     score: Number(input.score ?? 0),
+    source: String(input.source ?? '').trim(),
+    submittedBy: String(input.submittedBy ?? '').trim(),
     questionIds: Array.isArray(input.questionIds)
       ? input.questionIds.map((questionId) => String(questionId ?? '').trim()).filter(Boolean)
       : [],
@@ -90,6 +92,8 @@ export function toQuizAttemptModelFromData(id, data = {}) {
       : [],
     correctCount: Number(data.correctCount ?? 0),
     score: Number(data.score ?? 0),
+    source: String(data.source ?? '').trim(),
+    submittedBy: String(data.submittedBy ?? '').trim(),
     submissionCount: Math.max(0, Number(data.submissionCount ?? 0)),
     status:
       data.status === QUIZ_ATTEMPT_STATUS_REOPENED

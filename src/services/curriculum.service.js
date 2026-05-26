@@ -16,6 +16,7 @@ import {
 import { toAppError } from '../utils/firebase-error.js';
 import {
   clampCurriculumSession,
+  getEffectiveCurriculumPhase,
   groupCurriculumProgramsBySubject,
   normalizeCurriculumExerciseVisibleSessions,
   sortCurriculumPrograms,
@@ -56,7 +57,7 @@ function buildCurriculumAssignment(classItem, programs) {
   return {
     programId: program.id,
     currentSession: clampCurriculumSession(program, classItem?.curriculumCurrentSession || 1),
-    curriculumPhase: classItem?.curriculumPhase === 'final' ? 'final' : 'learning',
+    curriculumPhase: getEffectiveCurriculumPhase(classItem, program),
     exerciseVisibleSessions: normalizeCurriculumExerciseVisibleSessions(
       classItem?.curriculumExerciseVisibleSessions,
       program,

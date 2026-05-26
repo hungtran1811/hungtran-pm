@@ -1,5 +1,6 @@
 import { APP_CONFIG } from '../../config/app-config.js';
 import { subscribeClasses } from '../../services/classes.service.js';
+import { subscribeKnowledgeReports } from '../../services/knowledge-reports.service.js';
 import { deleteReport, getStudentReportHistory, subscribeReports } from '../../services/reports.service.js';
 import { subscribeStudents } from '../../services/students.service.js';
 import { getAuthState } from '../../state/auth.store.js';
@@ -8,6 +9,7 @@ import { copyTextToClipboard } from '../../utils/clipboard.js';
 import { formatDateTime } from '../../utils/date.js';
 import { mapFirebaseError } from '../../utils/firebase-error.js';
 import { escapeHtml, nl2br } from '../../utils/html.js';
+import { getHashRouteState } from '../../utils/route.js';
 import { renderAppShell } from '../components/AppShell.js';
 import { renderEmptyState } from '../components/EmptyState.js';
 import { renderLoadingOverlay } from '../components/LoadingOverlay.js';
@@ -195,7 +197,109 @@ function renderReportDetailContent(history, studentName = '') {
   `;
 }
 
+function formatKnowledgeReportCopyText(report) {
+  return [
+    `Họ tên: ${report.studentName}`,
+    `Lớp: ${report.classCode}`,
+    `Buổi: ${report.sessionNumber || 'Chưa rõ'}`,
+    `Mức độ hiểu: ${report.understandingLevel}/5`,
+    `Kiến thức đã hiểu: ${getCopyValue(report.understoodTopics, 'Chưa ghi')}`,
+    `Kiến thức chưa rõ: ${getCopyValue(report.unclearTopics, 'Chưa ghi')}`,
+    `Cần hỗ trợ: ${getCopyValue(report.supportRequest, 'Không có gì cần hỗ trợ')}`,
+  ].join('\n');
+}
+
+function renderKnowledgeReportDetailContent(report) {
+  if (!report) {
+    return renderEmptyState({
+      icon: 'chat-left-text',
+      title: 'Không tìm thấy phản hồi',
+      description: 'Phản hồi này có thể đã được cập nhật hoặc không còn trong bộ lọc hiện tại.',
+    });
+  }
+
+  return `
+    <div class="report-detail-card">
+      <div class="d-flex flex-wrap justify-content-between gap-3 mb-3">
+        <div>
+          <div class="fw-semibold">${escapeHtml(report.studentName)}</div>
+          <div class="small text-secondary">${escapeHtml(report.classCode)} · Buổi ${escapeHtml(report.sessionNumber || 'chưa rõ')}</div>
+        </div>
+        <div class="text-md-end">
+          <div class="small text-secondary">${escapeHtml(formatDateTime(report.submittedAt))}</div>
+          <span class="admin-soft-badge ${Number(report.understandingLevel || 0) <= 2 ? 'admin-soft-badge--danger' : 'admin-soft-badge--success'} mt-2">
+            ${escapeHtml(report.understandingLevel || 'Chưa có')}/5
+          </span>
+        </div>
+      </div>
+
+      <div class="report-detail-section">
+        <div class="report-detail-label">Kiến thức đã hiểu</div>
+        <div class="report-detail-content">${nl2br(report.understoodTopics)}</div>
+      </div>
+
+      <div class="report-detail-section">
+        <div class="report-detail-label">Kiến thức chưa rõ</div>
+        <div class="report-detail-content">${nl2br(report.unclearTopics)}</div>
+      </div>
+
+      <div class="report-detail-section">
+        <div class="report-detail-label">Cần hỗ trợ</div>
+        <div class="report-detail-content">${nl2br(report.supportRequest || 'Không có gì cần hỗ trợ')}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderKnowledgeReportsList(reports) {
+  const items = reports
+    .map((report) => {
+      const understandingLevel = Number(report.understandingLevel || 0);
+      const isLowUnderstanding = understandingLevel > 0 && understandingLevel <= 2;
+
+      return `
+        <article
+          class="admin-report-card admin-knowledge-report-card"
+          data-action="select-knowledge-report"
+          data-report-id="${escapeHtml(report.id)}"
+          role="button"
+          tabindex="0"
+          title="Bấm vào card để xem phản hồi"
+        >
+          <div class="admin-card-main">
+            <div>
+              <div class="admin-card-title">${escapeHtml(report.studentName)}</div>
+              <div class="admin-card-subtitle">${escapeHtml(report.classCode)}</div>
+            </div>
+          </div>
+
+          <div class="admin-card-meta">
+            <span class="admin-soft-badge admin-soft-badge--muted">
+              <i class="bi bi-clock"></i>${escapeHtml(formatDateTime(report.submittedAt))}
+            </span>
+            <span class="admin-soft-badge admin-soft-badge--primary">
+              Buổi ${escapeHtml(report.sessionNumber || 'chưa rõ')}
+            </span>
+            <span class="admin-soft-badge ${isLowUnderstanding ? 'admin-soft-badge--danger' : 'admin-soft-badge--success'}">
+              ${understandingLevel || 'Chưa có'}/5
+            </span>
+          </div>
+        </article>
+      `;
+    })
+    .join('');
+
+  return `
+    <div class="admin-data-card">
+      <div class="admin-report-list admin-knowledge-report-list">
+        ${items}
+      </div>
+    </div>
+  `;
+}
+
 function renderReportsClassFilter({ filters, classes, selectedClass, reportCount, isArchiveView }) {
+  const isKnowledgeView = filters.reportKind === 'knowledge';
   const classOptions = classes
     .map(
       (item) => `
@@ -207,6 +311,26 @@ function renderReportsClassFilter({ filters, classes, selectedClass, reportCount
     .join('');
 
   return `
+    <div class="admin-list-switch mb-3 reports-kind-tabs">
+      <div class="admin-segmented-tabs" role="group" aria-label="Loại báo cáo">
+        <button
+          type="button"
+          class="admin-segmented-tabs__button ${isKnowledgeView ? '' : 'admin-segmented-tabs__button--active'}"
+          data-action="set-report-kind"
+          data-kind="progress"
+        >
+          Theo dõi tiến độ sản phẩm cuối khóa
+        </button>
+        <button
+          type="button"
+          class="admin-segmented-tabs__button ${isKnowledgeView ? 'admin-segmented-tabs__button--active' : ''}"
+          data-action="set-report-kind"
+          data-kind="knowledge"
+        >
+          Phản hồi buổi học
+        </button>
+      </div>
+    </div>
     <div class="admin-list-switch mb-3 reports-toolbar">
       <div class="admin-segmented-tabs" role="group" aria-label="Chế độ báo cáo">
         <button
@@ -226,7 +350,7 @@ function renderReportsClassFilter({ filters, classes, selectedClass, reportCount
           Lưu trữ
         </button>
       </div>
-      <div class="ms-auto">
+      <div class="ms-auto ${isKnowledgeView ? 'd-none' : ''}">
         <button
           type="button"
           class="btn btn-outline-primary"
@@ -248,7 +372,7 @@ function renderReportsClassFilter({ filters, classes, selectedClass, reportCount
             </select>
           </div>
           <div class="col-12 col-md-auto ms-md-auto">
-            <span class="admin-count-pill">${reportCount} báo cáo</span>
+            <span class="admin-count-pill">${reportCount} ${isKnowledgeView ? 'phản hồi' : 'báo cáo'}</span>
           </div>
           <div class="col-12 col-md-auto">
             <button type="button" class="btn btn-outline-secondary w-100" data-action="reset-filters">
@@ -303,24 +427,36 @@ export const reportsPage = {
     const filterSlot = document.getElementById('reports-filter-slot');
     const tableSlot = document.getElementById('reports-table-slot');
     const modalSlot = document.getElementById('reports-modal-slot');
+    const routeState = getHashRouteState();
     const filterStore = createFilterStore({
+      reportKind: 'progress',
       viewScope: 'active',
-      classId: '',
+      classId: routeState.classCode || '',
     });
     const state = {
       classes: [],
       students: [],
       reports: [],
+      knowledgeReports: [],
       selectedStudentId: '',
       selectedStudentName: '',
     };
 
+    document.getElementById('report-detail-modal')?.remove();
     modalSlot.innerHTML = renderReportDetailModal();
-    const reportModalEl = document.getElementById('report-detail-modal');
-    const reportModal = new window.bootstrap.Modal(reportModalEl);
-    const reportModalTitle = document.getElementById('report-detail-modal-title');
-    const reportModalSubtitle = document.getElementById('report-detail-modal-subtitle');
-    const reportModalBody = document.getElementById('report-detail-modal-body');
+    const reportModalEl = modalSlot.querySelector('#report-detail-modal');
+    document.body.appendChild(reportModalEl);
+    const reportModal = window.bootstrap.Modal.getOrCreateInstance(reportModalEl);
+    const reportModalTitle = reportModalEl.querySelector('#report-detail-modal-title');
+    const reportModalSubtitle = reportModalEl.querySelector('#report-detail-modal-subtitle');
+    const reportModalBody = reportModalEl.querySelector('#report-detail-modal-body');
+
+    function showReportModal({ title, subtitle = '', body = '' }) {
+      reportModalTitle.textContent = title;
+      reportModalSubtitle.textContent = subtitle;
+      reportModalBody.innerHTML = body;
+      reportModal.show();
+    }
 
     function getScopedClasses(viewScope) {
       return state.classes.filter(viewScope === 'archive' ? isArchivedReportClass : isReportableClass);
@@ -330,6 +466,12 @@ export const reportsPage = {
       const allowedClassCodes = new Set(getScopedClasses(viewScope).map((item) => item.classCode));
 
       return state.reports.filter((report) => allowedClassCodes.has(report.classCode || report.classId));
+    }
+
+    function getScopedKnowledgeReports(viewScope) {
+      const allowedClassCodes = new Set(getScopedClasses(viewScope).map((item) => item.classCode));
+
+      return state.knowledgeReports.filter((report) => allowedClassCodes.has(report.classCode));
     }
 
     function getReportsContext() {
@@ -348,7 +490,11 @@ export const reportsPage = {
 
       const latestReports = getLatestReportsByStudent(getScopedReports(filters.viewScope));
       const filteredReports = latestReports.filter((report) => {
-        const byClass = !filters.classId || report.classId === filters.classId;
+        const byClass = !filters.classId || (report.classId || report.classCode) === filters.classId;
+        return byClass;
+      });
+      const filteredKnowledgeReports = getScopedKnowledgeReports(filters.viewScope).filter((report) => {
+        const byClass = !filters.classId || report.classCode === filters.classId;
         return byClass;
       });
 
@@ -356,6 +502,7 @@ export const reportsPage = {
         filters,
         availableClasses,
         filteredReports,
+        filteredKnowledgeReports,
       };
     }
 
@@ -366,11 +513,12 @@ export const reportsPage = {
         return;
       }
 
-      const { filters, availableClasses, filteredReports } = context;
+      const { filters, availableClasses, filteredReports, filteredKnowledgeReports } = context;
       const selectedClass = availableClasses.find((item) => item.classCode === filters.classId) || null;
       const isArchiveView = filters.viewScope === 'archive';
+      const isKnowledgeView = filters.reportKind === 'knowledge';
 
-      if (state.selectedStudentId && !filteredReports.some((report) => report.studentId === state.selectedStudentId)) {
+      if (!isKnowledgeView && state.selectedStudentId && !filteredReports.some((report) => report.studentId === state.selectedStudentId)) {
         state.selectedStudentId = '';
         state.selectedStudentName = '';
       }
@@ -379,12 +527,21 @@ export const reportsPage = {
         filters,
         classes: availableClasses,
         selectedClass,
-        reportCount: filteredReports.length,
+        reportCount: isKnowledgeView ? filteredKnowledgeReports.length : filteredReports.length,
         isArchiveView,
       });
 
-      tableSlot.innerHTML =
-        filteredReports.length > 0
+      tableSlot.innerHTML = isKnowledgeView
+        ? filteredKnowledgeReports.length > 0
+          ? renderKnowledgeReportsList(filteredKnowledgeReports)
+          : renderEmptyState({
+              icon: 'chat-left-text',
+              title: isArchiveView ? 'Kho lưu trữ chưa có phản hồi phù hợp' : 'Chưa có phản hồi buổi học',
+              description: isArchiveView
+                ? 'Hãy điều chỉnh bộ lọc lưu trữ hoặc chọn lớp khác.'
+                : 'Khi học sinh gửi phản hồi hiểu bài, dữ liệu sẽ xuất hiện tại đây.',
+            })
+        : filteredReports.length > 0
           ? renderReportsTable(filteredReports, {
               selectedStudentId: state.selectedStudentId,
               showDeleteAction: APP_CONFIG.enableAdminDebugActions,
@@ -401,10 +558,11 @@ export const reportsPage = {
     async function loadStudentDetails(studentId, studentName) {
       state.selectedStudentId = studentId;
       state.selectedStudentName = studentName || '';
-      reportModalTitle.textContent = 'Chi tiết báo cáo';
-      reportModalSubtitle.textContent = state.selectedStudentName;
-      reportModalBody.innerHTML = renderLoadingOverlay('Đang tải báo cáo...');
-      reportModal.show();
+      showReportModal({
+        title: 'Chi tiết báo cáo',
+        subtitle: state.selectedStudentName,
+        body: renderLoadingOverlay('Đang tải báo cáo...'),
+      });
 
       const history = await getStudentReportHistory(studentId);
       reportModalBody.innerHTML = renderReportDetailContent(history, state.selectedStudentName);
@@ -441,10 +599,21 @@ export const reportsPage = {
         return;
       }
 
+      if (button.dataset.action === 'set-report-kind') {
+        filterStore.set({
+          reportKind: button.dataset.kind === 'knowledge' ? 'knowledge' : 'progress',
+          classId: '',
+        });
+        return;
+      }
+
       if (button.dataset.action === 'reset-filters') {
-        const currentScope = filterStore.getState().viewScope;
+        const currentFilters = filterStore.getState();
         filterStore.reset();
-        filterStore.set({ viewScope: currentScope });
+        filterStore.set({
+          reportKind: currentFilters.reportKind,
+          viewScope: currentFilters.viewScope,
+        });
         return;
       }
 
@@ -491,41 +660,152 @@ export const reportsPage = {
       }
     });
 
-    tableSlot.addEventListener('click', async (event) => {
-      const button = event.target.closest('[data-action]');
-
-      if (!button) {
+    tableSlot.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') {
         return;
       }
 
-      if (button.dataset.action === 'copy-student-report') {
-        const report = state.reports.find((item) => item.id === button.dataset.reportId);
+      const card = event.target.closest('.admin-report-card[data-action]');
 
-        if (!report) {
+      if (!card || !tableSlot.contains(card)) {
+        return;
+      }
+
+      event.preventDefault();
+      card.click();
+    });
+
+    tableSlot.addEventListener('click', async (event) => {
+      const actionButton = event.target.closest('button[data-action]');
+
+      if (actionButton && tableSlot.contains(actionButton)) {
+        event.stopPropagation();
+
+        if (actionButton.dataset.action === 'copy-student-report') {
+          const report = state.reports.find((item) => item.id === actionButton.dataset.reportId);
+
+          if (!report) {
+            return;
+          }
+
+          try {
+            await copyTextToClipboard(formatStudentReportCopyText(buildReportCopyData({ report })));
+            showToast({
+              title: 'Đã copy báo cáo',
+              message: `Báo cáo của ${report.studentName} đã được sao chép.`,
+              variant: 'success',
+            });
+          } catch (error) {
+            showToast({
+              title: 'Không thể copy báo cáo',
+              message: mapFirebaseError(error, 'Trình duyệt hiện không cho phép sao chép tự động.'),
+              variant: 'danger',
+            });
+          }
+
           return;
         }
 
-        try {
-          await copyTextToClipboard(formatStudentReportCopyText(buildReportCopyData({ report })));
-          showToast({
-            title: 'Đã copy báo cáo',
-            message: `Báo cáo của ${report.studentName} đã được sao chép.`,
-            variant: 'success',
-          });
-        } catch (error) {
-          showToast({
-            title: 'Không thể copy báo cáo',
-            message: mapFirebaseError(error, 'Trình duyệt hiện không cho phép sao chép tự động.'),
-            variant: 'danger',
-          });
+        if (actionButton.dataset.action === 'copy-knowledge-report') {
+          const report = state.knowledgeReports.find((item) => item.id === actionButton.dataset.reportId);
+
+          if (!report) {
+            return;
+          }
+
+          try {
+            await copyTextToClipboard(formatKnowledgeReportCopyText(report));
+            showToast({
+              title: 'Đã copy phản hồi',
+              message: `Phản hồi của ${report.studentName} đã được sao chép.`,
+              variant: 'success',
+            });
+          } catch (error) {
+            showToast({
+              title: 'Không thể copy phản hồi',
+              message: mapFirebaseError(error, 'Trình duyệt hiện không cho phép sao chép tự động.'),
+              variant: 'danger',
+            });
+          }
+
+          return;
         }
 
+        if (actionButton.dataset.action === 'delete-report') {
+          if (!APP_CONFIG.enableAdminDebugActions) {
+            showToast({
+              title: 'Đã tắt thao tác thử nghiệm',
+              message: 'Tính năng xóa báo cáo hiện chỉ dùng khi bật chế độ debug.',
+              variant: 'warning',
+            });
+            return;
+          }
+
+          const report = state.reports.find((item) => item.id === actionButton.dataset.reportId);
+
+          if (!report) {
+            return;
+          }
+
+          const confirmed = await confirmDialog({
+            title: 'Xóa báo cáo?',
+            message: `Xóa báo cáo của ${report.studentName} lúc ${formatDateTime(report.submittedAt)}?`,
+            confirmText: 'Xóa báo cáo',
+            variant: 'danger',
+          });
+
+          if (!confirmed) {
+            return;
+          }
+
+          try {
+            await deleteReport(report.id);
+
+            if (state.selectedStudentId === report.studentId) {
+              state.selectedStudentName = report.studentName;
+            }
+
+            showToast({
+              title: 'Đã xóa báo cáo',
+              message: `Báo cáo của ${report.studentName} đã được xóa.`,
+              variant: 'success',
+            });
+
+            renderView();
+          } catch (error) {
+            showToast({
+              title: 'Không thể xóa báo cáo',
+              message: mapFirebaseError(error, 'Không thể xóa báo cáo lúc này.'),
+              variant: 'danger',
+            });
+          }
+
+          return;
+        }
+      }
+
+      const card = event.target.closest('.admin-report-card[data-action]');
+
+      if (!card || !tableSlot.contains(card)) {
         return;
       }
 
-      if (button.dataset.action === 'select-student') {
+      if (card.dataset.action === 'select-knowledge-report') {
+        const report = state.knowledgeReports.find((item) => item.id === card.dataset.reportId);
+
+        state.selectedStudentId = '';
+        state.selectedStudentName = report?.studentName || '';
+        showReportModal({
+          title: 'Chi tiết phản hồi buổi học',
+          subtitle: report?.studentName || '',
+          body: renderKnowledgeReportDetailContent(report),
+        });
+        return;
+      }
+
+      if (card.dataset.action === 'select-student') {
         try {
-          await loadStudentDetails(button.dataset.studentId, button.dataset.studentName || '');
+          await loadStudentDetails(card.dataset.studentId, card.dataset.studentName || '');
         } catch (error) {
           reportModalBody.innerHTML = renderEmptyState({
             icon: 'exclamation-triangle',
@@ -535,58 +815,6 @@ export const reportsPage = {
           showToast({
             title: 'Lỗi tải báo cáo',
             message: mapFirebaseError(error, 'Không tải được chi tiết báo cáo của học sinh này.'),
-            variant: 'danger',
-          });
-        }
-
-        return;
-      }
-
-      if (button.dataset.action === 'delete-report') {
-        if (!APP_CONFIG.enableAdminDebugActions) {
-          showToast({
-            title: 'Đã tắt thao tác thử nghiệm',
-            message: 'Tính năng xóa báo cáo hiện chỉ dùng khi bật chế độ debug.',
-            variant: 'warning',
-          });
-          return;
-        }
-
-        const report = state.reports.find((item) => item.id === button.dataset.reportId);
-
-        if (!report) {
-          return;
-        }
-
-        const confirmed = await confirmDialog({
-          title: 'Xóa báo cáo?',
-          message: `Xóa báo cáo của ${report.studentName} lúc ${formatDateTime(report.submittedAt)}?`,
-          confirmText: 'Xóa báo cáo',
-          variant: 'danger',
-        });
-
-        if (!confirmed) {
-          return;
-        }
-
-        try {
-          await deleteReport(report.id);
-
-          if (state.selectedStudentId === report.studentId) {
-            state.selectedStudentName = report.studentName;
-          }
-
-          showToast({
-            title: 'Đã xóa báo cáo',
-            message: `Báo cáo của ${report.studentName} đã được xóa.`,
-            variant: 'success',
-          });
-
-          renderView();
-        } catch (error) {
-          showToast({
-            title: 'Không thể xóa báo cáo',
-            message: mapFirebaseError(error, 'Không thể xóa báo cáo lúc này.'),
             variant: 'danger',
           });
         }
@@ -635,10 +863,28 @@ export const reportsPage = {
           });
         },
       ),
+      subscribeKnowledgeReports(
+        (reports) => {
+          state.knowledgeReports = reports;
+          renderView();
+        },
+        (error) => {
+          showToast({
+            title: 'Lỗi dữ liệu',
+            message: mapFirebaseError(error, 'Không tải được phản hồi buổi học.'),
+            variant: 'danger',
+          });
+        },
+      ),
     ];
 
     renderView();
 
-    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+    return () => {
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+      reportModal.hide();
+      reportModal.dispose();
+      reportModalEl.remove();
+    };
   },
 };

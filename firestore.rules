@@ -194,6 +194,70 @@ service cloud.firestore {
         && request.resource.data.source == 'student-form';
     }
 
+    function isValidPublicKnowledgeReportCreate() {
+      return request.resource.data.keys().hasOnly([
+          'classCode',
+          'studentId',
+          'studentName',
+          'curriculumProgramId',
+          'sessionNumber',
+          'lessonId',
+          'understoodTopics',
+          'unclearTopics',
+          'understandingLevel',
+          'supportRequest',
+          'submittedAt',
+          'createdAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'classCode',
+          'studentId',
+          'studentName',
+          'curriculumProgramId',
+          'sessionNumber',
+          'lessonId',
+          'understoodTopics',
+          'unclearTopics',
+          'understandingLevel',
+          'supportRequest',
+          'submittedAt',
+          'createdAt'
+        ])
+        && isOpenClass(request.resource.data.classCode)
+        && isActiveStudentInClass(request.resource.data.studentId, request.resource.data.classCode)
+        && studentDoc(request.resource.data.studentId).data.fullName == request.resource.data.studentName
+        && request.resource.data.curriculumProgramId is string
+        && request.resource.data.curriculumProgramId.size() > 0
+        && (
+          !classDoc(request.resource.data.classCode).data.keys().hasAny(['curriculumProgramId'])
+          || classDoc(request.resource.data.classCode).data.curriculumProgramId == ''
+          || classDoc(request.resource.data.classCode).data.curriculumProgramId == request.resource.data.curriculumProgramId
+        )
+        && request.resource.data.sessionNumber is number
+        && request.resource.data.sessionNumber >= 1
+        && request.resource.data.sessionNumber <= 50
+        && (
+          !classDoc(request.resource.data.classCode).data.keys().hasAny(['curriculumCurrentSession'])
+          || classDoc(request.resource.data.classCode).data.curriculumCurrentSession <= 0
+          || request.resource.data.sessionNumber == classDoc(request.resource.data.classCode).data.curriculumCurrentSession
+        )
+        && request.resource.data.lessonId is string
+        && request.resource.data.lessonId.size() <= 160
+        && request.resource.data.understoodTopics is string
+        && request.resource.data.understoodTopics.size() >= 5
+        && request.resource.data.understoodTopics.size() <= 2000
+        && request.resource.data.unclearTopics is string
+        && request.resource.data.unclearTopics.size() >= 5
+        && request.resource.data.unclearTopics.size() <= 2000
+        && request.resource.data.understandingLevel is int
+        && request.resource.data.understandingLevel >= 1
+        && request.resource.data.understandingLevel <= 5
+        && request.resource.data.supportRequest is string
+        && request.resource.data.supportRequest.size() <= 2000
+        && request.resource.data.submittedAt == request.time
+        && request.resource.data.createdAt == request.time;
+    }
+
     function isValidPublicStudentSnapshotUpdate(studentId) {
       return request.resource.data.diff(resource.data).changedKeys().hasOnly([
           'currentProgressPercent',
@@ -687,8 +751,8 @@ service cloud.firestore {
 
     match /quizLiveAttempts/{liveAttemptId} {
       allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
+      allow create: if isAdmin() || isValidQuizLiveAttemptCreate(liveAttemptId);
+      allow update: if isAdmin() || isValidQuizLiveAttemptUpdate(liveAttemptId);
       allow delete: if isAdmin();
     }
 
@@ -706,23 +770,30 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /knowledgeReports/{reportId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() || isValidPublicKnowledgeReportCreate();
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
     match /quizAttempts/{attemptId} {
       allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
+      allow create: if isAdmin() || isValidQuizAttemptCreate(attemptId);
+      allow update: if isAdmin() || isValidQuizAttemptUpdate(attemptId);
       allow delete: if isAdmin();
     }
 
     match /quizAttemptStates/{attemptId} {
       allow read: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
+      allow create: if isAdmin() || isValidQuizAttemptStateCreate(attemptId);
+      allow update: if isAdmin() || isValidQuizAttemptStateUpdate(attemptId);
       allow delete: if isAdmin();
     }
 
     match /quizAttemptSubmissions/{attemptSubmissionId} {
       allow read: if isAdmin();
-      allow create: if isAdmin();
+      allow create: if isAdmin() || isValidQuizAttemptSubmissionCreate(attemptSubmissionId);
       allow update: if false;
       allow delete: if isAdmin();
     }

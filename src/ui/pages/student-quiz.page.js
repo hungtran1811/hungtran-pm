@@ -141,76 +141,64 @@ export const studentQuizPage = {
   async render() {
     if (!QUIZ_STUDENT_ENABLED) {
       return `
-        <div class="student-layout">
-          <section class="student-hero">
-            <div class="container-fluid student-page-shell py-4 py-lg-5">
-              <div class="row justify-content-center">
-                <div class="col-12 col-lg-8 col-xl-6">
-                  <div class="card border-0 shadow-lg">
-                    <div class="card-body p-4 p-lg-5">
-                      ${renderBrandLogo({
-                        id: 'student-quiz-brand-trigger',
-                        className: 'student-brand-lockup mb-4',
-                        tone: 'dark',
-                        compact: true,
-                      })}
-                      <h1 class="h3 mb-3">Bài kiểm tra chưa mở cho học sinh</h1>
-                      ${renderAlert(
-                        'Giáo viên đang chuẩn bị ngân hàng câu hỏi. Khi chức năng kiểm tra được bật, bài làm sẽ hiển thị trong trang Học liệu.',
-                        'info',
-                      )}
-                      <a class="btn btn-primary mt-2" href="#/student/report">
-                        Về trang học sinh
-                      </a>
-                    </div>
-                  </div>
+        <div class="student-layout student-quiz-layout">
+          <main class="student-quiz-page">
+            <div class="student-page-shell">
+              <section class="student-quiz-portal-card student-quiz-portal-card--narrow">
+                <header class="student-quiz-portal-header">
+                  ${renderBrandLogo({
+                    id: 'student-quiz-brand-trigger',
+                    className: 'student-brand-lockup',
+                    tone: 'dark',
+                    compact: true,
+                  })}
+                </header>
+                <div class="student-quiz-portal-body">
+                  <h1>Bài kiểm tra chưa mở cho học sinh</h1>
+                  ${renderAlert(
+                    'Giáo viên đang chuẩn bị ngân hàng câu hỏi. Khi chức năng kiểm tra được bật, bài làm sẽ hiển thị trong trang Học liệu.',
+                    'info',
+                  )}
+                  <a class="btn btn-primary" href="#/student/report">
+                    Về trang học sinh
+                  </a>
                 </div>
-              </div>
+              </section>
             </div>
-          </section>
+          </main>
           ${renderToastStack()}
         </div>
       `;
     }
 
     return `
-      <div class="student-layout">
-        <section class="student-hero">
-          <div class="container-fluid student-page-shell py-4 py-lg-5">
-            <div class="row justify-content-center">
-              <div class="col-12">
-                <div class="student-hero-card shadow-lg border-0">
-                  <div class="row g-0">
-                    <div class="col-12 col-lg-4 col-xl-3 student-hero-panel">
-                      ${renderBrandLogo({
-                        id: 'student-quiz-brand-trigger',
-                        className: 'student-brand-lockup mb-4',
-                        tone: 'light',
-                        compact: true,
-                      })}
-                      <h1 class="student-hero-title fw-semibold mb-3">Kiểm tra trắc nghiệm</h1>
-                      <p class="student-hero-copy mb-0 text-white-50">
-                        Chọn đúng lớp và đúng tên của bạn để mở bài kiểm tra hiện tại. Khi giáo viên kết thúc bài kiểm tra, các đáp án chưa nộp sẽ không được ghi nhận.
-                      </p>
-                    </div>
-                    <div class="col-12 col-lg-8 col-xl-9 p-4 p-xl-5 bg-white student-main-panel">
-                      <div id="student-quiz-alert"></div>
-                      <div class="row g-3 mb-4">
-                        <div class="col-12 col-md-6">
-                          <div id="student-quiz-class-slot">${renderLoadingOverlay('Đang tải thông tin lớp...')}</div>
-                        </div>
-                        <div class="col-12 col-md-6">
-                          <div id="student-quiz-student-slot">${renderStudentSelect([])}</div>
-                        </div>
-                      </div>
-                      <div id="student-quiz-form-slot">${renderLoadingOverlay('Đang tải bài kiểm tra...')}</div>
-                    </div>
-                  </div>
+      <div class="student-layout student-quiz-layout">
+        <main class="student-quiz-page">
+          <div class="student-page-shell">
+            <section class="student-quiz-portal-card">
+              <header class="student-quiz-portal-header">
+                ${renderBrandLogo({
+                  id: 'student-quiz-brand-trigger',
+                  className: 'student-brand-lockup',
+                  tone: 'dark',
+                  compact: true,
+                })}
+                <div>
+                  <span>Kiểm tra trắc nghiệm</span>
+                  <h1>Làm bài kiểm tra</h1>
                 </div>
+              </header>
+              <div class="student-quiz-portal-body">
+                <div id="student-quiz-alert"></div>
+                <div class="student-quiz-selection-grid">
+                  <div id="student-quiz-class-slot">${renderLoadingOverlay('Đang tải thông tin lớp...')}</div>
+                  <div id="student-quiz-student-slot">${renderStudentSelect([])}</div>
+                </div>
+                <div id="student-quiz-form-slot">${renderLoadingOverlay('Đang tải bài kiểm tra...')}</div>
               </div>
-            </div>
+            </section>
           </div>
-        </section>
+        </main>
         ${renderToastStack()}
       </div>
     `;

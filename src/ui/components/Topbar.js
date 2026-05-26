@@ -8,12 +8,10 @@ export function renderTopbar({ title, subtitle, user }) {
 
   return `
     <header class="topbar admin-topbar">
-      <div class="container-fluid d-flex flex-column flex-lg-row gap-3 align-items-lg-center justify-content-between">
+      <div class="container-fluid d-flex flex-column flex-lg-row gap-2 align-items-lg-center justify-content-between">
         <div class="admin-topbar__title-group">
-          <div>
-            <h1 class="admin-topbar__title mb-1">${escapeHtml(title)}</h1>
-            ${subtitleMarkup}
-          </div>
+          <h1 class="admin-topbar__title mb-1">${escapeHtml(title)}</h1>
+          ${subtitleMarkup}
         </div>
         <div class="admin-topbar__account">
           <div class="admin-user-pill">

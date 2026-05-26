@@ -266,10 +266,11 @@ export function buildPublicQuizPath(classCode = '') {
   return `/quiz/${encodeURIComponent(normalizeClassCode(classCode))}`;
 }
 
-function buildAdminPreviewHashPath(path, programId = '', sessionNumber = 0) {
+function buildAdminPreviewHashPath(path, programId = '', sessionNumber = 0, options = {}) {
   const params = new URLSearchParams();
   const normalizedProgramId = normalizeProgramId(programId);
   const normalizedSessionNumber = normalizeSessionNumber(sessionNumber);
+  const normalizedClassCode = normalizeClassCode(options.classCode);
 
   if (normalizedProgramId) {
     params.set('programId', normalizedProgramId);
@@ -279,16 +280,20 @@ function buildAdminPreviewHashPath(path, programId = '', sessionNumber = 0) {
     params.set('session', String(normalizedSessionNumber));
   }
 
+  if (normalizedClassCode) {
+    params.set('classCode', normalizedClassCode);
+  }
+
   const serialized = params.toString();
   return `#${path}${serialized ? `?${serialized}` : ''}`;
 }
 
-export function buildAdminLessonPreviewPath(programId = '', sessionNumber = 0) {
-  return buildAdminPreviewHashPath('/admin/lesson-preview', programId, sessionNumber);
+export function buildAdminLessonPreviewPath(programId = '', sessionNumber = 0, options = {}) {
+  return buildAdminPreviewHashPath('/admin/lesson-preview', programId, sessionNumber, options);
 }
 
-export function buildAdminQuizPreviewPath(programId = '', sessionNumber = 0) {
-  return buildAdminPreviewHashPath('/admin/quiz-preview', programId, sessionNumber);
+export function buildAdminQuizPreviewPath(programId = '', sessionNumber = 0, options = {}) {
+  return buildAdminPreviewHashPath('/admin/quiz-preview', programId, sessionNumber, options);
 }
 
 export function ensureHashRouteLocation(win = window) {

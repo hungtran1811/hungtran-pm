@@ -1,0 +1,363 @@
+﻿@import url("https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700;800&display=swap");
+
+:root {
+  --color-primary: #0f4c81;
+  --color-primary-dark: #0b2f4f;
+  --color-primary-soft: #eaf4ff;
+  --color-accent: #00a6d6;
+  --color-accent-soft: #ddf7ff;
+  --color-success: #18a058;
+  --color-warning: #f5a524;
+  --color-danger: #e5484d;
+  --color-bg: #f5f8fc;
+  --color-card: #ffffff;
+  --color-border: #d8e2ef;
+  --color-text: #102033;
+  --color-muted: #607089;
+
+  --app-bg: var(--color-bg);
+  --app-panel: var(--color-card);
+  --app-border: var(--color-border);
+  --app-text: var(--color-text);
+  --app-muted: var(--color-muted);
+  --app-brand: var(--color-primary);
+  --app-brand-dark: var(--color-primary-dark);
+  --app-brand-soft: var(--color-primary-soft);
+  --app-accent: var(--color-accent);
+  --app-accent-soft: var(--color-accent-soft);
+  --app-success: var(--color-success);
+  --app-warning: var(--color-warning);
+  --app-danger: var(--color-danger);
+  --bs-body-bg: var(--app-bg);
+  --bs-body-color: var(--app-text);
+  --bs-primary: var(--app-brand);
+  --bs-primary-rgb: 15, 76, 129;
+  --bs-info: var(--app-accent);
+  --bs-info-rgb: 0, 166, 214;
+  --bs-success: var(--app-success);
+  --bs-success-rgb: 24, 160, 88;
+  --bs-warning: var(--app-warning);
+  --bs-warning-rgb: 245, 165, 36;
+  --bs-danger: var(--app-danger);
+  --bs-danger-rgb: 229, 72, 77;
+  --bs-font-sans-serif: "Exo 2", "Segoe UI", sans-serif;
+}
+
+body {
+  min-height: 100vh;
+  font-family: var(--bs-font-sans-serif);
+  background:
+    radial-gradient(circle at top left, rgba(0, 166, 214, 0.15), transparent 30%),
+    radial-gradient(circle at top right, rgba(15, 76, 129, 0.1), transparent 28%),
+    linear-gradient(180deg, #f8fbff 0%, var(--app-bg) 52%, #edf4fb 100%);
+}
+
+.btn-primary {
+  --bs-btn-bg: var(--app-brand);
+  --bs-btn-border-color: var(--app-brand);
+  --bs-btn-hover-bg: var(--app-brand-dark);
+  --bs-btn-hover-border-color: var(--app-brand-dark);
+  --bs-btn-active-bg: var(--app-brand-dark);
+  --bs-btn-active-border-color: var(--app-brand-dark);
+  --bs-btn-disabled-bg: var(--app-brand);
+  --bs-btn-disabled-border-color: var(--app-brand);
+  box-shadow: 0 0.55rem 1.2rem rgba(15, 76, 129, 0.12);
+}
+
+.btn-outline-primary {
+  --bs-btn-color: var(--app-brand);
+  --bs-btn-border-color: rgba(15, 76, 129, 0.55);
+  --bs-btn-hover-bg: var(--app-brand);
+  --bs-btn-hover-border-color: var(--app-brand);
+  --bs-btn-active-bg: var(--app-brand);
+  --bs-btn-active-border-color: var(--app-brand);
+}
+
+.btn-info,
+.btn-outline-info {
+  --bs-btn-color: #ffffff;
+  --bs-btn-bg: var(--app-accent);
+  --bs-btn-border-color: var(--app-accent);
+  --bs-btn-hover-bg: #008fbb;
+  --bs-btn-hover-border-color: #008fbb;
+}
+
+.btn-success {
+  --bs-btn-bg: var(--app-success);
+  --bs-btn-border-color: var(--app-success);
+  --bs-btn-hover-bg: #128249;
+  --bs-btn-hover-border-color: #128249;
+}
+
+.btn-warning {
+  --bs-btn-bg: var(--app-warning);
+  --bs-btn-border-color: var(--app-warning);
+  --bs-btn-hover-bg: #d98c13;
+  --bs-btn-hover-border-color: #d98c13;
+}
+
+.btn-danger {
+  --bs-btn-bg: var(--app-danger);
+  --bs-btn-border-color: var(--app-danger);
+  --bs-btn-hover-bg: #c9343c;
+  --bs-btn-hover-border-color: #c9343c;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: rgba(0, 166, 214, 0.55);
+  box-shadow: 0 0 0 0.2rem rgba(0, 166, 214, 0.16);
+}
+
+.text-bg-primary {
+  background-color: var(--app-brand) !important;
+}
+
+.text-bg-success {
+  background-color: var(--app-success) !important;
+}
+
+.text-bg-warning {
+  background-color: var(--app-warning) !important;
+}
+
+.text-bg-danger {
+  background-color: var(--app-danger) !important;
+}
+
+.alert-info {
+  --bs-alert-color: #075985;
+  --bs-alert-bg: var(--app-accent-soft);
+  --bs-alert-border-color: rgba(0, 166, 214, 0.32);
+}
+
+.alert-primary {
+  --bs-alert-color: var(--app-brand-dark);
+  --bs-alert-bg: var(--app-brand-soft);
+  --bs-alert-border-color: rgba(15, 76, 129, 0.26);
+}
+
+/* CognitivePortal-inspired shared UI primitives */
+:root {
+  --portal-sidebar-width: 224px;
+  --portal-radius-sm: 0.28rem;
+  --portal-radius: 0.44rem;
+  --portal-radius-lg: 0.58rem;
+  --portal-shadow: 0 0.55rem 1.25rem rgba(11, 47, 79, 0.055);
+  --portal-shadow-soft: 0 0.18rem 0.5rem rgba(11, 47, 79, 0.035);
+  --motion-fast: 140ms;
+  --motion-normal: 220ms;
+  --motion-slow: 420ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --hover-lift: translateY(-2px);
+  --focus-ring: 0 0 0 0.18rem rgba(0, 166, 214, 0.18);
+}
+
+a {
+  color: var(--app-brand);
+}
+
+.btn {
+  --bs-btn-border-radius: var(--portal-radius-sm);
+  min-height: 2.08rem;
+  font-weight: 620;
+  letter-spacing: -0.01em;
+  transition:
+    transform var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out),
+    border-color var(--motion-fast) var(--ease-out),
+    background-color var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out);
+}
+
+.btn-sm {
+  min-height: 1.82rem;
+  border-radius: var(--portal-radius-sm);
+}
+
+.form-control,
+.form-select {
+  min-height: 2.28rem;
+  border-color: var(--app-border);
+  border-radius: var(--portal-radius-sm);
+  background-color: #f3f7ff;
+  color: var(--app-text);
+  transition:
+    border-color var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out),
+    background-color var(--motion-fast) var(--ease-out);
+}
+
+textarea.form-control {
+  min-height: 5.8rem;
+}
+
+.form-label {
+  color: var(--app-brand-dark);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.card,
+.modal-content,
+.dropdown-menu {
+  border-color: var(--app-border);
+  border-radius: var(--portal-radius);
+  box-shadow: var(--portal-shadow-soft);
+}
+
+.portal-card,
+.portal-panel,
+.portal-command-bar,
+.portal-table {
+  border: 1px solid var(--app-border);
+  border-radius: var(--portal-radius);
+  background: var(--app-panel);
+  box-shadow: var(--portal-shadow-soft);
+}
+
+.portal-card,
+.portal-panel {
+  padding: 0.82rem;
+}
+
+.portal-command-bar {
+  padding: 0.65rem;
+}
+
+@keyframes portalFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes portalSoftPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes portalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes portalPulseGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 166, 214, 0);
+  }
+
+  50% {
+    box-shadow: 0 0 0 0.32rem rgba(0, 166, 214, 0.12);
+  }
+}
+
+@keyframes portalShimmer {
+  from {
+    background-position: 200% 0;
+  }
+
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.btn:hover:not(:disabled) {
+  transform: var(--hover-lift);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.form-control:hover:not(:disabled):not(:focus),
+.form-select:hover:not(:disabled):not(:focus) {
+  border-color: rgba(0, 166, 214, 0.34);
+  background-color: #f8fbff;
+}
+
+.form-control:focus,
+.form-select:focus {
+  box-shadow: var(--focus-ring);
+}
+
+.portal-card,
+.portal-panel,
+.portal-command-bar,
+.card,
+.modal-content {
+  transition:
+    border-color var(--motion-normal) var(--ease-out),
+    box-shadow var(--motion-normal) var(--ease-out),
+    transform var(--motion-normal) var(--ease-out),
+    background-color var(--motion-normal) var(--ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+
+  .btn:hover:not(:disabled),
+  .portal-card:hover,
+  .portal-panel:hover,
+  .card:hover {
+    transform: none !important;
+  }
+}
+
+.portal-section-title {
+  margin: 0;
+  color: var(--app-brand-dark);
+  font-size: 0.78rem;
+  font-weight: 760;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.portal-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 1.9rem;
+  padding: 0.28rem 0.62rem;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: #f6faff;
+  color: var(--app-brand-dark);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.table {
+  --bs-table-color: var(--app-text);
+  --bs-table-border-color: var(--app-border);
+}
+

@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   getCountFromServer,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
@@ -59,6 +60,13 @@ export function subscribeStudents(onData, onError) {
     },
     onError,
   );
+}
+
+export async function getStudentsOnce() {
+  const { db } = getFirebaseServices();
+  const studentsQuery = query(collection(db, 'students'), orderBy('fullNameKey'));
+  const snapshot = await getDocs(studentsQuery);
+  return sortStudents(snapshot.docs.map(toStudentModel));
 }
 
 export async function createStudent(values) {

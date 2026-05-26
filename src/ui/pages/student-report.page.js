@@ -1,6 +1,7 @@
 import { getClassCurriculumView } from '../../services/curriculum.service.js';
-import { getClassRoster, listActiveClasses, submitStudentReport } from '../../services/public-api.service.js';
+import { getClassRoster, listActiveClasses, submitKnowledgeReport, submitStudentReport } from '../../services/public-api.service.js';
 import { attachHiddenAdminShortcut } from '../../utils/admin-shortcut.js';
+import { getCurriculumSessionActivity, isCurriculumQuizActivity } from '../../utils/curriculum-program.js';
 import { isToday } from '../../utils/date.js';
 import { escapeHtml } from '../../utils/html.js';
 import { getLockedReportClassCode } from '../../utils/route.js';
@@ -9,6 +10,7 @@ import { renderAlert } from '../components/Alert.js';
 import { renderBrandLogo } from '../components/BrandLogo.js';
 import { renderClassSelect } from '../components/ClassSelect.js';
 import { renderLoadingOverlay } from '../components/LoadingOverlay.js';
+import { renderKnowledgeReportForm } from '../components/KnowledgeReportForm.js';
 import { renderProjectSummary } from '../components/ProjectSummary.js';
 import { renderProjectWaterfallGuide } from '../components/ProjectWaterfallGuide.js';
 import { renderReportForm } from '../components/ReportForm.js';
@@ -51,7 +53,38 @@ function shouldShowProgressForm(curriculumPreview) {
     return true;
   }
 
-  return curriculumPreview.assignment.curriculumPhase === 'final' && curriculumPreview.program.finalMode === 'project';
+  return curriculumPreview.assignment.curriculumPhase === 'final';
+}
+
+function getCurrentSessionNumber(curriculumPreview) {
+  return Number(curriculumPreview?.assignment?.currentSession || 0);
+}
+
+function getCurrentLesson(curriculumPreview) {
+  const currentSession = getCurrentSessionNumber(curriculumPreview);
+  return (curriculumPreview?.lessons || []).find((lesson) => Number(lesson.sessionNumber || 0) === currentSession) || null;
+}
+
+function getReportMode(curriculumPreview) {
+  if (!curriculumPreview?.program || !curriculumPreview?.assignment) {
+    return 'progress';
+  }
+
+  if (shouldShowProgressForm(curriculumPreview)) {
+    return 'progress';
+  }
+
+  const activity = getCurriculumSessionActivity(curriculumPreview.program, getCurrentSessionNumber(curriculumPreview));
+
+  if (isCurriculumQuizActivity(activity?.activityType)) {
+    return 'quiz';
+  }
+
+  if (curriculumPreview.assignment.curriculumPhase === 'learning') {
+    return 'knowledge';
+  }
+
+  return 'notice';
 }
 
 function renderReportAvailabilityNotice(curriculumPreview) {
@@ -59,16 +92,16 @@ function renderReportAvailabilityNotice(curriculumPreview) {
     return '';
   }
 
-  if (curriculumPreview.assignment.curriculumPhase !== 'final') {
+  if (getReportMode(curriculumPreview) === 'quiz') {
     return renderAlert(
-      'Form báo cáo tiến độ sản phẩm sẽ mở khi lớp chuyển sang giai đoạn làm sản phẩm cuối khóa.',
+      'Buổi này là bài kiểm tra. Hãy vào trang Học liệu của lớp để làm bài khi giáo viên mở kiểm tra.',
       'info',
     );
   }
 
-  if (curriculumPreview.program.finalMode !== 'project') {
+  if (curriculumPreview.assignment.curriculumPhase !== 'final') {
     return renderAlert(
-      'Lớp này đang ở giai đoạn ôn kiểm tra cuối khóa, nên không dùng form báo cáo tiến độ sản phẩm.',
+      'Form báo cáo tiến độ sản phẩm sẽ mở khi lớp chuyển sang giai đoạn làm sản phẩm cuối khóa.',
       'info',
     );
   }
@@ -172,7 +205,7 @@ export const studentReportPage = {
     function renderSelections() {
       const selectedStudent = getSelectedStudent();
       const selectedClassInfo = getSelectedClassInfo();
-      const canShowReportForm = shouldShowProgressForm(curriculumPreview);
+      const reportMode = getReportMode(curriculumPreview);
 
       classSlot.innerHTML = lockedClassCode
         ? renderLockedClassField(lockedClass || { classCode: selectedClassCode || lockedClassCode, className: '' })
@@ -186,12 +219,17 @@ export const studentReportPage = {
         curriculumError,
       );
       waterfallSlot.innerHTML = renderProjectWaterfallGuide(curriculumPreview, selectedStudent);
-      formSlot.innerHTML = canShowReportForm
+      formSlot.innerHTML = reportMode === 'progress'
         ? renderReportForm(getFormDefaults(selectedStudent), {
             disabled: !selectedStudent,
             helperText: getReportHelperText(selectedStudent),
           })
-        : renderReportAvailabilityNotice(curriculumPreview);
+        : reportMode === 'knowledge'
+          ? renderKnowledgeReportForm({}, {
+              disabled: !selectedStudent,
+              lessonTitle: getCurrentLesson(curriculumPreview)?.title || `Buổi ${getCurrentSessionNumber(curriculumPreview)}`,
+            })
+          : renderReportAvailabilityNotice(curriculumPreview);
     }
 
     function renderPageAlertState() {
@@ -222,7 +260,7 @@ export const studentReportPage = {
         return;
       }
 
-      if (selectedStudent.lastReportedAt && isToday(selectedStudent.lastReportedAt)) {
+      if (getReportMode(curriculumPreview) === 'progress' && selectedStudent.lastReportedAt && isToday(selectedStudent.lastReportedAt)) {
         pageAlert.innerHTML = renderAlert(
           'Hôm nay bạn đã gửi báo cáo. Nếu có cập nhật mới, bạn vẫn có thể gửi thêm.',
           'warning',
@@ -346,13 +384,74 @@ export const studentReportPage = {
     formSlot.addEventListener('submit', async (event) => {
       const form = event.target;
 
-      if (form.id !== 'student-report-form') {
+      if (form.id !== 'student-report-form' && form.id !== 'student-knowledge-report-form') {
         return;
       }
 
       event.preventDefault();
 
       const formData = new FormData(form);
+      const alertSlot = document.getElementById('student-report-alert');
+
+      if (form.id === 'student-knowledge-report-form') {
+        const currentLesson = getCurrentLesson(curriculumPreview);
+        const understoodTopics = String(formData.get('understoodTopics') ?? '').trim();
+        const unclearTopics = String(formData.get('unclearTopics') ?? '').trim();
+        const supportRequest = String(formData.get('supportRequest') ?? '').trim();
+        const payload = {
+          classCode: selectedClassCode,
+          studentId: selectedStudentId,
+          curriculumProgramId: curriculumPreview?.program?.id || '',
+          sessionNumber: getCurrentSessionNumber(curriculumPreview),
+          lessonId: currentLesson?.id || '',
+          understoodTopics,
+          unclearTopics,
+          understandingLevel: Number(formData.get('understandingLevel')),
+          supportRequest: supportRequest || 'Không có gì cần hỗ trợ',
+        };
+
+        if (understoodTopics.length < 5) {
+          alertSlot.innerHTML = renderAlert('Hãy ghi ít nhất 5 ký tự ở phần kiến thức đã hiểu.', 'danger');
+          return;
+        }
+
+        if (unclearTopics.length < 5) {
+          alertSlot.innerHTML = renderAlert('Hãy ghi ít nhất 5 ký tự ở phần kiến thức chưa rõ. Nếu đã rõ hết, có thể ghi "Không có".', 'danger');
+          return;
+        }
+
+        if (!Number.isFinite(payload.understandingLevel) || payload.understandingLevel < 1 || payload.understandingLevel > 5) {
+          alertSlot.innerHTML = renderAlert('Hãy chọn mức độ hiểu bài từ 1 đến 5.', 'danger');
+          return;
+        }
+
+        const submitButtons = [...form.querySelectorAll('button[type="submit"]')];
+        submitButtons.forEach((button) => {
+          button.disabled = true;
+          button.innerHTML = '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Đang gửi...';
+        });
+
+        try {
+          await submitKnowledgeReport(payload);
+          alertSlot.innerHTML = renderAlert('Phản hồi buổi học đã được gửi thành công.', 'success');
+          showToast({
+            title: 'Đã lưu phản hồi',
+            message: 'Thầy sẽ dùng phản hồi này để tổng hợp nội dung cần ôn lại.',
+            variant: 'success',
+          });
+          form.reset();
+        } catch (error) {
+          alertSlot.innerHTML = renderAlert(getErrorMessage(error, 'Không thể gửi phản hồi lúc này.'), 'danger');
+        } finally {
+          submitButtons.forEach((button) => {
+            button.disabled = false;
+            button.innerHTML = '<i class="bi bi-send me-2"></i>Gửi phản hồi';
+          });
+        }
+
+        return;
+      }
+
       const rawDifficulties = String(formData.get('difficulties') ?? '').trim();
       const status = formData.get('status');
       const payload = {
@@ -366,7 +465,6 @@ export const studentReportPage = {
         status,
       };
       const validation = validateReportForm(payload);
-      const alertSlot = document.getElementById('student-report-alert');
 
       if (!validation.isValid) {
         alertSlot.innerHTML = renderAlert(Object.values(validation.errors).join('<br>'), 'danger');

@@ -11,24 +11,17 @@ import {
 } from '../../services/quizzes.service.js';
 import { isCloudinaryConfigured, uploadCurriculumLessonImage } from '../../services/cloudinary.service.js';
 import { getAuthState } from '../../state/auth.store.js';
-import { formatDateTime } from '../../utils/date.js';
 import {
   getCurriculumActivityTypeLabel,
-  getCurriculumSessionActivities,
   getCurriculumSessionActivity,
   isCurriculumQuizActivity,
 } from '../../utils/curriculum-program.js';
-import { escapeHtml, nl2br } from '../../utils/html.js';
+import { escapeHtml } from '../../utils/html.js';
 import {
   createQuizItemId,
   formatQuizReadinessRequirement,
-  getQuizDifficultyCounts,
-  getQuizDifficultyLabel,
   getQuizReadiness,
-  getQuizQuestionTypeLabel,
-  isFillBlankQuestion,
   isOfficialQuizMode,
-  isQuizBlankAnswerCorrect,
   isQuizStartedForClass,
   normalizeQuizConfigRecord,
   QUIZ_ATTEMPT_STATUS_REOPENED,
@@ -41,14 +34,24 @@ import {
   QUIZ_QUESTION_LIMIT,
   QUIZ_QUESTION_TYPE_FILL_BLANK,
   QUIZ_QUESTION_TYPE_SINGLE_CHOICE,
-  QUIZ_QUESTION_TYPES,
   validateQuizConfigRecord,
 } from '../../utils/quiz.js';
+import { buildQuizSampleConfig } from '../../utils/quiz-samples.js';
 import { renderAlert } from '../components/Alert.js';
 import { renderAppShell } from '../components/AppShell.js';
 import { renderEmptyState } from '../components/EmptyState.js';
 import { renderLoadingOverlay } from '../components/LoadingOverlay.js';
 import { showToast } from '../components/ToastStack.js';
+import { renderAttemptList } from './quizzes/attempt-list.view.js';
+import {
+  decorateAttemptByBestScore,
+  getAttemptSubmissionHistory,
+  getBestAttemptSubmission,
+  getLatestAttemptSubmission,
+} from './quizzes/attempt-grading.js';
+import { renderAttemptOverviewReport } from './quizzes/attempt-overview.view.js';
+import { renderAttemptDetailModal } from './quizzes/attempt-detail.view.js';
+import { getProgramSessionOptions, renderQuizEditor } from './quizzes/quiz-editor.view.js';
 
 const QUIZ_ADMIN_UI_STORAGE_KEY = 'hungtranpm.quiz-admin.ui';
 
@@ -169,17 +172,6 @@ function getQuizManageableClasses(classes = []) {
   return classes.filter((classItem) => classItem.status === 'active' && !classItem.hidden);
 }
 
-function getProgramSessionOptions(program) {
-  if (!program) {
-    return QUIZ_DEFAULT_OFFICIAL_SESSION_NUMBERS.map((sessionNumber) => ({
-      sessionNumber,
-      activityType: QUIZ_MODE_OFFICIAL,
-    }));
-  }
-
-  return getCurriculumSessionActivities(program);
-}
-
 function getClassProgram(selectedClass, programs = []) {
   return programs.find((program) => program.id === selectedClass?.curriculumProgramId) || null;
 }
@@ -188,532 +180,6 @@ function getClassQuizActivity(selectedClass, programs = []) {
   const program = getClassProgram(selectedClass, programs);
   const sessionNumber = Number(selectedClass?.curriculumCurrentSession || 0);
   return program ? getCurriculumSessionActivity(program, sessionNumber) : null;
-}
-
-function renderQuestionImagePreview(imageUrl = '', imageAlt = '', prompt = '') {
-  if (!String(imageUrl || '').trim()) {
-    return '';
-  }
-
-  return `
-    <figure class="quiz-question-media quiz-question-media--admin">
-      <img
-        src="${escapeHtml(imageUrl)}"
-        alt="${escapeHtml(imageAlt || prompt || 'Minh họa câu hỏi')}"
-        class="quiz-question-media__image"
-        loading="lazy"
-      />
-    </figure>
-  `;
-}
-
-function hasAttemptRetakeAfterReopen(attempt) {
-  if (!attempt?.reopenedAt || !attempt?.submittedAt) {
-    return false;
-  }
-
-  const reopenedTime = attempt.reopenedAt instanceof Date ? attempt.reopenedAt.getTime() : 0;
-  const submittedTime = attempt.submittedAt instanceof Date ? attempt.submittedAt.getTime() : 0;
-
-  return submittedTime > reopenedTime && Number(attempt.submissionCount || 0) > 1;
-}
-
-function getAttemptStatusMeta(attempt) {
-  if (!attempt) {
-    return {
-      label: 'Chưa rõ',
-      badgeClass: 'text-bg-secondary',
-      detail: '',
-    };
-  }
-
-  if (attempt.status === QUIZ_ATTEMPT_STATUS_REOPENED) {
-    return {
-      label: 'Đang chờ làm lại',
-      badgeClass: 'text-bg-warning text-dark',
-      detail: 'Học sinh này đã được mở lại và có thể vào làm lại ngay bây giờ.',
-    };
-  }
-
-  if (hasAttemptRetakeAfterReopen(attempt)) {
-    return {
-      label: 'Đã nộp lại',
-      badgeClass: 'text-bg-info',
-      detail: `Học sinh đã nộp lại sau khi được mở vào ${formatDateTime(attempt.submittedAt)}.`,
-    };
-  }
-
-  return {
-    label: 'Đã nộp',
-    badgeClass: 'text-bg-success',
-    detail:
-      Number(attempt.submissionCount || 0) > 1
-        ? `Học sinh đã nộp tổng cộng ${attempt.submissionCount} lần. Hệ thống đang lấy điểm cao nhất để hiển thị.`
-        : 'Học sinh đã nộp bài và chưa được mở lại.',
-  };
-}
-
-function getAttemptStatusBadge(attempt) {
-  const statusMeta = getAttemptStatusMeta(attempt);
-  return `<span class="badge ${statusMeta.badgeClass}">${escapeHtml(statusMeta.label)}</span>`;
-}
-
-function buildGradedQuestions(quizConfig, answers = {}, questionIds = []) {
-  const questions = Array.isArray(quizConfig?.questions)
-    ? [...quizConfig.questions].sort((left, right) => Number(left.order || 0) - Number(right.order || 0))
-    : [];
-  const selectedQuestionIds = Array.isArray(questionIds)
-    ? questionIds.map((questionId) => String(questionId ?? '').trim()).filter(Boolean)
-    : [];
-  const orderedQuestions =
-    selectedQuestionIds.length > 0
-      ? selectedQuestionIds
-          .map((questionId) => questions.find((question) => question.id === questionId) || null)
-          .filter(Boolean)
-      : questions;
-
-  return orderedQuestions.map((question, index) => {
-    const questionType = question.type || QUIZ_QUESTION_TYPE_SINGLE_CHOICE;
-    const options = Array.isArray(question.options)
-      ? [...question.options].sort((left, right) => Number(left.order || 0) - Number(right.order || 0))
-      : [];
-    const rawAnswerValue = answers?.[question.id];
-    const selectedOptionId = questionType === QUIZ_QUESTION_TYPE_SINGLE_CHOICE ? String(rawAnswerValue ?? '').trim() : '';
-    const selectedOption = options.find((option) => option.id === selectedOptionId) || null;
-    const correctOption = options.find((option) => option.id === question.correctOptionId) || null;
-    const selectedTextAnswer = questionType === QUIZ_QUESTION_TYPE_FILL_BLANK ? String(rawAnswerValue ?? '').trim() : '';
-    const acceptedAnswers = Array.isArray(question.acceptedAnswers) ? question.acceptedAnswers : [];
-    const isCorrect =
-      questionType === QUIZ_QUESTION_TYPE_FILL_BLANK
-        ? isQuizBlankAnswerCorrect(question, selectedTextAnswer)
-        : Boolean(selectedOptionId) && selectedOptionId === correctOption?.id;
-
-    return {
-      questionId: question.id,
-      questionType,
-      difficulty: question.difficulty || QUIZ_DIFFICULTY_MEDIUM,
-      prompt: question.prompt,
-      imageUrl: question.imageUrl || '',
-      imageAlt: question.imageAlt || '',
-      blankPlaceholder: question.blankPlaceholder || '',
-      order: Math.max(1, Number(question.order || index + 1)),
-      selectedOptionId,
-      selectedOptionText:
-        questionType === QUIZ_QUESTION_TYPE_FILL_BLANK ? selectedTextAnswer : selectedOption?.text || '',
-      correctOptionId: correctOption?.id || '',
-      correctOptionText:
-        questionType === QUIZ_QUESTION_TYPE_FILL_BLANK ? acceptedAnswers.join(', ') : correctOption?.text || '',
-      isCorrect,
-    };
-  });
-}
-
-function buildGradedSubmission(quizConfig, submission = {}, fallbackQuestionCount = 0) {
-  const gradedQuestions = buildGradedQuestions(quizConfig, submission.answers || {}, submission.questionIds || []);
-  const questionCount = Number(submission.questionCount || fallbackQuestionCount || gradedQuestions.length || 0);
-  const correctCount = gradedQuestions.filter((question) => question.isCorrect).length;
-
-  return {
-    ...submission,
-    questionCount,
-    correctCount,
-    score: questionCount > 0 ? Math.round((correctCount / questionCount) * 100) : 0,
-    gradingReady: gradedQuestions.length > 0,
-    gradedQuestions,
-  };
-}
-
-function buildFallbackSubmissionFromAttempt(attempt) {
-  if (!attempt) {
-    return null;
-  }
-
-  return {
-    submissionNumber: Math.max(1, Number(attempt.submissionCount || 1)),
-    questionCount: Number(attempt.questionCount || 0),
-    correctCount: Number(attempt.correctCount || 0),
-    score: Number(attempt.score || 0),
-    gradingReady: Boolean(attempt.gradingReady),
-    gradedQuestions: Array.isArray(attempt.gradedQuestions) ? attempt.gradedQuestions : [],
-    submittedAt: attempt.submittedAt || null,
-  };
-}
-
-function pickBestGradedSubmission(submissions = []) {
-  return [...submissions].sort((left, right) => {
-    if (right.score !== left.score) {
-      return right.score - left.score;
-    }
-
-    if (right.correctCount !== left.correctCount) {
-      return right.correctCount - left.correctCount;
-    }
-
-    if ((right.submissionNumber || 0) !== (left.submissionNumber || 0)) {
-      return (right.submissionNumber || 0) - (left.submissionNumber || 0);
-    }
-
-    const leftTime = left.submittedAt instanceof Date ? left.submittedAt.getTime() : 0;
-    const rightTime = right.submittedAt instanceof Date ? right.submittedAt.getTime() : 0;
-    return rightTime - leftTime;
-  })[0] || null;
-}
-
-function decorateAttempt(attempt, quizConfigs = []) {
-  const quizConfig =
-    quizConfigs.find((config) => Number(config.sessionNumber) === Number(attempt.sessionNumber || 0)) || null;
-
-  if (!quizConfig) {
-    const fallbackGradedQuestions = Array.isArray(attempt.gradedQuestions) ? attempt.gradedQuestions : [];
-    const fallbackQuestionCount = Number(attempt.questionCount || fallbackGradedQuestions.length || 0);
-    const fallbackCorrectCount = Number(attempt.correctCount || 0);
-    const fallbackScore =
-      fallbackQuestionCount > 0
-        ? Math.round((fallbackCorrectCount / fallbackQuestionCount) * 100)
-        : Number(attempt.score || 0);
-
-    return {
-      ...attempt,
-      quizTitle: attempt.quizTitle || 'Bài kiểm tra',
-      questionCount: fallbackQuestionCount,
-      correctCount: fallbackCorrectCount,
-      score: fallbackScore,
-      gradingReady: fallbackGradedQuestions.length > 0,
-      gradedQuestions: fallbackGradedQuestions,
-    };
-  }
-
-  const gradedQuestions = buildGradedQuestions(quizConfig, attempt.answers || {}, attempt.questionIds || []);
-  const questionCount = Number(attempt.questionCount || gradedQuestions.length || 0);
-  const correctCount = gradedQuestions.filter((question) => question.isCorrect).length;
-
-  return {
-    ...attempt,
-    quizTitle: attempt.quizTitle || quizConfig.title || 'Bài kiểm tra',
-    questionCount,
-    correctCount,
-    score: questionCount > 0 ? Math.round((correctCount / questionCount) * 100) : 0,
-    gradingReady: gradedQuestions.length > 0,
-    gradedQuestions,
-  };
-}
-
-function decorateAttemptByBestScore(attempt, quizConfigs = []) {
-  const baseAttempt = decorateAttempt(attempt, quizConfigs);
-  const quizConfig =
-    quizConfigs.find((config) => Number(config.sessionNumber) === Number(attempt.sessionNumber || 0)) || null;
-
-  if (!quizConfig) {
-    return {
-      ...baseAttempt,
-      bestSubmissionNumber: Number(attempt.submissionCount || 1),
-      bestSubmittedAt: attempt.submittedAt || null,
-    };
-  }
-
-  const rawSubmissions = Array.isArray(attempt.submissions) && attempt.submissions.length > 0
-    ? attempt.submissions
-    : [
-        {
-          submissionNumber: Number(attempt.submissionCount || 1),
-          questionCount: Number(attempt.questionCount || 0),
-          questionIds: attempt.questionIds || [],
-          answers: attempt.answers || {},
-          submittedAt: attempt.submittedAt || null,
-        },
-      ];
-  const gradedSubmissions = rawSubmissions.map((submission) =>
-    buildGradedSubmission(quizConfig, submission, attempt.questionCount),
-  );
-  const bestSubmission = pickBestGradedSubmission(gradedSubmissions) || null;
-
-  if (!bestSubmission) {
-    return {
-      ...baseAttempt,
-      gradedSubmissions,
-      bestSubmissionNumber: Number(attempt.submissionCount || 1),
-      bestSubmittedAt: attempt.submittedAt || null,
-    };
-  }
-
-  return {
-    ...baseAttempt,
-    questionCount: bestSubmission.questionCount,
-    correctCount: bestSubmission.correctCount,
-    score: bestSubmission.score,
-    gradingReady: bestSubmission.gradingReady,
-    gradedQuestions: bestSubmission.gradedQuestions,
-    gradedSubmissions,
-    bestSubmissionNumber: Number(bestSubmission.submissionNumber || 1),
-    bestSubmittedAt: bestSubmission.submittedAt || null,
-  };
-}
-
-function renderAttemptScore(attempt) {
-  if (!attempt?.gradingReady) {
-    return 'Chưa chấm được';
-  }
-
-  return `${attempt.correctCount}/${attempt.questionCount} (${attempt.score}%)`;
-}
-
-function buildQuestionComparisonRows(submissionHistory = []) {
-  const questionMap = new Map();
-
-  submissionHistory.forEach((submission, submissionIndex) => {
-    const submissionNumber = Number(submission?.submissionNumber || submissionIndex + 1);
-
-    (submission?.gradedQuestions || []).forEach((question, questionIndex) => {
-      const questionId = String(question?.questionId || `submission-${submissionNumber}-question-${questionIndex + 1}`).trim();
-      const existingRow = questionMap.get(questionId) || {
-        questionId,
-        prompt: String(question?.prompt || '').trim(),
-        imageUrl: String(question?.imageUrl || '').trim(),
-        imageAlt: String(question?.imageAlt || '').trim(),
-        questionType: String(question?.questionType || QUIZ_QUESTION_TYPE_SINGLE_CHOICE).trim(),
-        correctOptionText: String(question?.correctOptionText || '').trim(),
-        order: Math.max(1, Number(question?.order || questionIndex + 1)),
-        firstSubmissionNumber: submissionNumber,
-        responsesBySubmission: new Map(),
-      };
-
-      existingRow.prompt = existingRow.prompt || String(question?.prompt || '').trim();
-      existingRow.imageUrl = existingRow.imageUrl || String(question?.imageUrl || '').trim();
-      existingRow.imageAlt = existingRow.imageAlt || String(question?.imageAlt || '').trim();
-      existingRow.correctOptionText = existingRow.correctOptionText || String(question?.correctOptionText || '').trim();
-      existingRow.questionType =
-        existingRow.questionType || String(question?.questionType || QUIZ_QUESTION_TYPE_SINGLE_CHOICE).trim();
-      existingRow.responsesBySubmission.set(submissionNumber, question);
-      questionMap.set(questionId, existingRow);
-    });
-  });
-
-  return [...questionMap.values()].sort((left, right) => {
-    if (left.firstSubmissionNumber !== right.firstSubmissionNumber) {
-      return left.firstSubmissionNumber - right.firstSubmissionNumber;
-    }
-
-    if (left.order !== right.order) {
-      return left.order - right.order;
-    }
-
-    return left.prompt.localeCompare(right.prompt, 'vi');
-  });
-}
-
-function getAttemptSubmissionHistory(attempt) {
-  if (!attempt) {
-    return [];
-  }
-
-  const gradedSubmissions = Array.isArray(attempt.gradedSubmissions) ? attempt.gradedSubmissions : [];
-
-  if (gradedSubmissions.length > 0) {
-    return [...gradedSubmissions].sort((left, right) => {
-      if ((left.submissionNumber || 0) !== (right.submissionNumber || 0)) {
-        return (left.submissionNumber || 0) - (right.submissionNumber || 0);
-      }
-
-      const leftTime = left.submittedAt instanceof Date ? left.submittedAt.getTime() : 0;
-      const rightTime = right.submittedAt instanceof Date ? right.submittedAt.getTime() : 0;
-      return leftTime - rightTime;
-    });
-  }
-
-  const fallbackSubmission = buildFallbackSubmissionFromAttempt(attempt);
-  return fallbackSubmission ? [fallbackSubmission] : [];
-}
-
-function getLatestAttemptSubmission(attempt) {
-  const submissionHistory = getAttemptSubmissionHistory(attempt);
-  return submissionHistory[submissionHistory.length - 1] || null;
-}
-
-function getBestAttemptSubmission(attempt) {
-  const submissionHistory = getAttemptSubmissionHistory(attempt);
-
-  if (!submissionHistory.length) {
-    return null;
-  }
-
-  const preferredSubmissionNumber = Number(attempt?.bestSubmissionNumber || 0);
-
-  if (preferredSubmissionNumber > 0) {
-    const matchedSubmission = submissionHistory.find(
-      (submission) => Number(submission.submissionNumber || 0) === preferredSubmissionNumber,
-    );
-
-    if (matchedSubmission) {
-      return matchedSubmission;
-    }
-  }
-
-  return pickBestGradedSubmission(submissionHistory);
-}
-
-function buildAttemptReportSummary(attempts = []) {
-  const decoratedAttempts = Array.isArray(attempts) ? attempts.filter((attempt) => attempt?.gradingReady) : [];
-  const totalAttempts = decoratedAttempts.length;
-  const scoreList = decoratedAttempts.map((attempt) => Number(attempt.score || 0));
-  const averageScore =
-    totalAttempts > 0 ? Math.round(scoreList.reduce((sum, score) => sum + score, 0) / totalAttempts) : 0;
-  const highestScore = totalAttempts > 0 ? Math.max(...scoreList) : 0;
-  const lowestScore = totalAttempts > 0 ? Math.min(...scoreList) : 0;
-  const perfectCount = scoreList.filter((score) => score === 100).length;
-  const questionMap = new Map();
-
-  decoratedAttempts.forEach((attempt) => {
-    (attempt.gradedQuestions || []).forEach((question) => {
-      const existingItem = questionMap.get(question.questionId) || {
-        questionId: question.questionId,
-        prompt: question.prompt,
-        questionType: question.questionType || QUIZ_QUESTION_TYPE_SINGLE_CHOICE,
-        appearanceCount: 0,
-        correctCount: 0,
-        wrongCount: 0,
-      };
-
-      existingItem.appearanceCount += 1;
-      existingItem.correctCount += question.isCorrect ? 1 : 0;
-      existingItem.wrongCount += question.isCorrect ? 0 : 1;
-      questionMap.set(question.questionId, existingItem);
-    });
-  });
-
-  const questionRows = [...questionMap.values()].map((item) => ({
-    ...item,
-    correctRate: item.appearanceCount > 0 ? Math.round((item.correctCount / item.appearanceCount) * 100) : 0,
-    wrongRate: item.appearanceCount > 0 ? Math.round((item.wrongCount / item.appearanceCount) * 100) : 0,
-  }));
-  const hardestQuestion = [...questionRows].sort((left, right) => {
-    if (right.wrongRate !== left.wrongRate) {
-      return right.wrongRate - left.wrongRate;
-    }
-
-    if (right.wrongCount !== left.wrongCount) {
-      return right.wrongCount - left.wrongCount;
-    }
-
-    return left.prompt.localeCompare(right.prompt, 'vi');
-  })[0] || null;
-  const easiestQuestion = [...questionRows].sort((left, right) => {
-    if (right.correctRate !== left.correctRate) {
-      return right.correctRate - left.correctRate;
-    }
-
-    if (right.correctCount !== left.correctCount) {
-      return right.correctCount - left.correctCount;
-    }
-
-    return left.prompt.localeCompare(right.prompt, 'vi');
-  })[0] || null;
-
-  return {
-    totalAttempts,
-    averageScore,
-    highestScore,
-    lowestScore,
-    perfectCount,
-    hardestQuestion,
-    easiestQuestion,
-  };
-}
-
-function renderAttemptSummaryCard({
-  title,
-  value,
-  description,
-  tone = 'neutral',
-}) {
-  return `
-    <div class="quiz-summary-card quiz-summary-card--${tone}">
-      <div class="quiz-summary-card__label">${escapeHtml(title)}</div>
-      <div class="quiz-summary-card__value">${escapeHtml(value)}</div>
-      <div class="quiz-summary-card__description">${escapeHtml(description)}</div>
-    </div>
-  `;
-}
-
-function renderQuestionInsight(title, question, mode = 'wrong') {
-  if (!question) {
-    return renderEmptyState({
-      icon: 'bar-chart',
-      title,
-      description: 'Chưa có đủ bài nộp để tổng hợp chỉ số cho câu hỏi này.',
-    });
-  }
-
-  return `
-    <div class="quiz-summary-insight">
-      <div class="small text-secondary text-uppercase fw-semibold mb-2">${escapeHtml(title)}</div>
-      <div class="fw-semibold mb-2">${escapeHtml(question.prompt)}</div>
-      <div class="small text-secondary">
-        ${
-          mode === 'wrong'
-            ? `Bị sai ${question.wrongCount}/${question.appearanceCount} lượt (${question.wrongRate}%).`
-            : `Làm đúng ${question.correctCount}/${question.appearanceCount} lượt (${question.correctRate}%).`
-        }
-      </div>
-    </div>
-  `;
-}
-
-function renderAttemptOverviewReport(attempts = [], liveAttemptCount = 0) {
-  const summary = buildAttemptReportSummary(attempts);
-
-  return `
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-header bg-white border-0">
-        <h2 class="h5 mb-1">Báo cáo nhanh</h2>
-        <p class="text-secondary mb-0">Tóm tắt kết quả lớp theo bộ lọc hiện tại.</p>
-      </div>
-      <div class="card-body">
-        ${
-          summary.totalAttempts === 0
-            ? renderEmptyState({
-                icon: 'clipboard2-data',
-                title: liveAttemptCount > 0 ? `${liveAttemptCount} học sinh đang làm bài` : 'Chưa có dữ liệu để tổng hợp',
-                description:
-                  liveAttemptCount > 0
-                    ? 'Khi học sinh nộp hoặc admin kết thúc bài kiểm tra, thống kê điểm và câu đúng/sai sẽ hiển thị ở đây.'
-                    : 'Khi học sinh nộp bài, thống kê điểm và câu khó/dễ sẽ hiển thị ở đây.',
-              })
-            : `
-              <div class="quiz-summary-grid mb-4">
-                ${renderAttemptSummaryCard({
-                  title: 'Đang làm',
-                  value: String(liveAttemptCount),
-                  description: 'Số học sinh đã chọn ít nhất một đáp án và đang có bản nháp.',
-                  tone: 'primary',
-                })}
-                ${renderAttemptSummaryCard({
-                  title: 'Số bài đã nộp',
-                  value: String(summary.totalAttempts),
-                  description: 'Tính theo bộ lọc lớp và buổi hiện tại.',
-                  tone: 'primary',
-                })}
-                ${renderAttemptSummaryCard({
-                  title: 'Điểm trung bình',
-                  value: `${summary.averageScore}%`,
-                  description: `Cao nhất ${summary.highestScore}% · Thấp nhất ${summary.lowestScore}%`,
-                  tone: 'success',
-                })}
-                ${renderAttemptSummaryCard({
-                  title: 'Bài đạt tuyệt đối',
-                  value: String(summary.perfectCount),
-                  description: 'Số bài đạt 100% trong bộ lọc hiện tại.',
-                  tone: 'warning',
-                })}
-              </div>
-              <div class="quiz-summary-insight-grid">
-                ${renderQuestionInsight('Câu bị sai nhiều nhất', summary.hardestQuestion, 'wrong')}
-                ${renderQuestionInsight('Câu làm tốt nhất', summary.easiestQuestion, 'correct')}
-              </div>
-            `
-        }
-      </div>
-    </div>
-  `;
 }
 
 function getSelectedClass(classes = [], selectedClassCode = '') {
@@ -754,7 +220,7 @@ function renderQuizPageTabs(activeTab = 'editor') {
     },
     {
       id: 'operations',
-      label: 'Điều khiển và thống kê',
+      label: 'Trung tâm điều khiển',
       description: 'Bắt đầu bài kiểm tra, theo dõi bài nộp và mở lại',
       icon: 'bar-chart-steps',
     },
@@ -879,781 +345,75 @@ function renderClassQuizLaunchControl({
   `;
 }
 
-function renderQuizEditor({
-  programs,
-  selectedProgramId,
-  selectedSessionNumber,
-  selectedProgram,
-  draft,
-  isLoading,
-  isSaving,
-  uploadingQuestionId,
-  imageUploadEnabled,
-  error,
-  contextLocked = false,
-}) {
-  if (!programs.length) {
-    return renderEmptyState({
-      icon: 'patch-question',
-      title: 'Chưa có chương trình để gắn đề',
-      description: 'Hãy tạo hoặc kích hoạt ít nhất một chương trình học trước khi cấu hình bài trắc nghiệm.',
-    });
-  }
-
-  const questionActionDisabled = isLoading || isSaving || Boolean(uploadingQuestionId);
-  const sessionOptions = getProgramSessionOptions(selectedProgram);
-  const selectedSessionActivity = selectedProgram
-    ? getCurriculumSessionActivity(selectedProgram, selectedSessionNumber)
-    : null;
-  const selectedActivityLabel = selectedSessionActivity
-    ? getCurriculumActivityTypeLabel(selectedSessionActivity.activityType)
-    : 'Kiểm tra';
-  const scopeSubject = String(draft?.subject || selectedProgram?.subject || 'Chưa rõ môn').trim();
-  const scopeLevel = String(draft?.level || selectedProgram?.level || 'Chưa rõ level').trim();
-  const readiness = getQuizReadiness(draft || {});
-  const difficultyCounts = getQuizDifficultyCounts(draft?.questions || []);
-  const policySummary = QUIZ_DIFFICULTIES.map(
-    (difficulty) => `${getQuizDifficultyLabel(difficulty)} ${Number(readiness.policy?.[difficulty] || 0)}`,
-  ).join(' · ');
-  const countSummary = QUIZ_DIFFICULTIES.map(
-    (difficulty) => `${getQuizDifficultyLabel(difficulty)} ${Number(difficultyCounts[difficulty] || 0)}`,
-  ).join(' · ');
-
-  return `
-    <div class="card border-0 shadow-sm h-100 quiz-editor-card">
-      <div class="card-header bg-white border-0 quiz-editor-card__header">
-        <div>
-          <h2 class="h5 mb-0">Cấu hình đề trắc nghiệm</h2>
-          <div class="quiz-editor-context mt-2">
-            <span><i class="bi bi-journal-code me-1"></i>${escapeHtml(selectedProgram?.name || 'Chưa chọn chương trình')}</span>
-            <span>${escapeHtml(scopeSubject)} · ${escapeHtml(scopeLevel)}</span>
-            <span>Buổi ${Number(selectedSessionNumber || 0)}</span>
-            <span>${escapeHtml(selectedActivityLabel)}</span>
-          </div>
-        </div>
-      </div>
-      <div class="card-body">
-        ${error ? `<div class="mb-3">${renderAlert(escapeHtml(error), 'danger')}</div>` : ''}
-        <div class="quiz-editor-setup ${contextLocked ? 'quiz-editor-setup--locked' : ''}">
-          ${
-            contextLocked
-              ? ''
-              : `
-                <div class="quiz-editor-setup__source">
-                  <label class="form-label">Chương trình nguồn</label>
-                  <select class="form-select form-select-sm" id="quiz-program-select" ${isLoading ? 'disabled' : ''}>
-                    ${programs
-                      .map(
-                        (program) => `
-                          <option value="${escapeHtml(program.id)}" ${program.id === selectedProgramId ? 'selected' : ''}>
-                            ${escapeHtml(program.name)}
-                          </option>
-                        `,
-                      )
-                      .join('')}
-                  </select>
-                </div>
-              `
-          }
-          <div class="quiz-editor-setup__title">
-            <label class="form-label">Tiêu đề</label>
-            <input class="form-control form-control-sm" id="quiz-title-input" value="${escapeHtml(draft?.title || '')}" ${isLoading ? 'disabled' : ''} />
-          </div>
-          ${
-            contextLocked
-              ? ''
-              : `
-                <div class="quiz-editor-setup__session">
-                  <label class="form-label">Buổi</label>
-                  <select class="form-select form-select-sm" id="quiz-session-select" ${isLoading ? 'disabled' : ''}>
-                    ${sessionOptions
-                      .map(
-                        (item) => `
-                          <option value="${item.sessionNumber}" ${item.sessionNumber === selectedSessionNumber ? 'selected' : ''}>
-                            Buổi ${item.sessionNumber} - ${escapeHtml(getCurriculumActivityTypeLabel(item.activityType))}
-                          </option>
-                        `,
-                      )
-                      .join('')}
-                  </select>
-                </div>
-              `
-          }
-          <div class="quiz-editor-setup__description">
-            <label class="form-label">Mô tả ngắn</label>
-            <textarea class="form-control form-control-sm" id="quiz-description-input" rows="2" ${isLoading ? 'disabled' : ''}>${escapeHtml(
-              draft?.description || '',
-            )}</textarea>
-          </div>
-        </div>
-        <div class="quiz-editor-readiness ${readiness.isReady ? 'quiz-editor-readiness--ready' : 'quiz-editor-readiness--warning'}">
-          <div>
-            <div class="quiz-editor-readiness__label">Ngân hàng</div>
-            <div class="fw-semibold">${escapeHtml(scopeSubject)} · ${escapeHtml(scopeLevel)} · Buổi ${Number(selectedSessionNumber || 0)}</div>
-          </div>
-          <div>
-            <div class="quiz-editor-readiness__label">Tỉ lệ cần</div>
-            <div class="fw-semibold">${escapeHtml(policySummary)}</div>
-          </div>
-          <div>
-            <div class="quiz-editor-readiness__label">Hiện có</div>
-            <div class="fw-semibold">${escapeHtml(countSummary)}</div>
-          </div>
-          <div class="quiz-editor-readiness__status">
-            ${
-              readiness.isReady
-                ? '<i class="bi bi-check-circle-fill me-1"></i>Đủ điều kiện'
-                : `<i class="bi bi-exclamation-triangle-fill me-1"></i>${escapeHtml(formatQuizReadinessRequirement(readiness))}`
-            }
-          </div>
-        </div>
-        <input type="file" id="quiz-question-image-input" class="d-none" accept="image/*" />
-        <hr class="my-4">
-        <div class="d-flex flex-wrap justify-content-between gap-3 align-items-center mb-3">
-          <div>
-            <h3 class="h6 mb-1">Danh sách câu hỏi</h3>
-            <div class="small text-secondary">Hỗ trợ trắc nghiệm 1 đáp án đúng và điền vào chỗ trống. Cần đủ ${escapeHtml(policySummary)} để mở kiểm tra.</div>
-          </div>
-          <button type="button" class="btn btn-outline-primary" data-action="add-question" ${questionActionDisabled ? 'disabled' : ''}>
-            <i class="bi bi-plus-circle me-2"></i>Thêm câu hỏi
-          </button>
-        </div>
-        ${
-          isLoading
-            ? renderLoadingOverlay('Đang tải cấu hình đề...')
-            : (draft?.questions || []).length > 0
-              ? `
-                <div class="quiz-admin-question-list">
-                  ${(draft.questions || [])
-                    .map(
-                      (question, questionIndex) => `
-                        <section class="quiz-admin-question-card">
-                          <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start mb-3">
-                            <div>
-                              <span class="badge text-bg-light text-dark border mb-2">Câu ${questionIndex + 1}</span>
-                              <div class="small text-secondary">${escapeHtml(getQuizQuestionTypeLabel(question.type))}</div>
-                            </div>
-                            <button
-                              type="button"
-                              class="btn btn-sm btn-outline-danger"
-                              data-action="remove-question"
-                              data-question-id="${escapeHtml(question.id)}"
-                            >
-                              <i class="bi bi-trash me-1"></i>Xóa câu
-                            </button>
-                          </div>
-                          <div class="row g-3 mb-3">
-                            <div class="col-12 col-lg-4">
-                              <label class="form-label">Loại câu hỏi</label>
-                              <select
-                                class="form-select"
-                                data-field="question-type"
-                                data-question-id="${escapeHtml(question.id)}"
-                              >
-                                ${QUIZ_QUESTION_TYPES.map(
-                                  (questionType) => `
-                                    <option value="${escapeHtml(questionType)}" ${question.type === questionType ? 'selected' : ''}>
-                                      ${escapeHtml(getQuizQuestionTypeLabel(questionType))}
-                                    </option>
-                                  `,
-                                ).join('')}
-                              </select>
-                            </div>
-                            <div class="col-12 col-lg-3">
-                              <label class="form-label">Độ khó</label>
-                              <select
-                                class="form-select"
-                                data-field="difficulty"
-                                data-question-id="${escapeHtml(question.id)}"
-                              >
-                                ${QUIZ_DIFFICULTIES.map(
-                                  (difficulty) => `
-                                    <option value="${escapeHtml(difficulty)}" ${question.difficulty === difficulty ? 'selected' : ''}>
-                                      ${escapeHtml(getQuizDifficultyLabel(difficulty))}
-                                    </option>
-                                  `,
-                                ).join('')}
-                              </select>
-                            </div>
-                            <div class="col-12 col-lg-5">
-                              <label class="form-label">Nội dung câu hỏi</label>
-                              <textarea
-                                class="form-control"
-                                rows="3"
-                                data-field="prompt"
-                                data-question-id="${escapeHtml(question.id)}"
-                              >${escapeHtml(question.prompt)}</textarea>
-                            </div>
-                          </div>
-                          <div class="row g-3 mb-3">
-                            <div class="col-12 col-lg-8">
-                              <label class="form-label">URL ảnh minh họa</label>
-                              <input
-                                class="form-control"
-                                value="${escapeHtml(question.imageUrl || '')}"
-                                placeholder="https://..."
-                                data-field="image-url"
-                                data-question-id="${escapeHtml(question.id)}"
-                              />
-                            </div>
-                            <div class="col-12 col-lg-4">
-                              <label class="form-label">Mô tả ảnh</label>
-                              <input
-                                class="form-control"
-                                value="${escapeHtml(question.imageAlt || '')}"
-                                placeholder="Mô tả ngắn cho ảnh"
-                                data-field="image-alt"
-                                data-question-id="${escapeHtml(question.id)}"
-                              />
-                            </div>
-                            <div class="col-12">
-                              <div class="d-flex flex-wrap gap-2 align-items-center">
-                                <button
-                                  type="button"
-                                  class="btn btn-sm btn-outline-secondary"
-                                  data-action="pick-question-image"
-                                  data-question-id="${escapeHtml(question.id)}"
-                                  ${!imageUploadEnabled || Boolean(uploadingQuestionId) ? 'disabled' : ''}
-                                >
-                                  ${
-                                    uploadingQuestionId === question.id
-                                      ? '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Đang tải ảnh...'
-                                      : '<i class="bi bi-image me-1"></i>Tải ảnh'
-                                  }
-                                </button>
-                                <button
-                                  type="button"
-                                  class="btn btn-sm btn-outline-danger"
-                                  data-action="remove-question-image"
-                                  data-question-id="${escapeHtml(question.id)}"
-                                  ${!question.imageUrl || Boolean(uploadingQuestionId) ? 'disabled' : ''}
-                                >
-                                  <i class="bi bi-trash me-1"></i>Xóa ảnh
-                                </button>
-                                <span class="small text-secondary">
-                                  ${
-                                    imageUploadEnabled
-                                      ? 'Có thể dán URL ảnh hoặc tải ảnh lên trực tiếp cho từng câu hỏi.'
-                                      : 'Cloudinary chưa cấu hình, bạn vẫn có thể dán URL ảnh thủ công.'
-                                  }
-                                </span>
-                              </div>
-                              ${renderQuestionImagePreview(question.imageUrl, question.imageAlt, question.prompt)}
-                            </div>
-                          </div>
-                          ${
-                            isFillBlankQuestion(question)
-                              ? `
-                                <div class="row g-3">
-                                  <div class="col-12 col-lg-8">
-                                    <label class="form-label">Gợi ý trong ô trả lời</label>
-                                    <input
-                                      class="form-control"
-                                      value="${escapeHtml(question.blankPlaceholder || '')}"
-                                      placeholder="Ví dụ: Nhập tên hàm"
-                                      data-field="blank-placeholder"
-                                      data-question-id="${escapeHtml(question.id)}"
-                                    />
-                                  </div>
-                                  <div class="col-12 col-lg-4">
-                                    <label class="form-label">So khớp chữ hoa/thường</label>
-                                    <div class="form-check form-switch border rounded-3 px-3 py-2 h-100 d-flex align-items-center">
-                                      <input
-                                        class="form-check-input me-2"
-                                        type="checkbox"
-                                        role="switch"
-                                        data-field="case-sensitive"
-                                        data-question-id="${escapeHtml(question.id)}"
-                                        ${question.caseSensitive ? 'checked' : ''}
-                                      />
-                                      <label class="form-check-label">Phân biệt hoa thường</label>
-                                    </div>
-                                  </div>
-                                  <div class="col-12">
-                                    <label class="form-label">Đáp án chấp nhận</label>
-                                    <textarea
-                                      class="form-control"
-                                      rows="4"
-                                      placeholder="Mỗi dòng là một đáp án hợp lệ"
-                                      data-field="accepted-answers"
-                                      data-question-id="${escapeHtml(question.id)}"
-                                    >${escapeHtml(stringifyAcceptedAnswers(question.acceptedAnswers))}</textarea>
-                                    <div class="form-text">Bạn có thể nhập nhiều đáp án tương đương, mỗi dòng một đáp án.</div>
-                                  </div>
-                                </div>
-                              `
-                              : `
-                                <div class="quiz-admin-option-list">
-                                  ${(question.options || [])
-                                    .map(
-                                      (option, optionIndex) => `
-                                        <div class="quiz-admin-option-row">
-                                          <div class="form-check">
-                                            <input
-                                              class="form-check-input"
-                                              type="radio"
-                                              name="correct-option-${escapeHtml(question.id)}"
-                                              ${question.correctOptionId === option.id ? 'checked' : ''}
-                                              data-action="set-correct-option"
-                                              data-question-id="${escapeHtml(question.id)}"
-                                              data-option-id="${escapeHtml(option.id)}"
-                                            />
-                                          </div>
-                                          <input
-                                            class="form-control"
-                                            value="${escapeHtml(option.text)}"
-                                            placeholder="Đáp án ${optionIndex + 1}"
-                                            data-field="option-text"
-                                            data-question-id="${escapeHtml(question.id)}"
-                                            data-option-id="${escapeHtml(option.id)}"
-                                          />
-                                          <button
-                                            type="button"
-                                            class="btn btn-outline-secondary"
-                                            data-action="remove-option"
-                                            data-question-id="${escapeHtml(question.id)}"
-                                            data-option-id="${escapeHtml(option.id)}"
-                                            ${(question.options || []).length <= 2 ? 'disabled' : ''}
-                                          >
-                                            <i class="bi bi-dash-circle"></i>
-                                          </button>
-                                        </div>
-                                      `,
-                                    )
-                                    .join('')}
-                                </div>
-                                <div class="mt-3">
-                                  <button
-                                    type="button"
-                                    class="btn btn-sm btn-outline-primary"
-                                    data-action="add-option"
-                                    data-question-id="${escapeHtml(question.id)}"
-                                  >
-                                    <i class="bi bi-plus-circle me-1"></i>Thêm đáp án
-                                  </button>
-                                </div>
-                              `
-                          }
-                        </section>
-                      `,
-                    )
-                    .join('')}
-                </div>
-              `
-              : renderEmptyState({
-                  icon: 'list-check',
-                  title: `Chưa có câu hỏi cho buổi ${selectedSessionNumber}`,
-                  description: 'Bấm "Thêm câu hỏi" để bắt đầu soạn đề trắc nghiệm cho chương trình này.',
-                })
-        }
-      </div>
-      <div class="card-footer bg-white border-0 pt-0">
-        <button
-          type="button"
-          class="btn btn-primary w-100"
-          data-action="save-quiz"
-          ${isSaving || Boolean(uploadingQuestionId) ? 'disabled' : ''}
-        >
-          ${
-            isSaving
-              ? '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Đang lưu cấu hình...'
-              : '<i class="bi bi-save me-2"></i>Lưu cấu hình bài kiểm tra'
-          }
-        </button>
-      </div>
-    </div>
-  `;
-}
-
-function renderAttemptList({
-  classes,
-  selectedClassCode,
-  selectedSessionFilter,
-  sessionFilterOptions = [],
-  attempts,
-  isLoading,
-  error,
-  selectedAttemptId,
-}) {
-  return `
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white border-0">
-        <h2 class="h5 mb-1">Bài nộp của học sinh</h2>
-        <p class="text-secondary mb-0">Theo dõi trạng thái nộp bài, điểm chấm tự động và mở lại khi cần.</p>
-      </div>
-      <div class="card-body">
-        <div class="row g-3 mb-3">
-          <div class="col-12 col-lg-8">
-            <label class="form-label">Lớp</label>
-            <select id="quiz-attempt-class-select" class="form-select">
-              <option value="">Chọn lớp để xem bài nộp</option>
-              ${classes
-                .map(
-                  (classItem) => `
-                    <option value="${escapeHtml(classItem.classCode)}" ${classItem.classCode === selectedClassCode ? 'selected' : ''}>
-                      ${escapeHtml(classItem.classCode)} - ${escapeHtml(classItem.className)}
-                    </option>
-                  `,
-                )
-                .join('')}
-            </select>
-          </div>
-          <div class="col-12 col-lg-4">
-            <label class="form-label">Lọc theo buổi</label>
-            <select id="quiz-attempt-session-filter" class="form-select">
-              <option value="all" ${selectedSessionFilter === 'all' ? 'selected' : ''}>Tất cả</option>
-              ${sessionFilterOptions.map(
-                (item) => `
-                  <option value="${item.sessionNumber}" ${Number(selectedSessionFilter) === item.sessionNumber ? 'selected' : ''}>
-                    Buổi ${item.sessionNumber} - ${escapeHtml(getCurriculumActivityTypeLabel(item.activityType))}
-                  </option>
-                `,
-              ).join('')}
-            </select>
-          </div>
-        </div>
-        ${
-          !selectedClassCode
-            ? renderEmptyState({
-                icon: 'inboxes',
-                title: 'Chưa chọn lớp',
-                description: 'Chọn một lớp ở trên để xem danh sách bài nộp trắc nghiệm.',
-              })
-            : isLoading
-              ? renderLoadingOverlay('Đang tải danh sách bài nộp...')
-              : error
-                ? renderAlert(escapeHtml(error), 'danger')
-                : attempts.length > 0
-                  ? `
-                    <div class="table-responsive">
-                      <table class="table align-middle quiz-attempt-table">
-                        <thead>
-                          <tr>
-                            <th>Học sinh</th>
-                            <th>Buổi</th>
-                            <th>Trạng thái</th>
-                            <th>Điểm</th>
-                            <th>Nộp lúc</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          ${attempts
-                            .map(
-                              (attempt) => `
-                                <tr
-                                  class="quiz-attempt-row ${attempt.id === selectedAttemptId ? 'quiz-attempt-row--active' : ''}"
-                                >
-                                  <td>
-                                    <button
-                                      type="button"
-                                      class="btn btn-link p-0 text-start fw-semibold quiz-attempt-name"
-                                      data-action="open-attempt-modal"
-                                      data-attempt-id="${escapeHtml(attempt.id)}"
-                                    >
-                                      ${escapeHtml(attempt.studentName)}
-                                    </button>
-                                    <div class="small text-secondary">
-                                      ${escapeHtml(attempt.quizTitle || 'Bài kiểm tra')} · Kiểm tra
-                                    </div>
-                                  </td>
-                                  <td>Buổi ${Number(attempt.sessionNumber || 0)}</td>
-                                  <td>${getAttemptStatusBadge(attempt)}</td>
-                                  <td>${renderAttemptScore(attempt)}</td>
-                                  <td>${escapeHtml(formatDateTime(attempt.submittedAt))}</td>
-                                </tr>
-                              `,
-                            )
-                            .join('')}
-                        </tbody>
-                      </table>
-                    </div>
-                  `
-                  : renderEmptyState({
-                      icon: 'clipboard2-x',
-                      title: 'Chưa có bài nộp',
-                      description: 'Lớp này chưa có học sinh nộp bài trong phạm vi lọc hiện tại.',
-                    })
-        }
-      </div>
-    </div>
-  `;
-}
-
-function renderAttemptDetail(attempt, options = {}) {
-  const isReopening = Boolean(options.isReopening);
-  const modalInfo = String(options.info || '').trim();
-  const modalError = String(options.error || '').trim();
-  const submissionHistory = Array.isArray(options.submissionHistory)
-    ? options.submissionHistory
-    : getAttemptSubmissionHistory(attempt);
-  const bestSubmission = options.bestSubmission || getBestAttemptSubmission(attempt);
-  const latestSubmission = options.latestSubmission || getLatestAttemptSubmission(attempt);
-  const bestSubmissionNumber = Number(bestSubmission?.submissionNumber || attempt?.bestSubmissionNumber || 0);
-  const latestSubmissionNumber = Number(latestSubmission?.submissionNumber || 0);
-  const questionComparisonRows = buildQuestionComparisonRows(submissionHistory);
-  const statusMeta = getAttemptStatusMeta(attempt);
-
-  if (!attempt) {
-    return renderEmptyState({
-      icon: 'file-earmark-check',
-      title: 'Chọn một bài nộp',
-      description: 'Bấm vào tên học sinh trong bảng để xem chi tiết bài nộp và mở lại lượt làm nếu cần.',
-    });
-  }
-
-  return `
-    <div class="card border-0 shadow-sm h-100">
-      <div class="card-header bg-white border-0">
-        <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start">
-          <div>
-            <h2 class="h5 mb-1">${escapeHtml(attempt.studentName)}</h2>
-            <p class="text-secondary mb-0">
-              ${escapeHtml(attempt.classCode)} · Buổi ${Number(attempt.sessionNumber || 0)} · ${escapeHtml(attempt.quizTitle || 'Bài kiểm tra')}
-            </p>
-          </div>
-          <div class="d-flex flex-wrap gap-2 align-items-center justify-content-end">
-            <button
-              type="button"
-              class="btn btn-outline-primary"
-              data-action="reopen-attempt"
-              data-attempt-id="${escapeHtml(attempt.id)}"
-              data-class-code="${escapeHtml(attempt.classCode || '')}"
-              data-student-id="${escapeHtml(attempt.studentId || '')}"
-              data-session-number="${Number(attempt.sessionNumber || 0)}"
-              data-quiz-mode="${escapeHtml(attempt.quizMode || QUIZ_MODE_OFFICIAL)}"
-              ${attempt.status === QUIZ_ATTEMPT_STATUS_REOPENED || isReopening ? 'disabled' : ''}
-            >
-              ${
-                isReopening
-                  ? '<span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Đang mở lại...'
-                  : '<i class="bi bi-arrow-repeat me-2"></i>Mở lại cho học sinh làm lại'
-              }
-            </button>
-            ${getAttemptStatusBadge(attempt)}
-            <span class="badge bg-white text-dark border">${renderAttemptScore(bestSubmission || attempt)}</span>
-          </div>
-        </div>
-      </div>
-      <div class="card-body">
-        ${
-          modalInfo
-            ? `
-              <div class="alert alert-info d-flex align-items-center gap-2" role="alert">
-                <span class="spinner-border spinner-border-sm flex-shrink-0 ${isReopening ? '' : 'd-none'}" aria-hidden="true"></span>
-                <span>${escapeHtml(modalInfo)}</span>
-              </div>
-            `
-            : ''
-        }
-        ${
-          modalError
-            ? `
-              <div class="alert alert-danger" role="alert">
-                ${escapeHtml(modalError)}
-              </div>
-            `
-            : ''
-        }
-        <div class="row g-3 mb-4">
-          <div class="col-12 col-md-4">
-            <div class="quiz-status-meta">
-              <div class="quiz-status-meta__label">Số lượt làm đã ghi nhận</div>
-              <div class="fw-semibold">${submissionHistory.length || attempt.submissionCount || 1}</div>
-            </div>
-          </div>
-          <div class="col-12 col-md-4">
-            <div class="quiz-status-meta">
-              <div class="quiz-status-meta__label">Điểm cao nhất</div>
-              <div class="fw-semibold">${renderAttemptScore(bestSubmission || attempt)}</div>
-            </div>
-          </div>
-          <div class="col-12 col-md-4">
-            <div class="quiz-status-meta">
-              <div class="quiz-status-meta__label">Lần nộp gần nhất</div>
-              <div class="fw-semibold">${
-                latestSubmission
-                  ? `Lần ${Number(latestSubmission.submissionNumber || 0)} · ${renderAttemptScore(latestSubmission)}`
-                  : 'Chưa có dữ liệu'
-              }</div>
-            </div>
-          </div>
-        </div>
-        <div class="alert ${attempt.status === QUIZ_ATTEMPT_STATUS_REOPENED ? 'alert-warning' : hasAttemptRetakeAfterReopen(attempt) ? 'alert-success' : 'alert-secondary'}" role="alert">
-          <div class="fw-semibold mb-1">Trạng thái hiện tại: ${escapeHtml(statusMeta.label)}</div>
-          <div>${escapeHtml(statusMeta.detail)}</div>
-        </div>
-        ${
-          submissionHistory.length > 1
-            ? `
-              <div class="mb-4">
-                <h3 class="h6 mb-3">So sánh các lần làm</h3>
-                <div class="row g-3">
-                  ${submissionHistory
-                    .map((submission) => {
-                      const submissionNumber = Number(submission.submissionNumber || 0);
-                      const isBestSubmission = submissionNumber === bestSubmissionNumber;
-                      const isLatestSubmission = submissionNumber === latestSubmissionNumber;
-
-                      return `
-                        <div class="col-12 col-md-6">
-                          <div class="quiz-status-meta h-100">
-                            <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
-                              <div class="quiz-status-meta__label mb-0">Lần ${submissionNumber || '?'}</div>
-                              ${isBestSubmission ? '<span class="badge text-bg-success">Tốt nhất</span>' : ''}
-                              ${isLatestSubmission ? '<span class="badge text-bg-info">Mới nhất</span>' : ''}
-                            </div>
-                            <div class="fw-semibold mb-2">${renderAttemptScore(submission)}</div>
-                            <div class="small text-secondary">${escapeHtml(formatDateTime(submission.submittedAt))}</div>
-                          </div>
-                        </div>
-                      `;
-                    })
-                    .join('')}
-                </div>
-              </div>
-            `
-            : ''
-        }
-        ${
-          attempt.status === QUIZ_ATTEMPT_STATUS_REOPENED && attempt.reopenedAt
-            ? `
-              <div class="alert alert-warning" role="alert">
-                Bài này đã được mở lại lúc ${escapeHtml(formatDateTime(attempt.reopenedAt))}${
-                  attempt.reopenedBy ? ` bởi ${escapeHtml(attempt.reopenedBy)}` : ''
-                }.
-              </div>
-            `
-            : ''
-        }
-        ${
-          !submissionHistory.some((submission) => submission?.gradingReady)
-            ? `
-              <div class="alert alert-secondary" role="alert">
-                Chưa tải được đáp án chính xác của đề nên chưa hiển thị chi tiết chấm bài.
-              </div>
-            `
-            : ''
-        }
-        <div class="quiz-attempt-answer-list">
-          ${questionComparisonRows
-            .map(
-              (question, index) => `
-                <section class="quiz-answer-card">
-                  <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start mb-3">
-                    <div>
-                      <div class="d-flex flex-wrap gap-2 mb-2">
-                        <span class="badge text-bg-light text-dark border">Câu ${index + 1}</span>
-                        <span class="badge bg-white text-dark border">${escapeHtml(getQuizQuestionTypeLabel(question.questionType))}</span>
-                      </div>
-                      <div class="fw-semibold">${nl2br(question.prompt)}</div>
-                      ${renderQuestionImagePreview(question.imageUrl, question.imageAlt, question.prompt)}
-                    </div>
-                  </div>
-                  <div class="row g-3 mb-3">
-                    <div class="col-12">
-                      <div class="quiz-status-meta">
-                        <div class="quiz-status-meta__label">${question.questionType === QUIZ_QUESTION_TYPE_FILL_BLANK ? 'Đáp án chấp nhận' : 'Đáp án đúng'}</div>
-                        <div>${nl2br(question.correctOptionText)}</div>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="row g-3">
-                    ${submissionHistory
-                      .map((submission) => {
-                        const submissionNumber = Number(submission.submissionNumber || 0);
-                        const comparedQuestion = question.responsesBySubmission.get(submissionNumber) || null;
-                        const statusLabel = !comparedQuestion ? 'Không có câu này' : comparedQuestion.isCorrect ? 'Đúng' : 'Sai';
-                        const statusClass = !comparedQuestion
-                          ? 'text-bg-secondary'
-                          : comparedQuestion.isCorrect
-                            ? 'text-bg-success'
-                            : 'text-bg-danger';
-                        const answerLabel = question.questionType === QUIZ_QUESTION_TYPE_FILL_BLANK ? 'Học sinh trả lời' : 'Học sinh chọn';
-                        const answerMarkup = !comparedQuestion
-                          ? '<span class="text-secondary">Lượt này không gặp câu hỏi này trong bộ đề ngẫu nhiên.</span>'
-                          : comparedQuestion.selectedOptionText
-                            ? nl2br(comparedQuestion.selectedOptionText)
-                            : `<span class="text-secondary">${
-                                question.questionType === QUIZ_QUESTION_TYPE_FILL_BLANK ? 'Chưa trả lời' : 'Chưa chọn'
-                              }</span>`;
-
-                        return `
-                          <div class="col-12 col-xl-6">
-                            <div class="quiz-status-meta h-100">
-                              <div class="d-flex flex-wrap justify-content-between gap-2 align-items-center mb-2">
-                                <div class="quiz-status-meta__label mb-0">Lần ${submissionNumber || '?'}</div>
-                                <span class="badge ${statusClass}">${statusLabel}</span>
-                              </div>
-                              <div class="small text-secondary mb-2">${escapeHtml(formatDateTime(submission.submittedAt))}</div>
-                              <div class="small text-uppercase text-secondary fw-semibold mb-1">${answerLabel}</div>
-                              <div>${answerMarkup}</div>
-                            </div>
-                          </div>
-                        `;
-                      })
-                      .join('')}
-                  </div>
-                </section>
-              `,
-            )
-            .join('')}
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function renderAttemptDetailModal(attempt, isOpen = false, options = {}) {
-  if (!isOpen || !attempt) {
-    return '';
-  }
-
-  return `
-    <div class="quiz-modal-backdrop" data-action="close-attempt-modal">
-      <div class="quiz-modal-dialog" role="dialog" aria-modal="true" aria-label="Chi tiết bài nộp">
-        <div class="d-flex justify-content-end mb-3">
-          <button type="button" class="btn btn-outline-secondary btn-sm" data-action="close-attempt-modal">
-            <i class="bi bi-x-lg me-2"></i>Đóng
-          </button>
-        </div>
-        ${renderAttemptDetail(attempt, options)}
-      </div>
-    </div>
-  `;
-}
-
 export function renderQuizManagementContent({
   hideTabs = false,
   showBothPanels = false,
   enableOperations = QUIZ_OPERATIONS_ENABLED,
+  mode = 'full',
+  showLaunchControl = true,
 } = {}) {
   const operationsEnabled = Boolean(enableOperations);
+  const normalizedMode = ['editor', 'operations', 'full'].includes(mode) ? mode : 'full';
+  const renderEditorPanel = normalizedMode !== 'operations';
+  const renderOperationsPanel = operationsEnabled && normalizedMode !== 'editor';
+  const renderTabs = normalizedMode === 'full' && !hideTabs && operationsEnabled;
 
   return `
-    <div id="quiz-tabs-slot">${hideTabs || !operationsEnabled ? '' : renderQuizPageTabs('editor')}</div>
-    <section id="quiz-editor-panel">
-      <div id="quiz-editor-slot">${renderLoadingOverlay('Đang tải cấu hình trắc nghiệm...')}</div>
-    </section>
+    <div id="quiz-tabs-slot">${renderTabs ? renderQuizPageTabs('editor') : ''}</div>
     ${
-      operationsEnabled
+      renderEditorPanel
         ? `
-          <section id="quiz-operations-panel" class="${showBothPanels ? 'mt-4' : 'd-none'}">
-            <div class="row g-4">
-              <div class="col-12 col-xl-5">
-                <div class="d-grid gap-4">
-                  <div id="quiz-launch-control-slot">${renderLoadingOverlay('Đang tải điều khiển bài kiểm tra...')}</div>
-                  <div id="quiz-attempt-list-slot">${renderLoadingOverlay('Đang tải danh sách lớp...')}</div>
-                </div>
-              </div>
-              <div class="col-12 col-xl-7">
-                <div id="quiz-report-slot">${renderLoadingOverlay('Đang tổng hợp báo cáo nhanh...')}</div>
-              </div>
-            </div>
+          <section id="quiz-editor-panel">
+            <div id="quiz-editor-slot">${renderLoadingOverlay('Đang tải cấu hình trắc nghiệm...')}</div>
+          </section>
+        `
+        : ''
+    }
+    ${
+      renderOperationsPanel
+        ? `
+          <section id="quiz-operations-panel" class="${normalizedMode === 'operations' || showBothPanels ? 'mt-4' : 'd-none'}">
+            <div id="quiz-operation-tabs-slot"></div>
+            ${
+              showLaunchControl
+                ? `<div id="quiz-launch-control-slot" class="mb-3">${renderLoadingOverlay('Đang tải điều khiển bài kiểm tra...')}</div>`
+                : ''
+            }
+            <section id="quiz-operation-overview-panel">
+              <div id="quiz-report-slot">${renderLoadingOverlay('Đang tổng hợp báo cáo nhanh...')}</div>
+            </section>
+            <section id="quiz-operation-attempts-panel" class="d-none">
+              <div id="quiz-attempt-list-slot">${renderLoadingOverlay('Đang tải danh sách lớp...')}</div>
+            </section>
           </section>
         `
         : ''
     }
     <div id="quiz-attempt-modal-slot"></div>
+  `;
+}
+
+function renderQuizOperationTabs(activeTab = 'overview') {
+  const tabs = [
+    { id: 'overview', label: 'Báo cáo nhanh', icon: 'bar-chart-line' },
+    { id: 'attempts', label: 'Bài nộp', icon: 'clipboard-check' },
+  ];
+
+  return `
+    <div class="quiz-control-tabs" role="tablist" aria-label="Trung tâm điều khiển quiz">
+      ${tabs
+        .map((tab) => `
+          <button
+            type="button"
+            class="quiz-control-tab ${tab.id === activeTab ? 'quiz-control-tab--active' : ''}"
+            data-action="switch-quiz-operation-tab"
+            data-tab-id="${tab.id}"
+          >
+            <i class="bi bi-${tab.icon} me-2"></i>${tab.label}
+          </button>
+        `)
+        .join('')}
+    </div>
   `;
 }
 
@@ -1688,23 +448,33 @@ export async function mountQuizManagement({
   hideTabs = false,
   showBothPanels = false,
   enableOperations = QUIZ_OPERATIONS_ENABLED,
+  mode = 'full',
+  showLaunchControl = true,
 } = {}) {
     const operationsEnabled = Boolean(enableOperations);
+    const normalizedMode = ['editor', 'operations', 'full'].includes(mode) ? mode : 'full';
     const savedUiState = {
-      activeTab: operationsEnabled && !forceDefaultTab
+      activeTab: normalizedMode === 'operations'
+        ? 'operations'
+        : normalizedMode === 'editor'
+          ? 'editor'
+          : operationsEnabled && !forceDefaultTab
         ? loadQuizAdminUiState().activeTab || defaultActiveTab
         : defaultActiveTab,
     };
     const tabsSlot = document.getElementById('quiz-tabs-slot');
     const editorPanel = document.getElementById('quiz-editor-panel');
     const operationsPanel = document.getElementById('quiz-operations-panel');
+    const operationTabsSlot = document.getElementById('quiz-operation-tabs-slot');
+    const operationOverviewPanel = document.getElementById('quiz-operation-overview-panel');
+    const operationAttemptsPanel = document.getElementById('quiz-operation-attempts-panel');
     const editorSlot = document.getElementById('quiz-editor-slot');
     const launchControlSlot = document.getElementById('quiz-launch-control-slot');
     const attemptListSlot = document.getElementById('quiz-attempt-list-slot');
     const reportSlot = document.getElementById('quiz-report-slot');
     const attemptModalSlot = document.getElementById('quiz-attempt-modal-slot');
 
-    if (!editorSlot) {
+    if (!editorSlot && !attemptListSlot && !reportSlot) {
       return null;
     }
 
@@ -1730,6 +500,7 @@ export async function mountQuizManagement({
       selectedSessionFilter: 'all',
       selectedAttemptId: '',
       activeTab: operationsEnabled && savedUiState.activeTab === 'operations' ? 'operations' : 'editor',
+      operationTab: 'overview',
       isAttemptModalOpen: false,
       reopeningAttemptId: '',
       attemptModalInfo: '',
@@ -1792,27 +563,41 @@ export async function mountQuizManagement({
     function renderView() {
       persistQuizAdminUiState(state);
       if (tabsSlot) {
-        tabsSlot.innerHTML = hideTabs || !operationsEnabled ? '' : renderQuizPageTabs(state.activeTab);
+        tabsSlot.innerHTML =
+          normalizedMode === 'full' && !hideTabs && operationsEnabled
+            ? renderQuizPageTabs(state.activeTab)
+            : '';
       }
 
-      if (!operationsEnabled) {
+      if (normalizedMode === 'editor' || !operationsEnabled) {
         editorPanel?.classList.remove('d-none');
         operationsPanel?.classList.add('d-none');
+      } else if (normalizedMode === 'operations') {
+        editorPanel?.classList.add('d-none');
+        operationsPanel?.classList.remove('d-none');
       } else if (showBothPanels) {
-        editorPanel.classList.remove('d-none');
-        operationsPanel.classList.remove('d-none');
-        operationsPanel.classList.add('mt-4');
+        editorPanel?.classList.remove('d-none');
+        operationsPanel?.classList.remove('d-none');
+        operationsPanel?.classList.add('mt-4');
       } else {
-        editorPanel.classList.toggle('d-none', state.activeTab !== 'editor');
-        operationsPanel.classList.toggle('d-none', state.activeTab !== 'operations');
+        editorPanel?.classList.toggle('d-none', state.activeTab !== 'editor');
+        operationsPanel?.classList.toggle('d-none', state.activeTab !== 'operations');
       }
+
+      if (operationTabsSlot) {
+        operationTabsSlot.innerHTML = renderQuizOperationTabs(state.operationTab);
+      }
+
+      operationOverviewPanel?.classList.toggle('d-none', state.operationTab !== 'overview');
+      operationAttemptsPanel?.classList.toggle('d-none', state.operationTab !== 'attempts');
 
       const manageableClasses = getQuizManageableClasses(state.classes);
       const selectedClass = getSelectedClass(manageableClasses, state.selectedClassCode);
       const selectedProgram = state.programs.find((program) => program.id === state.selectedProgramId) || null;
       const selectedClassProgram = getClassProgram(selectedClass, state.programs);
       const selectedClassActivity = getClassQuizActivity(selectedClass, state.programs);
-      const sessionFilterOptions = getProgramSessionOptions(selectedClassProgram || selectedProgram);
+      const sessionFilterOptions = getProgramSessionOptions(selectedClassProgram || selectedProgram)
+        .filter((session) => isCurriculumQuizActivity(session.activityType));
       const activeClassConfigs = getActiveQuizConfigsForClass(
         selectedClass,
         state.quizConfigs,
@@ -1826,30 +611,34 @@ export async function mountQuizManagement({
       const selectedAttempt = getSelectedAttempt(filteredAttempts);
       const officialReportAttempts = filteredAttempts.filter((attempt) => isOfficialQuizMode(attempt.quizMode));
 
-      editorSlot.innerHTML = renderQuizEditor({
-        programs: state.programs,
-        selectedProgramId: state.selectedProgramId,
-        selectedSessionNumber: state.selectedSessionNumber,
-        selectedProgram,
-        draft: state.draft,
-        isLoading: state.quizLoading,
-        isSaving: state.isSavingQuiz,
-        uploadingQuestionId: state.uploadingQuestionId,
-        imageUploadEnabled: isCloudinaryConfigured(),
-        error: state.quizError,
-        contextLocked: Boolean(lockedProgramId || lockedSessionNumber),
-      });
+      if (editorSlot) {
+        editorSlot.innerHTML = renderQuizEditor({
+          programs: state.programs,
+          selectedProgramId: state.selectedProgramId,
+          selectedSessionNumber: state.selectedSessionNumber,
+          selectedProgram,
+          draft: state.draft,
+          isLoading: state.quizLoading,
+          isSaving: state.isSavingQuiz,
+          uploadingQuestionId: state.uploadingQuestionId,
+          imageUploadEnabled: isCloudinaryConfigured(),
+          error: state.quizError,
+          contextLocked: Boolean(lockedProgramId || lockedSessionNumber),
+        });
+      }
 
-      if (operationsEnabled && launchControlSlot && attemptListSlot && reportSlot) {
-        launchControlSlot.innerHTML = renderClassQuizLaunchControl({
+      if (operationsEnabled && launchControlSlot) {
+        launchControlSlot.innerHTML = showLaunchControl ? renderClassQuizLaunchControl({
           selectedClass,
           currentQuizConfig,
           sessionActivity: selectedClassActivity,
           liveAttemptCount: filteredLiveAttempts.length,
           isUpdating: state.isUpdatingClassQuiz,
           error: state.classQuizError,
-        });
+        }) : '';
+      }
 
+      if (operationsEnabled && attemptListSlot && reportSlot) {
         attemptListSlot.innerHTML = renderAttemptList({
           classes: manageableClasses,
           selectedClassCode: state.selectedClassCode,
@@ -2135,7 +924,7 @@ export async function mountQuizManagement({
       renderView();
     });
 
-    editorSlot.addEventListener('change', async (event) => {
+    editorSlot?.addEventListener('change', async (event) => {
       const programSelect = event.target.closest('#quiz-program-select');
       const sessionSelect = event.target.closest('#quiz-session-select');
       const questionImageInput = event.target.closest('#quiz-question-image-input');
@@ -2238,7 +1027,7 @@ export async function mountQuizManagement({
       }
     });
 
-    editorSlot.addEventListener('input', (event) => {
+    editorSlot?.addEventListener('input', (event) => {
       const titleInput = event.target.closest('#quiz-title-input');
       const descriptionInput = event.target.closest('#quiz-description-input');
       const promptInput = event.target.closest('[data-field="prompt"]');
@@ -2321,9 +1110,10 @@ export async function mountQuizManagement({
       }
     });
 
-    editorSlot.addEventListener('click', async (event) => {
+    editorSlot?.addEventListener('click', async (event) => {
       const sessionButton = event.target.closest('[data-action="select-session"]');
       const addQuestionButton = event.target.closest('[data-action="add-question"]');
+      const useSampleButton = event.target.closest('[data-action="use-quiz-sample"]');
       const removeQuestionButton = event.target.closest('[data-action="remove-question"]');
       const pickQuestionImageButton = event.target.closest('[data-action="pick-question-image"]');
       const removeQuestionImageButton = event.target.closest('[data-action="remove-question-image"]');
@@ -2342,6 +1132,32 @@ export async function mountQuizManagement({
 
       if (addQuestionButton) {
         addQuestion();
+        renderView();
+        return;
+      }
+
+      if (useSampleButton) {
+        try {
+          const selectedProgram = state.programs.find((program) => program.id === state.selectedProgramId) || null;
+
+          if (!selectedProgram) {
+            throw new Error('Hãy chọn chương trình trước khi dùng bộ đề mẫu.');
+          }
+
+          state.draft = buildQuizSampleConfig({
+            subject: selectedProgram.subject || state.draft.subject || '',
+            level: selectedProgram.level || state.draft.level || '',
+            sessionNumber: state.selectedSessionNumber,
+          });
+          state.quizError = '';
+          showToast({
+            title: 'Đã nạp bộ đề mẫu',
+            message: `Bộ đề mẫu buổi ${state.selectedSessionNumber} đã được đưa vào editor. Hãy kiểm tra rồi bấm lưu.`,
+            variant: 'success',
+          });
+        } catch (error) {
+          state.quizError = getErrorMessage(error, 'Không thể nạp bộ đề mẫu cho buổi này.');
+        }
         renderView();
         return;
       }
@@ -2504,6 +1320,17 @@ export async function mountQuizManagement({
         state.isUpdatingClassQuiz = false;
         renderView();
       }
+    });
+
+    operationsPanel?.addEventListener('click', (event) => {
+      const operationTabButton = event.target.closest('[data-action="switch-quiz-operation-tab"]');
+
+      if (!operationTabButton) {
+        return;
+      }
+
+      state.operationTab = operationTabButton.dataset.tabId === 'attempts' ? 'attempts' : 'overview';
+      renderView();
     });
 
     attemptListSlot?.addEventListener('change', async (event) => {

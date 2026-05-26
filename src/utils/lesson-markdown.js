@@ -80,14 +80,26 @@ export function normalizeLessonMarkdownTab(value = '') {
 }
 
 export function hasLessonExerciseContent(lesson = {}) {
+  if (!lesson) {
+    return false;
+  }
+
   return Boolean(toText(lesson.exerciseMarkdown));
 }
 
 export function hasVisibleLessonExercises(lesson = {}) {
+  if (!lesson) {
+    return false;
+  }
+
   return Boolean(lesson.exerciseVisible && hasLessonExerciseContent(lesson));
 }
 
 export function getLessonMarkdownSource(lesson = {}, tab = LESSON_MARKDOWN_TAB_LECTURE) {
+  if (!lesson) {
+    return '';
+  }
+
   const normalizedTab = normalizeLessonMarkdownTab(tab);
 
   if (normalizedTab === LESSON_MARKDOWN_TAB_EXERCISE) {

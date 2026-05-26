@@ -1,8 +1,10 @@
-import { renderSidebar } from './Sidebar.js';
+import { attachSidebarInteractions, renderSidebar } from './Sidebar.js';
 import { renderToastStack } from './ToastStack.js';
 import { renderTopbar } from './Topbar.js';
 
 export function renderAppShell({ title, subtitle = '', content = '', currentRoute = '', user = null }) {
+  queueMicrotask(() => attachSidebarInteractions(document));
+
   return `
     <div class="admin-shell">
       ${renderSidebar(currentRoute)}

@@ -1,28 +1,29 @@
 import {
+  getClassCurriculumView,
   getCurriculumProgram,
   listCurriculumPrograms,
 } from '../../services/curriculum.service.js';
 import {
-  buildCurriculumVisibleLessons,
-  getActiveCurriculumLessons,
   getCurriculumActivityTypeLabel,
   getCurriculumSessionActivities,
   getCurriculumSessionActivity,
 } from '../../utils/curriculum-program.js';
 import { escapeHtml } from '../../utils/html.js';
-import { hasLessonExerciseContent, normalizeLessonMarkdownTab } from '../../utils/lesson-markdown.js';
+import { normalizeLessonMarkdownTab } from '../../utils/lesson-markdown.js';
+import {
+  buildProgramStudentExperienceContext,
+  buildStudentExperienceCapabilities,
+} from '../../utils/student-experience.js';
 import {
   buildAdminLessonPreviewPath,
-  buildAdminQuizPreviewPath,
   getHashRouteState,
 } from '../../utils/route.js';
 import { renderAlert } from '../components/Alert.js';
-import { renderAppShell } from '../components/AppShell.js';
+import { renderBrandLogo } from '../components/BrandLogo.js';
 import { renderEmptyState } from '../components/EmptyState.js';
 import { renderLoadingOverlay } from '../components/LoadingOverlay.js';
 import { renderStudentLibraryBrowser } from '../components/StudentLibraryBrowser.js';
-
-const QUIZ_UI_ENABLED = true;
+import { renderToastStack } from '../components/ToastStack.js';
 
 function resolveSessionNumber(program, requestedSessionNumber) {
   const sessions = getCurriculumSessionActivities(program);
@@ -35,80 +36,6 @@ function resolveSessionNumber(program, requestedSessionNumber) {
   return sessions[0]?.sessionNumber || 1;
 }
 
-function renderProgramShortcutList(programs = [], target = 'lesson') {
-  if (!programs.length) {
-    return renderEmptyState({
-      icon: 'diagram-3',
-      title: 'Chưa có chương trình học',
-      description: 'Hãy tạo hoặc seed chương trình học trước khi dùng đường dẫn test admin.',
-    });
-  }
-
-  return `
-    <div class="card border-0 shadow-sm">
-      <div class="card-header bg-white border-0">
-        <h2 class="h5 mb-1">Chọn chương trình để test nhanh</h2>
-      </div>
-      <div class="card-body">
-        <div class="row g-3">
-          ${programs
-            .map((program) => {
-              const firstSession = getCurriculumSessionActivities(program)[0]?.sessionNumber || 1;
-              const href =
-                target === 'quiz'
-                  ? buildAdminQuizPreviewPath(program.id, firstSession)
-                  : buildAdminLessonPreviewPath(program.id, firstSession);
-
-              return `
-                <div class="col-12 col-md-6 col-xl-4">
-                  <a class="text-decoration-none" href="${escapeHtml(href)}">
-                    <div class="card h-100 border-0 bg-light-subtle">
-                      <div class="card-body">
-                        <div class="small text-secondary mb-2">${escapeHtml(program.subject || 'Chương trình')}</div>
-                        <h3 class="h6 text-dark mb-2">${escapeHtml(program.name)}</h3>
-                        <div class="text-secondary small">Tổng ${Number(program.totalSessionCount || 0)} buổi</div>
-                      </div>
-                    </div>
-                  </a>
-                </div>
-              `;
-            })
-            .join('')}
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function buildAdminStudentPreview(program, sessionNumber) {
-  const lessons = getActiveCurriculumLessons(program).map((lesson) => ({
-    ...lesson,
-    exerciseVisible: hasLessonExerciseContent(lesson),
-  }));
-  const visibleLessons = buildCurriculumVisibleLessons(program, lessons, {
-    currentSession: sessionNumber,
-    curriculumPhase: 'learning',
-  });
-
-  return {
-    classInfo: {
-      classCode: '',
-      className: '',
-    },
-    assignment: {
-      currentSession: sessionNumber,
-      curriculumPhase: 'learning',
-    },
-    program: {
-      ...program,
-      lessons,
-    },
-    lessons,
-    visibleLessons,
-    checklistItems: [],
-  };
-}
-
 function getDefaultPreviewLessonId(preview, sessionNumber, preferredLessonId = '') {
   const lessons = preview?.visibleLessons || [];
 
@@ -118,123 +45,288 @@ function getDefaultPreviewLessonId(preview, sessionNumber, preferredLessonId = '
 
   return (
     lessons.find((lesson) => Number(lesson.sessionNumber || 0) === Number(sessionNumber || 0))?.id ||
+    lessons.find((lesson) => Number(lesson.sessionNumber || 0) === Number(preview?.assignment?.currentSession || 0))?.id ||
     lessons[lessons.length - 1]?.id ||
     ''
   );
 }
 
-function renderLessonPreview(program, sessionNumber, previewState = {}) {
-  const sessions = getCurriculumSessionActivities(program);
-  const selectedActivity = getCurriculumSessionActivity(program, sessionNumber);
-  const preview = buildAdminStudentPreview(program, sessionNumber);
-  const activeLessonId = getDefaultPreviewLessonId(preview, sessionNumber, previewState.lessonId);
-  const quizPreviewPath = buildAdminQuizPreviewPath(program.id, sessionNumber);
+function isStudentAccessibleClass(classItem = {}) {
+  return classItem.status === 'active' && !classItem.hidden;
+}
+
+function renderClassOption(classItem, selectedClassCode) {
+  return `
+    <option value="${escapeHtml(classItem.classCode)}" ${classItem.classCode === selectedClassCode ? 'selected' : ''}>
+      ${escapeHtml(`${classItem.classCode} - ${classItem.className || 'Không tên'}`)}
+    </option>
+  `;
+}
+
+function renderPreviewControls({
+  programs = [],
+  classes = [],
+  program = null,
+  selectedClassCode = '',
+  sessionNumber = 1,
+}) {
+  const sessions = program ? getCurriculumSessionActivities(program) : [];
+  const selectedActivity = program ? getCurriculumSessionActivity(program, sessionNumber) : null;
+  const activeClasses = classes.filter(isStudentAccessibleClass);
+  const activityLabel = selectedActivity
+    ? getCurriculumActivityTypeLabel(selectedActivity.activityType)
+    : 'Học kiến thức';
 
   return `
-    <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start mb-3">
-      <div>
-        <h2 class="h4 mb-1">${escapeHtml(program.name)}</h2>
-        <div class="text-secondary">Buổi ${sessionNumber} · ${escapeHtml(getCurriculumActivityTypeLabel(selectedActivity.activityType))}</div>
-      </div>
-      <div class="d-flex flex-wrap gap-2">
-        <a class="btn btn-outline-secondary" href="#/admin/curriculum">
-          <i class="bi bi-arrow-left me-2"></i>Quay lại Học liệu
-        </a>
-        ${
-          QUIZ_UI_ENABLED
-            ? `
-              <a class="btn btn-outline-primary" href="${escapeHtml(quizPreviewPath)}">
-                <i class="bi bi-play-circle me-2"></i>Test quiz admin
-              </a>
-            `
-            : ''
-        }
-      </div>
-    </div>
-
-    <div class="card border-0 shadow-sm mb-3">
-      <div class="card-body">
-        <div class="row g-3 align-items-end">
-          <div class="col-12 col-md-5">
-            <label class="form-label">Buổi muốn xem</label>
-            <select class="form-select" id="admin-lesson-preview-session">
-              ${sessions
-                .map(
-                  (item) => `
-                    <option value="${item.sessionNumber}" ${item.sessionNumber === sessionNumber ? 'selected' : ''}>
-                      Buổi ${item.sessionNumber} - ${escapeHtml(getCurriculumActivityTypeLabel(item.activityType))}
-                    </option>
-                  `,
-                )
-                .join('')}
-            </select>
-          </div>
-        </div>
+    <div class="admin-student-preview-bar admin-student-preview-bar--compact">
+      <a class="admin-student-preview-back" href="#/admin/curriculum" aria-label="Quay lại Học liệu">
+        <i class="bi bi-arrow-left"></i>
+        <span>Học liệu</span>
+      </a>
+      ${
+        program
+          ? `
+            <div class="admin-student-preview-field admin-student-preview-field--readonly admin-student-preview-field--wide">
+              <label class="form-label">Chương trình</label>
+              <div class="admin-student-preview-readonly">${escapeHtml(program.name || 'Chưa chọn chương trình')}</div>
+            </div>
+          `
+          : ''
+      }
+      <div class="admin-student-preview-field admin-student-preview-field--readonly">
+        <label class="form-label">Buổi</label>
+        <div class="admin-student-preview-readonly">Buổi ${Number(sessionNumber || 0) || '?'} · ${escapeHtml(activityLabel)}</div>
       </div>
     </div>
+  `;
 
-    <div class="admin-lesson-student-preview">
-      ${renderStudentLibraryBrowser(preview, activeLessonId, previewState.imageSelections || {}, {
-        activeTab: normalizeLessonMarkdownTab(previewState.activeTab),
-        embedded: false,
-        lightboxImage: previewState.lightboxImage || null,
-      })}
+  return `
+    <div class="admin-student-preview-bar">
+      <a class="admin-student-preview-back" href="#/admin/curriculum" aria-label="Quay lại Học liệu">
+        <i class="bi bi-arrow-left"></i>
+        <span>Học liệu</span>
+      </a>
+      <div class="admin-student-preview-field">
+        <label class="form-label" for="admin-lesson-preview-class">Lớp</label>
+        <select class="form-select admin-student-preview-select" id="admin-lesson-preview-class">
+          <option value="" ${selectedClassCode ? '' : 'selected'}>Xem nội dung mẫu</option>
+          ${activeClasses.map((classItem) => renderClassOption(classItem, selectedClassCode)).join('')}
+        </select>
+      </div>
+      ${
+        selectedClassCode
+          ? `
+            <div class="admin-student-preview-field admin-student-preview-field--readonly">
+              <label class="form-label">Buổi</label>
+              <div class="admin-student-preview-readonly">
+                Buổi ${Number(sessionNumber || 0)}${selectedActivity ? ` · ${escapeHtml(getCurriculumActivityTypeLabel(selectedActivity.activityType))}` : ''}
+              </div>
+            </div>
+          `
+          : `
+            <div class="admin-student-preview-field">
+              <label class="form-label" for="admin-lesson-preview-program">Chương trình</label>
+              <select class="form-select admin-student-preview-select" id="admin-lesson-preview-program">
+                ${programs
+                  .map(
+                    (item) => `
+                      <option value="${escapeHtml(item.id)}" ${item.id === program?.id ? 'selected' : ''}>
+                        ${escapeHtml(item.name)}
+                      </option>
+                    `,
+                  )
+                  .join('')}
+              </select>
+            </div>
+            <div class="admin-student-preview-field">
+              <label class="form-label" for="admin-lesson-preview-session">Buổi</label>
+              <select class="form-select admin-student-preview-select" id="admin-lesson-preview-session">
+                ${sessions
+                  .map(
+                    (item) => `
+                      <option value="${item.sessionNumber}" ${item.sessionNumber === sessionNumber ? 'selected' : ''}>
+                        Buổi ${item.sessionNumber} - ${escapeHtml(getCurriculumActivityTypeLabel(item.activityType))}
+                      </option>
+                    `,
+                  )
+                  .join('')}
+              </select>
+            </div>
+          `
+      }
     </div>
   `;
 }
 
-export const adminLessonPreviewPage = {
-  async render({ authState }) {
-    return renderAppShell({
-      title: 'Xem thử học liệu',
-      currentRoute: '/admin/curriculum',
-      user: authState.user,
-      content: '<div id="admin-lesson-preview-root"></div>',
+function renderProgramShortcutList(programs = []) {
+  if (!programs.length) {
+    return renderEmptyState({
+      icon: 'diagram-3',
+      title: 'Chưa có chương trình học',
+      description: 'Hãy tạo hoặc seed chương trình học trước khi dùng màn xem thử.',
     });
+  }
+
+  return `
+    <div class="student-library-card card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="student-library-title-label">Xem nội dung mẫu</div>
+        <h2 class="h5 mb-3">Chọn chương trình để xem thử</h2>
+        <div class="admin-student-preview-program-grid">
+          ${programs
+            .map((program) => {
+              const firstSession = getCurriculumSessionActivities(program)[0]?.sessionNumber || 1;
+
+              return `
+                <a class="admin-student-preview-program" href="${escapeHtml(buildAdminLessonPreviewPath(program.id, firstSession))}">
+                  <span>${escapeHtml(program.subject || 'Chương trình')}</span>
+                  <strong>${escapeHtml(program.name)}</strong>
+                  <small>${Number(program.totalSessionCount || 0)} buổi</small>
+                </a>
+              `;
+            })
+            .join('')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderStudentPreviewContent({
+  preview,
+  activeLessonId,
+  activeTab,
+  imageSelections,
+  lightboxImage,
+  capabilities,
+  selectedClassCode,
+}) {
+  if (!preview && !selectedClassCode) {
+    return renderLoadingOverlay('Đang tải nội dung xem thử...');
+  }
+
+  if (!capabilities?.hasProgram) {
+    return renderAlert('Lớp này chưa được gán chương trình học nên học sinh chưa thể xem học liệu.', 'warning');
+  }
+
+  if (!capabilities.canViewLibrary) {
+    return renderAlert(
+      'Lớp này hiện không mở để học sinh xem học liệu. Nếu lớp đang ẩn hoặc đã hoàn thành, học sinh thật cũng sẽ không truy cập được.',
+      'warning',
+    );
+  }
+
+  const sampleNotice = '';
+  /*
+  const unusedSampleNotice = selectedClassCode
+    ? ''
+    : renderAlert('Đây là bản xem nội dung mẫu theo chương trình và buổi, không phải quyền truy cập của một lớp học thật.', 'info');
+
+  */
+  return `
+    ${sampleNotice}
+    ${renderStudentLibraryBrowser(preview, activeLessonId, imageSelections || {}, {
+      activeTab: normalizeLessonMarkdownTab(activeTab),
+      embedded: false,
+      lightboxImage: lightboxImage || null,
+    })}
+  `;
+}
+
+export const adminLessonPreviewPage = {
+  async render() {
+    return `
+      <div class="student-layout admin-student-preview-layout">
+        <section class="admin-student-preview-controls">
+          <div class="container-fluid student-page-shell">
+            <div id="admin-lesson-preview-controls">${renderLoadingOverlay('Đang tải điều khiển...')}</div>
+          </div>
+        </section>
+        <section class="student-library-shell py-3 py-lg-4">
+          <div class="container-fluid student-page-shell">
+            <div class="student-library-page">
+              <div class="student-library-page__brand">
+                ${renderBrandLogo({
+                  id: 'admin-lesson-preview-brand',
+                  className: 'student-library-page__brand-lockup',
+                  tone: 'dark',
+                  compact: true,
+                })}
+              </div>
+              <div id="admin-lesson-preview-root">${renderLoadingOverlay('Đang tải học liệu...')}</div>
+            </div>
+          </div>
+        </section>
+        ${renderToastStack()}
+      </div>
+    `;
   },
 
   async mount() {
     const root = document.getElementById('admin-lesson-preview-root');
+    const controls = document.getElementById('admin-lesson-preview-controls');
 
-    if (!root) {
+    if (!root || !controls) {
       return null;
     }
 
     let disposed = false;
+    let programs = [];
+    let classes = [];
     let program = null;
+    let preview = null;
+    let capabilities = null;
+    let selectedClassCode = '';
     let sessionNumber = 1;
     let activeLessonId = '';
     let activeTab = 'lecture';
     let imageSelections = {};
     let lightboxImage = null;
 
-    function renderView() {
-      if (!program) {
-        return;
-      }
-
-      root.innerHTML = renderLessonPreview(program, sessionNumber, {
-        lessonId: activeLessonId,
-        activeTab,
-        imageSelections,
-        lightboxImage,
+    function renderControls() {
+      controls.innerHTML = renderPreviewControls({
+        programs,
+        classes,
+        program,
+        selectedClassCode,
+        sessionNumber,
       });
     }
 
-    function syncHash() {
-      if (!program) {
+    function renderView() {
+      if (disposed) {
         return;
       }
 
-      const nextHash = buildAdminLessonPreviewPath(program.id, sessionNumber);
+      renderControls();
 
+      if (!program && !selectedClassCode) {
+        root.innerHTML = renderProgramShortcutList(programs);
+        return;
+      }
+
+      root.innerHTML = renderStudentPreviewContent({
+        preview,
+        activeLessonId,
+        activeTab,
+        imageSelections,
+        lightboxImage,
+        capabilities,
+        selectedClassCode,
+      });
+    }
+
+    function setHash(nextHash) {
       if (window.location.hash !== nextHash) {
         window.history.replaceState({}, '', nextHash);
       }
     }
 
+    function syncHash() {
+      setHash(buildAdminLessonPreviewPath(program?.id || '', sessionNumber));
+    }
+
     function setLesson(nextLessonId) {
-      const preview = buildAdminStudentPreview(program, sessionNumber);
       const lessons = preview?.visibleLessons || [];
       const lesson = lessons.find((item) => item.id === nextLessonId) || null;
 
@@ -243,8 +335,12 @@ export const adminLessonPreviewPage = {
       }
 
       activeLessonId = lesson.id;
-      sessionNumber = Number(lesson.sessionNumber || sessionNumber);
-      syncHash();
+
+      if (!selectedClassCode) {
+        sessionNumber = Number(lesson.sessionNumber || sessionNumber);
+        syncHash();
+      }
+
       renderView();
     }
 
@@ -276,51 +372,109 @@ export const adminLessonPreviewPage = {
 
     async function load() {
       const routeState = getHashRouteState();
-      root.innerHTML = renderLoadingOverlay('Đang tải nội dung preview...');
+      selectedClassCode = routeState.programId ? '' : routeState.classCode || '';
+      program = null;
+      preview = null;
+      capabilities = null;
+      root.innerHTML = renderLoadingOverlay('Đang tải học liệu...');
 
       try {
-        if (!routeState.programId) {
-          const programs = await listCurriculumPrograms();
+        programs = await listCurriculumPrograms();
+        classes = [];
 
-          if (!disposed) {
-            root.innerHTML = renderProgramShortcutList(programs, 'lesson');
+        if (routeState.programId) {
+          program = await getCurriculumProgram(routeState.programId);
+
+          if (!program) {
+            throw new Error('Không tìm thấy chương trình học để xem thử.');
           }
-          return;
+
+          sessionNumber = resolveSessionNumber(program, routeState.sessionNumber);
+          const context = buildProgramStudentExperienceContext(program, sessionNumber);
+          preview = context.preview;
+          capabilities = context.capabilities;
         }
 
-        program = await getCurriculumProgram(routeState.programId);
+        if (!preview && selectedClassCode) {
+          preview = await getClassCurriculumView(selectedClassCode, { publicAccess: false });
+          program = preview?.program || null;
+          sessionNumber = Number(preview?.assignment?.currentSession || routeState.sessionNumber || 1);
+          capabilities = buildStudentExperienceCapabilities(preview, {
+            mode: 'class_review',
+          });
+        } else if (!preview && routeState.programId) {
+          program = await getCurriculumProgram(routeState.programId);
 
-        if (!program) {
-          throw new Error('Không tìm thấy chương trình học để preview.');
+          if (!program) {
+            throw new Error('Không tìm thấy chương trình học để xem thử.');
+          }
+
+          sessionNumber = resolveSessionNumber(program, routeState.sessionNumber);
+          const context = buildProgramStudentExperienceContext(program, sessionNumber);
+          preview = context.preview;
+          capabilities = context.capabilities;
+        } else if (!preview) {
+          program = null;
+          preview = null;
+          capabilities = null;
         }
 
-        sessionNumber = resolveSessionNumber(program, routeState.sessionNumber);
         activeTab = normalizeLessonMarkdownTab(routeState.tab || activeTab);
-        activeLessonId = '';
+        activeLessonId = preview
+          ? getDefaultPreviewLessonId(preview, sessionNumber, activeLessonId)
+          : '';
         imageSelections = {};
         lightboxImage = null;
 
-        if (!disposed) {
-          renderView();
-        }
+        renderView();
       } catch (error) {
-        if (!disposed) {
-          root.innerHTML = renderAlert(escapeHtml(error?.message || 'Không thể tải preview học liệu.'), 'danger');
-        }
+        root.innerHTML = renderAlert(
+          escapeHtml(error?.message || 'Không thể tải học liệu để xem thử.'),
+          'danger',
+        );
+        renderControls();
       }
     }
 
-    root.addEventListener('change', (event) => {
+    controls.addEventListener('change', (event) => {
+      const classSelect = event.target.closest('#admin-lesson-preview-class');
+      const programSelect = event.target.closest('#admin-lesson-preview-program');
       const sessionSelect = event.target.closest('#admin-lesson-preview-session');
 
-      if (!sessionSelect || !program) {
+      if (classSelect) {
+        selectedClassCode = classSelect.value || '';
+        activeLessonId = '';
+        activeTab = 'lecture';
+        setHash(
+          selectedClassCode
+            ? buildAdminLessonPreviewPath('', 0, { classCode: selectedClassCode })
+            : buildAdminLessonPreviewPath(program?.id || programs[0]?.id || '', sessionNumber),
+        );
+        void load();
         return;
       }
 
-      sessionNumber = resolveSessionNumber(program, Number(sessionSelect.value || 1));
-      activeLessonId = '';
-      syncHash();
-      renderView();
+      if (programSelect) {
+        const nextProgram = programs.find((item) => item.id === programSelect.value) || null;
+
+        if (!nextProgram) {
+          return;
+        }
+
+        program = nextProgram;
+        sessionNumber = resolveSessionNumber(program, sessionNumber);
+        activeLessonId = '';
+        setHash(buildAdminLessonPreviewPath(program.id, sessionNumber));
+        void load();
+        return;
+      }
+
+      if (sessionSelect && program) {
+        sessionNumber = resolveSessionNumber(program, Number(sessionSelect.value || 1));
+        activeLessonId = '';
+        setHash(buildAdminLessonPreviewPath(program.id, sessionNumber));
+        void load();
+      }
     });
 
     root.addEventListener('click', (event) => {

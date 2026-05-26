@@ -178,6 +178,60 @@ async function submitStudentReportViaFirestore(payload) {
   };
 }
 
+async function submitKnowledgeReportViaFirestore(payload) {
+  const { db } = getFirebaseServices();
+  const classCode = normalizeClassCode(payload.classCode);
+  const studentId = normalizeText(payload.studentId);
+  const classSnapshot = await getDoc(doc(db, 'classes', classCode));
+
+  if (!classSnapshot.exists()) {
+    throw new Error('Không tìm thấy lớp học.');
+  }
+
+  const classData = classSnapshot.data();
+
+  if (classData.status !== 'active' || classData.hidden) {
+    throw new Error('Lớp học hiện không mở để gửi phản hồi.');
+  }
+
+  const studentSnapshot = await getDoc(doc(db, 'students', studentId));
+
+  if (!studentSnapshot.exists()) {
+    throw new Error('Không tìm thấy học sinh.');
+  }
+
+  const studentData = studentSnapshot.data();
+
+  if (!studentData.active || studentData.classId !== classCode) {
+    throw new Error('Học sinh hiện không thuộc lớp được chọn hoặc đã bị khóa.');
+  }
+
+  const reportRef = doc(collection(db, 'knowledgeReports'));
+  const submittedAt = serverTimestamp();
+
+  await writeBatch(db)
+    .set(reportRef, {
+      classCode,
+      studentId,
+      studentName: studentData.fullName ?? '',
+      curriculumProgramId: normalizeText(payload.curriculumProgramId),
+      sessionNumber: Number(payload.sessionNumber || 0),
+      lessonId: normalizeText(payload.lessonId),
+      understoodTopics: normalizeText(payload.understoodTopics),
+      unclearTopics: normalizeText(payload.unclearTopics),
+      understandingLevel: Number(payload.understandingLevel || 0),
+      supportRequest: normalizeText(payload.supportRequest) || 'Không có gì cần hỗ trợ',
+      submittedAt,
+      createdAt: submittedAt,
+    })
+    .commit();
+
+  return {
+    reportId: reportRef.id,
+    submittedAt: new Date().toISOString(),
+  };
+}
+
 export async function listActiveClasses() {
   try {
     return await listActiveClassesFromFirestore();
@@ -224,6 +278,14 @@ export async function submitStudentReport(payload) {
 
       throw toAppError(callableError, 'Không thể gửi báo cáo lúc này.');
     }
+  }
+}
+
+export async function submitKnowledgeReport(payload) {
+  try {
+    return await submitKnowledgeReportViaFirestore(payload);
+  } catch (error) {
+    throw toAppError(error, 'Không thể gửi phản hồi buổi học lúc này.');
   }
 }
 

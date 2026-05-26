@@ -1,32 +1,62 @@
-export const QUIZ_DEFAULT_OFFICIAL_SESSION_NUMBERS = [5, 9];
-export const QUIZ_SESSION_NUMBERS = QUIZ_DEFAULT_OFFICIAL_SESSION_NUMBERS;
-export const QUIZ_ATTEMPT_STATUS_SUBMITTED = 'submitted';
-export const QUIZ_ATTEMPT_STATUS_REOPENED = 'reopened';
-export const QUIZ_CLASS_STATUS_IDLE = 'idle';
-export const QUIZ_CLASS_STATUS_STARTED = 'started';
-export const QUIZ_QUESTION_LIMIT = 10;
-export const QUIZ_MODE_OFFICIAL = 'official_quiz';
-export const QUIZ_MODE_PRACTICE = 'practice_quiz';
-export const QUIZ_MODES = [QUIZ_MODE_OFFICIAL];
-export const QUIZ_QUESTION_TYPE_SINGLE_CHOICE = 'single_choice';
-export const QUIZ_QUESTION_TYPE_FILL_BLANK = 'fill_blank';
-export const QUIZ_QUESTION_TYPES = [
-  QUIZ_QUESTION_TYPE_SINGLE_CHOICE,
-  QUIZ_QUESTION_TYPE_FILL_BLANK,
-];
-export const QUIZ_DIFFICULTY_EASY = 'easy';
-export const QUIZ_DIFFICULTY_MEDIUM = 'medium';
-export const QUIZ_DIFFICULTY_HARD = 'hard';
-export const QUIZ_DIFFICULTIES = [
+import {
+  QUIZ_ATTEMPT_STATUS_REOPENED,
+  QUIZ_ATTEMPT_STATUS_SUBMITTED,
+  QUIZ_CLASS_STATUS_IDLE,
+  QUIZ_CLASS_STATUS_STARTED,
+  QUIZ_DEFAULT_PICK_POLICY,
+  QUIZ_DIFFICULTIES,
   QUIZ_DIFFICULTY_EASY,
-  QUIZ_DIFFICULTY_MEDIUM,
   QUIZ_DIFFICULTY_HARD,
-];
-export const QUIZ_DEFAULT_PICK_POLICY = {
-  [QUIZ_DIFFICULTY_EASY]: 4,
-  [QUIZ_DIFFICULTY_MEDIUM]: 4,
-  [QUIZ_DIFFICULTY_HARD]: 2,
-};
+  QUIZ_DIFFICULTY_MEDIUM,
+  QUIZ_MODE_OFFICIAL,
+  QUIZ_MODE_PRACTICE,
+  QUIZ_MODES,
+  QUIZ_QUESTION_LIMIT,
+  QUIZ_QUESTION_TYPE_FILL_BLANK,
+  QUIZ_QUESTION_TYPE_SINGLE_CHOICE,
+  QUIZ_QUESTION_TYPES,
+  QUIZ_SESSION_NUMBERS,
+  QUIZ_DEFAULT_OFFICIAL_SESSION_NUMBERS,
+} from './quiz/constants.js';
+import {
+  buildQuizAttemptId,
+  buildQuizAttemptSubmissionId,
+  buildQuizBankId,
+  buildQuizConfigDocId,
+  buildQuizLiveAttemptId,
+  createQuizItemId,
+  getQuizBankScope,
+} from './quiz/id.js';
+
+export {
+  QUIZ_ATTEMPT_STATUS_REOPENED,
+  QUIZ_ATTEMPT_STATUS_SUBMITTED,
+  QUIZ_CLASS_STATUS_IDLE,
+  QUIZ_CLASS_STATUS_STARTED,
+  QUIZ_DEFAULT_OFFICIAL_SESSION_NUMBERS,
+  QUIZ_DEFAULT_PICK_POLICY,
+  QUIZ_DIFFICULTIES,
+  QUIZ_DIFFICULTY_EASY,
+  QUIZ_DIFFICULTY_HARD,
+  QUIZ_DIFFICULTY_MEDIUM,
+  QUIZ_MODE_OFFICIAL,
+  QUIZ_MODE_PRACTICE,
+  QUIZ_MODES,
+  QUIZ_QUESTION_LIMIT,
+  QUIZ_QUESTION_TYPE_FILL_BLANK,
+  QUIZ_QUESTION_TYPE_SINGLE_CHOICE,
+  QUIZ_QUESTION_TYPES,
+  QUIZ_SESSION_NUMBERS,
+} from './quiz/constants.js';
+export {
+  buildQuizAttemptId,
+  buildQuizAttemptSubmissionId,
+  buildQuizBankId,
+  buildQuizConfigDocId,
+  buildQuizLiveAttemptId,
+  createQuizItemId,
+  getQuizBankScope,
+} from './quiz/id.js';
 
 function coerceText(value) {
   return String(value ?? '').trim();
@@ -258,60 +288,6 @@ function shuffleBySeed(items, seedValue) {
   }
 
   return output;
-}
-
-function slugifyQuizScopePart(value, fallback = 'unknown') {
-  const slug = coerceText(value)
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-
-  return slug || fallback;
-}
-
-export function createQuizItemId(prefix = 'quiz-item') {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-export function buildQuizConfigDocId(sessionNumber) {
-  return `session-${Number(sessionNumber || 0)}`;
-}
-
-export function buildQuizBankId(subject = '', level = '', sessionNumber = 0) {
-  return `${slugifyQuizScopePart(subject, 'subject')}__${slugifyQuizScopePart(level, 'level')}__${buildQuizConfigDocId(sessionNumber)}`;
-}
-
-export function getQuizBankScope(input = {}, fallback = {}) {
-  const subject = coerceText(input.subject || fallback.subject);
-  const level = coerceText(input.level || fallback.level);
-
-  return {
-    subject,
-    level,
-    subjectKey: slugifyQuizScopePart(subject, ''),
-    levelKey: slugifyQuizScopePart(level, ''),
-  };
-}
-
-export function buildQuizAttemptId(classCode, studentId, sessionNumber) {
-  const normalizedClassCode = coerceText(classCode).toUpperCase();
-  const normalizedStudentId = coerceText(studentId);
-  const normalizedSessionNumber = Number(sessionNumber || 0);
-  return `${normalizedClassCode}__${normalizedStudentId}__${normalizedSessionNumber}`;
-}
-
-export function buildQuizAttemptSubmissionId(attemptId, submissionNumber) {
-  const normalizedAttemptId = coerceText(attemptId);
-  const normalizedSubmissionNumber = Math.max(1, Number(submissionNumber || 1));
-  return `${normalizedAttemptId}__submission__${normalizedSubmissionNumber}`;
-}
-
-export function buildQuizLiveAttemptId(attemptId, submissionNumber) {
-  const normalizedAttemptId = coerceText(attemptId);
-  const normalizedSubmissionNumber = Math.max(1, Number(submissionNumber || 1));
-  return `${normalizedAttemptId}__live__${normalizedSubmissionNumber}`;
 }
 
 export function getQuizQuestionLimit(quiz = null) {

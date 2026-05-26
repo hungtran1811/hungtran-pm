@@ -1,4 +1,5 @@
 import { ensureAdmin, getAuthState, initializeAuthStore } from '../state/auth.store.js';
+import { adminAnalyticsPage } from '../ui/pages/admin-analytics.page.js';
 import { adminDashboardPage } from '../ui/pages/admin-dashboard.page.js';
 import { adminLessonPreviewPage } from '../ui/pages/admin-lesson-preview.page.js';
 import { adminLoginPage } from '../ui/pages/admin-login.page.js';
@@ -27,6 +28,7 @@ const ROUTES = {
   '/student/quiz': { page: studentQuizPage },
   '/admin/login': { page: adminLoginPage, guestAdminOnly: true },
   '/admin/dashboard': { page: adminDashboardPage, requiresAdmin: true },
+  '/admin/analytics': { page: adminAnalyticsPage, requiresAdmin: true },
   '/admin/classes': { page: classesPage, requiresAdmin: true },
   '/admin/curriculum': { page: curriculumDemoPage, requiresAdmin: true },
   '/admin/lesson-preview': { page: adminLessonPreviewPage, requiresAdmin: true },

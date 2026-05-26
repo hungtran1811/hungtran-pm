@@ -1,0 +1,1527 @@
+﻿.curriculum-program-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.curriculum-program-group {
+  border: 1px solid var(--app-border);
+  border-radius: 1rem;
+  background: #f8fbff;
+  padding: 0.95rem;
+}
+
+.curriculum-program-group__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.8rem;
+}
+
+.curriculum-program-group__chips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.7rem;
+}
+
+.curriculum-program-group--compact {
+  padding: 0.6rem 0.65rem;
+}
+
+.curriculum-program-group__head--compact {
+  margin-bottom: 0.5rem;
+}
+
+.curriculum-program-group__chips--compact {
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 0.5rem;
+}
+
+.curriculum-program-button {
+  width: 100%;
+  border: 1px solid var(--app-border);
+  border-radius: 0.95rem;
+  background: #ffffff;
+  color: var(--app-text);
+  text-align: left;
+  padding: 0.85rem 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.curriculum-program-button--compact {
+  padding: 0.58rem 0.65rem;
+  border-radius: 0.78rem;
+  min-width: 0;
+}
+
+.curriculum-program-button__title {
+  display: block;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.curriculum-program-button__meta {
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--app-muted);
+}
+
+.curriculum-program-button:hover {
+  border-color: rgba(15, 76, 129, 0.35);
+  background: #ffffff;
+}
+
+.curriculum-program-button--active {
+  border-color: rgba(15, 76, 129, 0.4);
+  background:
+    linear-gradient(180deg, rgba(15, 76, 129, 0.08), rgba(255, 255, 255, 0.96)),
+    #ffffff;
+  box-shadow: 0 0 0 1px rgba(15, 76, 129, 0.08);
+}
+
+.curriculum-overview-card {
+  background:
+    linear-gradient(180deg, rgba(248, 251, 255, 0.96), rgba(255, 255, 255, 1)),
+    radial-gradient(circle at top right, rgba(0, 166, 214, 0.12), transparent 40%);
+}
+
+.curriculum-session-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.curriculum-session-chip {
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--app-text);
+  padding: 0.5rem 0.9rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.curriculum-session-chip:hover {
+  border-color: rgba(15, 76, 129, 0.35);
+  color: var(--app-brand);
+}
+
+.curriculum-session-chip--active {
+  border-color: var(--app-brand);
+  background: var(--app-brand);
+  color: #ffffff;
+}
+
+.curriculum-detail-section + .curriculum-detail-section {
+  margin-top: 1rem;
+}
+
+.curriculum-detail-label {
+  margin-bottom: 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--app-muted);
+}
+
+.curriculum-detail-box,
+.curriculum-detail-list {
+  margin-bottom: 0;
+  border: 1px solid var(--app-border);
+  border-radius: 0.9rem;
+  background: #f8fafc;
+  padding: 0.95rem 1rem;
+  line-height: 1.6;
+}
+
+.curriculum-detail-list {
+  padding-left: 2rem;
+}
+
+.curriculum-checklist {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.curriculum-checklist-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid var(--app-border);
+  border-radius: 0.95rem;
+  background: #f8fafc;
+}
+
+.curriculum-checklist-item__order {
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--app-brand);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.curriculum-preview-note {
+  padding: 0.85rem 1rem;
+  border: 1px dashed rgba(15, 76, 129, 0.22);
+  border-radius: 0.9rem;
+  background: rgba(248, 251, 255, 0.95);
+  color: var(--app-muted);
+  line-height: 1.55;
+}
+
+.curriculum-preview-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.9rem;
+  margin-bottom: 1.15rem;
+}
+
+.curriculum-preview-meta__item {
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--app-border);
+  border-radius: 0.95rem;
+  background: #f8fbff;
+}
+
+.curriculum-preview-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--app-muted);
+}
+
+.curriculum-preview-section__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.curriculum-preview-lesson-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.curriculum-preview-lesson-item {
+  padding: 1rem 1.05rem;
+  border: 1px solid var(--app-border);
+  border-radius: 1rem;
+  background: #f8fafc;
+}
+
+.curriculum-preview-lesson-item--current {
+  border-color: rgba(15, 76, 129, 0.28);
+  background:
+    linear-gradient(180deg, rgba(15, 76, 129, 0.08), rgba(255, 255, 255, 1)),
+    #ffffff;
+  box-shadow: 0 0 0 1px rgba(15, 76, 129, 0.06);
+}
+
+.student-review-card {
+  background:
+    linear-gradient(180deg, rgba(248, 251, 255, 0.98), rgba(255, 255, 255, 1)),
+    radial-gradient(circle at top right, rgba(0, 166, 214, 0.1), transparent 35%);
+}
+
+.curriculum-live-warning {
+  padding: 0.95rem 1rem;
+  border: 1px solid rgba(245, 165, 36, 0.45);
+  border-radius: 1rem;
+  background: #fff8e6;
+  color: #8a5a00;
+  line-height: 1.55;
+}
+
+.curriculum-editor-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.curriculum-editor-tab {
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--app-text);
+  padding: 0.6rem 1rem;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.curriculum-editor-tab:hover {
+  border-color: rgba(15, 76, 129, 0.32);
+  color: var(--app-brand);
+}
+
+.curriculum-editor-tab--active {
+  border-color: var(--app-brand);
+  background: var(--app-brand);
+  color: #ffffff;
+}
+
+.curriculum-editor-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.curriculum-editor-list__item {
+  width: 100%;
+  border: 1px solid var(--app-border);
+  border-radius: 0.95rem;
+  background: #f8fafc;
+  padding: 0.9rem 0.95rem;
+  text-align: left;
+  color: var(--app-text);
+  transition: all 0.2s ease;
+}
+
+.curriculum-editor-list__item:hover {
+  border-color: rgba(15, 76, 129, 0.32);
+  background: #ffffff;
+}
+
+.curriculum-editor-list__item--active {
+  border-color: rgba(15, 76, 129, 0.4);
+  background:
+    linear-gradient(180deg, rgba(15, 76, 129, 0.08), rgba(255, 255, 255, 0.98)),
+    #ffffff;
+  box-shadow: 0 0 0 1px rgba(15, 76, 129, 0.06);
+}
+
+.curriculum-editor-empty {
+  padding: 1rem;
+  border: 1px dashed var(--app-border);
+  border-radius: 0.95rem;
+  background: #f8fbff;
+  color: var(--app-muted);
+  line-height: 1.6;
+}
+
+.curriculum-editor-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.curriculum-stage-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.curriculum-stage-card {
+  overflow: hidden;
+}
+
+.curriculum-page-root {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.curriculum-workspace-switch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.45rem;
+  border: 1px solid rgba(15, 76, 129, 0.1);
+  border-radius: 999px;
+  background: rgba(248, 251, 255, 0.92);
+  width: fit-content;
+  max-width: 100%;
+}
+
+.curriculum-workspace-switch__button {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--app-muted);
+  padding: 0.6rem 1rem;
+  font-weight: 700;
+  line-height: 1.2;
+  transition: all 0.18s ease;
+}
+
+.curriculum-workspace-switch__button:hover {
+  background: rgba(15, 76, 129, 0.08);
+  color: var(--app-text);
+}
+
+.curriculum-workspace-switch__button--active {
+  background: var(--app-brand);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(15, 76, 129, 0.18);
+}
+
+.curriculum-workspace {
+  display: grid;
+  gap: 0.95rem;
+  padding: 1rem 1.05rem 1.05rem;
+  border: 1px solid rgba(15, 76, 129, 0.1);
+  border-radius: 1.2rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 251, 255, 0.95) 100%);
+  box-shadow: 0 18px 40px rgba(15, 37, 64, 0.06);
+}
+
+.curriculum-workspace--assignment {
+  border-color: rgba(15, 76, 129, 0.12);
+}
+
+.curriculum-workspace--editor {
+  border-color: rgba(217, 168, 74, 0.16);
+}
+
+.curriculum-workspace__head {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.curriculum-workspace__eyebrow {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--app-muted);
+}
+
+.curriculum-workspace__hint {
+  color: var(--app-muted);
+  max-width: 62rem;
+  line-height: 1.5;
+}
+
+.curriculum-workspace__body {
+  display: grid;
+  gap: 0.95rem;
+}
+
+.curriculum-workspace--compact {
+  gap: 0.75rem;
+  padding: 0.85rem 0.9rem 0.9rem;
+}
+
+.curriculum-workspace__head--compact {
+  gap: 0.15rem;
+}
+
+.curriculum-section {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.curriculum-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.curriculum-admin-card .card-header,
+.curriculum-page-root .curriculum-overview-card .card-body,
+.curriculum-page-root .student-review-card .card-body {
+  padding: 1rem 1.05rem;
+}
+
+.curriculum-admin-card .card-body,
+.curriculum-admin-card .card-footer,
+.curriculum-page-root .card-body {
+  padding: 1rem 1.05rem;
+}
+
+.curriculum-page-root .card-footer {
+  padding: 0 1.05rem 1rem;
+}
+
+.curriculum-page-root .curriculum-program-list {
+  gap: 0.7rem;
+}
+
+.curriculum-page-root .curriculum-admin-card--compact .card-header,
+.curriculum-page-root .curriculum-admin-card--compact .card-body,
+.curriculum-page-root .curriculum-admin-card--compact .card-footer {
+  padding-left: 0.9rem;
+  padding-right: 0.9rem;
+}
+
+.curriculum-page-root .curriculum-program-group {
+  padding: 0.68rem 0.72rem;
+  border-radius: 0.8rem;
+}
+
+.curriculum-page-root .curriculum-program-group__head {
+  margin-bottom: 0.6rem;
+}
+
+.curriculum-page-root .curriculum-program-group__chips {
+  gap: 0.55rem;
+}
+
+.curriculum-page-root .curriculum-program-button {
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.8rem;
+}
+
+.curriculum-page-root .curriculum-editor-list {
+  gap: 0.65rem;
+}
+
+.curriculum-page-root .curriculum-editor-list__item,
+.curriculum-page-root .curriculum-checklist-item,
+.curriculum-page-root .curriculum-preview-meta__item,
+.curriculum-page-root .curriculum-preview-lesson-item {
+  border-radius: 0.85rem;
+}
+
+.curriculum-page-root .curriculum-editor-tabs {
+  gap: 0.55rem;
+}
+
+.curriculum-page-root .curriculum-editor-tab {
+  padding: 0.45rem 0.8rem;
+}
+
+.curriculum-page-root .curriculum-stage-grid {
+  gap: 0.85rem;
+}
+
+.curriculum-page-root .curriculum-stage-card .card-body {
+  padding: 0.95rem 1rem;
+}
+
+.curriculum-image-upload {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.curriculum-image-upload__preview {
+  min-height: 180px;
+  border: 1px dashed var(--app-border);
+  border-radius: 1rem;
+  background: #f8fbff;
+  overflow: hidden;
+}
+
+.curriculum-image-upload__preview-card {
+  height: 100%;
+}
+
+.curriculum-image-upload__preview-image {
+  width: 100%;
+  max-height: 280px;
+  object-fit: cover;
+  display: block;
+}
+
+.curriculum-image-upload__empty {
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  color: var(--app-muted);
+  text-align: center;
+  line-height: 1.55;
+}
+
+.curriculum-image-upload__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.curriculum-image-upload__preview--multi {
+  min-height: 0;
+  padding: 0.75rem;
+}
+
+.curriculum-image-manager {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+
+.curriculum-image-manager__item {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.65rem;
+  border: 1px solid var(--app-border);
+  border-radius: 0.95rem;
+  background: #ffffff;
+  cursor: grab;
+}
+
+.curriculum-image-manager__item:active {
+  cursor: grabbing;
+}
+
+.curriculum-image-manager__thumb-wrap {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--app-border);
+  border-radius: 0.85rem;
+  background: #f8fbff;
+  overflow: hidden;
+}
+
+.curriculum-image-manager__thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.curriculum-image-manager__primary {
+  position: absolute;
+  top: 0.45rem;
+  left: 0.45rem;
+}
+
+.curriculum-image-manager__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.curriculum-link-editor {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.curriculum-link-editor__empty {
+  padding: 0.85rem 0.95rem;
+  border: 1px dashed var(--app-border);
+  border-radius: 0.85rem;
+  background: #f8fbff;
+  color: var(--app-muted);
+  line-height: 1.5;
+}
+
+.curriculum-link-row {
+  padding: 0.8rem 0.85rem;
+  border: 1px solid var(--app-border);
+  border-radius: 0.95rem;
+  background: #ffffff;
+}
+
+.student-hero--library {
+  align-items: flex-start;
+}
+
+.student-hero-card--library {
+  border-radius: 1.25rem;
+}
+
+.student-hero-panel--compact {
+  padding: 1.65rem 1.4rem;
+}
+
+.student-hero-title--compact {
+  font-size: clamp(1.55rem, 2vw, 2.1rem);
+}
+
+.student-library-card {
+  border-radius: 1.15rem;
+  background:
+    linear-gradient(180deg, rgba(248, 251, 255, 0.98), rgba(255, 255, 255, 1)),
+    radial-gradient(circle at top right, rgba(0, 166, 214, 0.08), transparent 32%);
+}
+
+.student-library-cta-card {
+  border-radius: 1rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.student-library-title-label {
+  margin-bottom: 0.3rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--app-muted);
+}
+
+.student-library-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+}
+
+.student-library-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.student-library-sidebar {
+  display: grid;
+  gap: 0.7rem;
+  align-content: start;
+}
+
+.student-library-sidebar__label,
+.student-library-detail__label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--app-muted);
+}
+
+.student-library-lesson-list {
+  display: grid;
+  gap: 0.65rem;
+  max-height: min(76vh, 860px);
+  overflow: auto;
+  padding-right: 0.15rem;
+}
+
+.student-library-lesson-item {
+  width: 100%;
+  display: grid;
+  gap: 0.2rem;
+  text-align: left;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--app-border);
+  border-radius: 0.9rem;
+  background: #ffffff;
+  color: var(--app-text);
+  transition: all 0.18s ease;
+}
+
+.student-library-lesson-item:hover {
+  border-color: rgba(15, 76, 129, 0.35);
+  background: #f8fbff;
+}
+
+.student-library-lesson-item--active {
+  border-color: rgba(15, 76, 129, 0.4);
+  background:
+    linear-gradient(180deg, rgba(15, 76, 129, 0.08), rgba(255, 255, 255, 1)),
+    #ffffff;
+  box-shadow: 0 0 0 1px rgba(15, 76, 129, 0.06);
+}
+
+.student-library-lesson-item__session {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--app-brand);
+}
+
+.student-library-lesson-item__title {
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.student-library-content {
+  min-width: 0;
+}
+
+.student-library-detail {
+  display: grid;
+  gap: 1rem;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-height: 100%;
+  height: min(76vh, 860px);
+  padding: 1rem 1.05rem;
+  border: 1px solid var(--app-border);
+  border-radius: 1rem;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.curriculum-management-shell {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.curriculum-management-shell--compact {
+  gap: 0.7rem;
+}
+
+.curriculum-management-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.curriculum-management-topbar--compact {
+  gap: 0.5rem;
+}
+
+.curriculum-redesign-shell {
+  display: grid;
+  gap: 1rem;
+}
+
+.curriculum-redesign-context .card-body {
+  padding: 1rem 1.1rem;
+}
+
+.curriculum-content-picker {
+  border-radius: 1rem;
+}
+
+.curriculum-class-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 0.8rem;
+}
+
+.curriculum-class-card {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.9rem;
+  border: 1px solid var(--app-border);
+  border-radius: 1rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, rgba(248, 251, 255, 0.96) 100%);
+  box-shadow: 0 0.45rem 1.1rem rgba(15, 76, 129, 0.05);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.curriculum-class-card:hover {
+  border-color: rgba(13, 110, 253, 0.35);
+  box-shadow: 0 0.7rem 1.45rem rgba(15, 76, 129, 0.09);
+  transform: translateY(-1px);
+}
+
+.curriculum-class-card--active {
+  border-color: rgba(13, 110, 253, 0.65);
+  background:
+    radial-gradient(circle at top right, rgba(13, 110, 253, 0.12), transparent 34%),
+    linear-gradient(180deg, #f3f8ff 0%, #ffffff 100%);
+}
+
+.curriculum-class-card__top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.curriculum-class-card__code {
+  line-height: 1.25;
+  text-decoration: none;
+}
+
+.curriculum-class-card__code:hover,
+.curriculum-class-card__code:focus {
+  text-decoration: none;
+}
+
+.curriculum-class-card__program {
+  font-weight: 700;
+  color: var(--app-text);
+  line-height: 1.35;
+}
+
+.curriculum-class-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  color: var(--app-muted);
+  font-size: 0.84rem;
+}
+
+.curriculum-session-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  gap: 0.7rem;
+}
+
+.curriculum-content-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding: 0.35rem;
+  border: 1px solid var(--app-border);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.curriculum-content-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  min-height: 2.55rem;
+  padding: 0.52rem 0.9rem;
+  border: 1px solid transparent;
+  border-radius: 0.8rem;
+  background: transparent;
+  color: var(--app-text);
+  font-weight: 700;
+  transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.curriculum-content-tab:hover {
+  background: #ffffff;
+  border-color: rgba(13, 110, 253, 0.25);
+}
+
+.curriculum-content-tab--active {
+  background: #ffffff;
+  border-color: rgba(13, 110, 253, 0.45);
+  color: #0d6efd;
+  box-shadow: 0 0.45rem 1.15rem rgba(13, 110, 253, 0.12);
+}
+
+.curriculum-session-strip__item {
+  display: inline-grid;
+  gap: 0.25rem;
+  min-width: 0;
+  min-height: 5.35rem;
+  padding: 0.78rem 0.9rem;
+  border: 1px solid var(--app-border);
+  border-radius: 0.9rem;
+  background: #ffffff;
+  color: var(--app-text);
+  text-align: left;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.curriculum-session-strip__item:hover {
+  border-color: rgba(13, 110, 253, 0.35);
+  box-shadow: 0 0.45rem 1.2rem rgba(15, 76, 129, 0.08);
+  transform: translateY(-1px);
+}
+
+.curriculum-session-strip__item--active {
+  border-color: rgba(13, 110, 253, 0.65);
+  background: linear-gradient(180deg, #f5f9ff 0%, #ffffff 100%);
+  box-shadow: 0 0.65rem 1.35rem rgba(13, 110, 253, 0.12);
+}
+
+.curriculum-session-strip__title {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--app-muted);
+  font-size: 0.8rem;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.curriculum-session-strip__status {
+  flex: 0 0 auto;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.curriculum-session-strip__status--visible {
+  background: rgba(25, 135, 84, 0.12);
+  color: #087246;
+}
+
+.curriculum-session-strip__status--hidden {
+  background: rgba(255, 193, 7, 0.18);
+  color: #8a6400;
+}
+
+.curriculum-session-strip__status--empty,
+.curriculum-session-strip__status--muted {
+  background: rgba(108, 117, 125, 0.12);
+  color: #5c6670;
+}
+
+.curriculum-lesson-vault {
+  border-radius: 1rem;
+}
+
+.curriculum-lesson-vault__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.8rem;
+}
+
+.curriculum-lesson-vault__item {
+  display: grid;
+  gap: 0.85rem;
+  padding: 0.95rem;
+  border: 1px solid var(--app-border);
+  border-radius: 1rem;
+  background: #ffffff;
+}
+
+.curriculum-lesson-vault__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.curriculum-redesign-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 270px) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.curriculum-redesign-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 330px);
+  gap: 1rem;
+  align-items: start;
+  min-width: 0;
+}
+
+.curriculum-main-panel,
+.curriculum-side-panel,
+.curriculum-session-rail {
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.curriculum-main-panel {
+  min-width: 0;
+}
+
+.curriculum-session-rail {
+  position: sticky;
+  top: 1rem;
+}
+
+.curriculum-session-rail__list {
+  display: grid;
+  gap: 0.6rem;
+  max-height: calc(100vh - 260px);
+  overflow: auto;
+  padding-right: 0.15rem;
+}
+
+.curriculum-session-rail__item {
+  display: grid;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 0.8rem;
+  border: 1px solid var(--app-border);
+  border-radius: 0.9rem;
+  background: #ffffff;
+  color: var(--app-text);
+  text-align: left;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.curriculum-session-rail__item:hover {
+  border-color: rgba(13, 110, 253, 0.35);
+  box-shadow: 0 0.45rem 1.2rem rgba(15, 76, 129, 0.08);
+  transform: translateY(-1px);
+}
+
+.curriculum-session-rail__item--active {
+  border-color: rgba(13, 110, 253, 0.55);
+  background: linear-gradient(180deg, #f5f9ff 0%, #ffffff 100%);
+  box-shadow: 0 0.65rem 1.35rem rgba(13, 110, 253, 0.12);
+}
+
+.curriculum-session-rail__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.curriculum-session-rail__title {
+  font-size: 0.92rem;
+  color: var(--app-text);
+  line-height: 1.35;
+}
+
+.curriculum-session-rail__meta {
+  font-size: 0.82rem;
+  color: var(--app-muted);
+}
+
+.curriculum-activity-inline-form {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) auto;
+  gap: 0.65rem;
+  align-items: end;
+}
+
+.curriculum-side-panel {
+  position: sticky;
+  top: 1rem;
+}
+
+.curriculum-side-panel__section + .curriculum-side-panel__section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--app-border);
+}
+
+.curriculum-main-panel #quiz-editor-panel,
+.curriculum-main-panel #quiz-operations-panel {
+  min-width: 0;
+}
+
+.curriculum-main-panel #quiz-operations-panel .row {
+  --bs-gutter-x: 1rem;
+  --bs-gutter-y: 1rem;
+}
+
+.curriculum-page-root .curriculum-overview-card .card-body {
+  padding-top: 0.9rem;
+  padding-bottom: 0.9rem;
+}
+
+.curriculum-page-root .curriculum-overview-card h2 {
+  font-size: 1.1rem;
+}
+
+.curriculum-page-root .curriculum-overview-card p {
+  font-size: 0.94rem;
+  line-height: 1.5;
+}
+
+.curriculum-preview-meta {
+  gap: 0.65rem;
+  margin-bottom: 0.85rem;
+}
+
+.curriculum-preview-meta__item {
+  padding: 0.72rem 0.82rem;
+}
+
+.curriculum-preview-note {
+  padding: 0.68rem 0.8rem;
+  line-height: 1.45;
+}
+
+.student-review-card__section + .student-review-card__section {
+  margin-top: 0.95rem;
+}
+
+.student-review-card__section-head {
+  margin-bottom: 0.75rem;
+}
+
+.curriculum-page-root .student-review-card .card-body {
+  padding: 0.9rem 0.95rem;
+}
+
+.student-review-card__section + .student-review-card__section {
+  margin-top: 1.25rem;
+}
+
+.student-review-card__section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.student-review-tab-shell {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.student-review-pill-scroll {
+  overflow-x: auto;
+  padding-bottom: 0.2rem;
+}
+
+.student-review-pill-scroll::-webkit-scrollbar {
+  height: 0.45rem;
+}
+
+.student-review-pill-scroll::-webkit-scrollbar-thumb {
+  background: rgba(15, 76, 129, 0.18);
+  border-radius: 999px;
+}
+
+.student-review-lesson-pills {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 0.6rem;
+  min-width: max-content;
+}
+
+.student-review-lesson-pills .nav-link {
+  border: 1px solid var(--app-border);
+  background: #ffffff;
+  color: var(--app-text);
+  border-radius: 999px;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.student-review-lesson-pills .nav-link.active {
+  border-color: var(--app-brand);
+  background: var(--app-brand);
+  color: #ffffff;
+}
+
+.student-review-tab-content {
+  min-height: 0;
+}
+
+.student-review-pane-card {
+  border: 1px solid var(--app-border);
+  border-radius: 1rem;
+  background: #ffffff;
+  padding: 1rem 1.05rem;
+}
+
+.student-review-pane-card--current {
+  border-color: rgba(15, 76, 129, 0.25);
+  box-shadow: 0 0 0 1px rgba(15, 76, 129, 0.06);
+}
+
+.student-review-pane-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.student-review-lesson-stack {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.student-review-lesson-details {
+  border: 1px solid var(--app-border);
+  border-radius: 1rem;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.student-review-lesson-details--current {
+  border-color: rgba(15, 76, 129, 0.25);
+  box-shadow: 0 0 0 1px rgba(15, 76, 129, 0.06);
+}
+
+.student-review-lesson-summary {
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.85rem;
+  padding: 1rem 1.05rem;
+  cursor: pointer;
+}
+
+.student-review-lesson-summary::-webkit-details-marker {
+  display: none;
+}
+
+.student-review-lesson-summary__main {
+  min-width: 0;
+}
+
+.student-review-lesson-details[open] .student-review-lesson-summary {
+  border-bottom: 1px solid var(--app-border);
+}
+
+.student-review-lesson-body {
+  padding: 1rem 1.05rem;
+}
+
+.student-review-all-lessons {
+  margin-top: 1rem;
+}
+
+.student-review-focus {
+  padding: 1rem;
+  border: 1px solid var(--app-border);
+  border-radius: 1rem;
+  background: #ffffff;
+}
+
+.student-review-focus--current {
+  border-color: rgba(15, 76, 129, 0.25);
+  box-shadow: 0 0 0 1px rgba(15, 76, 129, 0.06);
+}
+
+.student-review-focus__box {
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--app-border);
+  border-radius: 0.85rem;
+  background: #f8fafc;
+  padding: 0.85rem 0.95rem;
+  line-height: 1.55;
+}
+
+.student-review-collapsible {
+  margin-top: 0.9rem;
+  border: 1px solid var(--app-border);
+  border-radius: 0.95rem;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.student-review-collapsible__summary {
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  cursor: pointer;
+}
+
+.student-review-collapsible__summary::-webkit-details-marker {
+  display: none;
+}
+
+.student-review-collapsible[open] .student-review-collapsible__summary {
+  border-bottom: 1px solid var(--app-border);
+}
+
+.student-review-collapsible__body {
+  padding: 0.95rem 1rem;
+}
+
+.student-review-compact-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.student-review-compact-item {
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--app-border);
+  border-radius: 0.9rem;
+  background: #f8fafc;
+}
+
+.student-review-checklist {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.student-review-checklist__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--app-border);
+  border-radius: 0.95rem;
+  background: #ffffff;
+}
+
+.student-review-checklist__order {
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--app-brand);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.student-review-checklist__meta {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.reports-toolbar .btn {
+  white-space: nowrap;
+}
+
+/* CognitivePortal curriculum redesign layer */
+.curriculum-shell,
+.curriculum-section,
+.curriculum-workspace,
+.curriculum-editor-card,
+.curriculum-program-card,
+.curriculum-archive-card,
+.curriculum-assignment-card,
+.curriculum-preview-card,
+.curriculum-session-card,
+.curriculum-lesson-card,
+.student-review-card {
+  border: 1px solid var(--app-border) !important;
+  border-radius: var(--portal-radius) !important;
+  background: #ffffff !important;
+  box-shadow: var(--portal-shadow-soft) !important;
+}
+
+.curriculum-top-tabs {
+  padding: 0.34rem;
+}
+
+.curriculum-top-tab {
+  min-height: 2.35rem;
+  padding: 0 0.8rem;
+}
+
+.curriculum-program-button,
+.curriculum-session-chip,
+.curriculum-editor-tab,
+.curriculum-session-button {
+  border-radius: var(--portal-radius-sm) !important;
+}
+
+.curriculum-program-button--active,
+.curriculum-session-chip--active,
+.curriculum-editor-tab--active,
+.curriculum-session-button--active {
+  border-color: rgba(0, 166, 214, 0.55) !important;
+  background: var(--app-brand-soft) !important;
+  color: var(--app-brand) !important;
+}
+
+.curriculum-lesson-markdown-editor,
+.curriculum-markdown-preview,
+.curriculum-detail-box,
+.curriculum-preview-meta__item {
+  border-radius: var(--portal-radius-sm);
+  background: #f8fbff;
+}
+
+/* Curriculum compact content pass */
+.curriculum-shell,
+.curriculum-section,
+.curriculum-workspace,
+.curriculum-editor-card,
+.curriculum-program-card,
+.curriculum-archive-card,
+.curriculum-assignment-card,
+.curriculum-preview-card,
+.curriculum-session-card,
+.curriculum-lesson-card,
+.student-review-card {
+  padding: 0.82rem !important;
+}
+
+.curriculum-top-tabs {
+  margin-bottom: 0.8rem;
+}
+
+.curriculum-top-tab {
+  min-height: 2.12rem;
+  padding: 0 0.72rem;
+  font-size: 0.88rem;
+}
+
+.curriculum-program-button,
+.curriculum-session-button,
+.curriculum-session-chip {
+  padding: 0.56rem 0.68rem;
+}
+
+.curriculum-session-list,
+.curriculum-lesson-grid,
+.curriculum-workspace-grid,
+.curriculum-editor-grid,
+.curriculum-assignment-grid {
+  gap: 0.7rem !important;
+}
+
+.curriculum-editor-tabs {
+  gap: 0.42rem;
+  margin-bottom: 0.7rem;
+}
+
+.curriculum-editor-tab {
+  min-height: 2rem;
+  padding: 0 0.65rem;
+  font-size: 0.86rem;
+}
+
+.curriculum-detail-box,
+.curriculum-detail-list,
+.curriculum-preview-meta__item,
+.curriculum-lesson-markdown-editor {
+  padding: 0.72rem 0.78rem;
+}
+
+.curriculum-markdown-preview {
+  min-height: 180px;
+  max-height: 360px;
+}
+
+/* Motion polish */
+.curriculum-shell,
+.curriculum-section,
+.curriculum-workspace,
+.curriculum-editor-card,
+.curriculum-program-card,
+.curriculum-archive-card,
+.curriculum-assignment-card,
+.curriculum-preview-card,
+.curriculum-session-card,
+.curriculum-lesson-card,
+.student-review-card {
+  animation: portalFadeUp var(--motion-slow) var(--ease-out) both;
+}
+
+.curriculum-program-button,
+.curriculum-session-button,
+.curriculum-session-chip,
+.curriculum-editor-tab,
+.curriculum-top-tab,
+.curriculum-content-tab,
+.curriculum-class-card,
+.curriculum-archive-card,
+.curriculum-assignment-card,
+.curriculum-preview-card,
+.curriculum-session-card,
+.curriculum-lesson-card,
+.curriculum-lesson-markdown-editor,
+.student-review-card {
+  transition:
+    transform var(--motion-normal) var(--ease-out),
+    border-color var(--motion-normal) var(--ease-out),
+    box-shadow var(--motion-normal) var(--ease-out),
+    background-color var(--motion-normal) var(--ease-out),
+    color var(--motion-normal) var(--ease-out);
+}
+
+.curriculum-program-button:hover,
+.curriculum-session-button:hover,
+.curriculum-session-chip:hover,
+.curriculum-editor-tab:hover,
+.curriculum-top-tab:hover,
+.curriculum-content-tab:hover,
+.curriculum-class-card:hover,
+.curriculum-archive-card:hover,
+.curriculum-assignment-card:hover,
+.curriculum-preview-card:hover,
+.curriculum-session-card:hover,
+.curriculum-lesson-card:hover,
+.student-review-card:hover {
+  border-color: rgba(0, 166, 214, 0.36);
+  box-shadow: 0 0.5rem 1.2rem rgba(11, 47, 79, 0.065);
+  transform: var(--hover-lift);
+}
+
+.curriculum-editor-tab--active,
+.curriculum-top-tab--active,
+.curriculum-content-tab--active,
+.curriculum-session-chip--active {
+  animation: portalSoftPop var(--motion-normal) var(--ease-out);
+}

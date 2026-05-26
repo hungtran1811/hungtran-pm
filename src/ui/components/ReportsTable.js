@@ -15,6 +15,8 @@ export function renderReportsTable(reports, { selectedStudentId = '', showDelete
           data-report-id="${escapeHtml(report.id)}"
           data-student-id="${escapeHtml(report.studentId)}"
           data-student-name="${escapeHtml(report.studentName)}"
+          role="button"
+          tabindex="0"
           title="Bấm vào card để xem báo cáo"
         >
           <div class="admin-card-main">

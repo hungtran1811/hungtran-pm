@@ -66,7 +66,13 @@ export function toDateKey(value = new Date()) {
 }
 
 export function isToday(value) {
-  return toDateKey(value) === toDateKey(new Date());
+  const date = toDate(value);
+
+  if (!date) {
+    return false;
+  }
+
+  return toDateKey(date) === toDateKey(new Date());
 }
 
 export function daysSince(value) {

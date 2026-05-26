@@ -1,8 +1,15 @@
+import { getClassesOnce } from '../../services/classes.service.js';
 import {
   getCurriculumProgram,
   listCurriculumPrograms,
 } from '../../services/curriculum.service.js';
-import { listQuizConfigs } from '../../services/quizzes.service.js';
+import {
+  ADMIN_QUIZ_PREVIEW_STUDENT_NAME,
+  recordAdminQuizPreviewSubmission,
+} from '../../services/quiz-admin-preview.service.js';
+import {
+  listQuizConfigs,
+} from '../../services/quizzes.service.js';
 import {
   getCurriculumActivityTypeLabel,
   getCurriculumSessionActivities,
@@ -13,14 +20,12 @@ import {
   buildStudentQuizVariant,
   formatQuizReadinessRequirement,
   getQuizReadiness,
-  getQuizQuestionTypeLabel,
   isFillBlankQuestion,
-  isQuizBlankAnswerCorrect,
+  isQuizQuestionAnswered,
   QUIZ_QUESTION_LIMIT,
   validateQuizAnswerMap,
 } from '../../utils/quiz.js';
 import {
-  buildAdminLessonPreviewPath,
   buildAdminQuizPreviewPath,
   getHashRouteState,
 } from '../../utils/route.js';
@@ -31,15 +36,7 @@ import { renderLoadingOverlay } from '../components/LoadingOverlay.js';
 import { renderQuizForm } from '../components/QuizForm.js';
 import { renderToastStack, showToast } from '../components/ToastStack.js';
 
-const ADMIN_PREVIEW_CLASS = {
-  classCode: 'ADMIN-QUIZ-DEMO',
-  className: 'Lớp mẫu kiểm tra',
-};
-
-const ADMIN_PREVIEW_STUDENT = {
-  studentId: 'ADMIN-STUDENT-DEMO',
-  fullName: 'Học sinh mẫu',
-};
+const ADMIN_PREVIEW_CLASS_CODE = 'ADMIN-PREVIEW';
 
 function resolveSessionNumber(program, requestedSessionNumber) {
   const sessions = getCurriculumSessionActivities(program);
@@ -49,19 +46,120 @@ function resolveSessionNumber(program, requestedSessionNumber) {
     return requested;
   }
 
-  return sessions[0]?.sessionNumber || 1;
+  if ([5, 9].includes(requested)) {
+    return requested;
+  }
+
+  return sessions.find((item) => [5, 9].includes(item.sessionNumber))?.sessionNumber || 5;
 }
 
-function renderMultilineText(value) {
-  return escapeHtml(String(value ?? '').trim()).replaceAll('\n', '<br>');
+function findQuizConfigForSession(configs = [], sessionNumber = 0) {
+  return configs.find((config) => Number(config.sessionNumber || 0) === Number(sessionNumber || 0)) || null;
 }
 
-function renderReadonlyField(label, primary, secondary = '') {
+function getRequiredAnswerMessage(question) {
+  return isFillBlankQuestion(question)
+    ? 'Hãy nhập câu trả lời cho câu hỏi này.'
+    : 'Hãy chọn một đáp án cho câu hỏi này.';
+}
+
+function normalizeAnswerErrors(quizVariant, errors = {}) {
+  const normalizedErrors = {};
+
+  Object.keys(errors).forEach((questionId) => {
+    const question = (quizVariant?.questions || []).find((item) => item.id === questionId);
+    normalizedErrors[questionId] = question
+      ? getRequiredAnswerMessage(question)
+      : 'Hãy trả lời câu hỏi này.';
+  });
+
+  return normalizedErrors;
+}
+
+function getPreviewClasses(classes = [], program = null) {
+  const activeClasses = classes.filter((classItem) => classItem.status === 'active' && !classItem.hidden);
+  const matchingClasses = program?.id
+    ? activeClasses.filter((classItem) => classItem.curriculumProgramId === program.id)
+    : activeClasses;
+
+  return matchingClasses.length > 0 ? matchingClasses : activeClasses;
+}
+
+function getStudentsForClass(students = [], classCode = '') {
+  const normalizedClassCode = String(classCode || '').trim().toUpperCase();
+
+  return students.filter((student) =>
+    student.active &&
+    (
+      String(student.classId || '').trim().toUpperCase() === normalizedClassCode ||
+      String(student.classCode || '').trim().toUpperCase() === normalizedClassCode
+    ),
+  );
+}
+
+function getSelectedClass(state) {
+  return getPreviewClasses(state.classes, state.program)
+    .find((classItem) => classItem.classCode === state.selectedClassCode) || null;
+}
+
+function getSelectedStudent(state) {
+  return state.selectedClassCode
+    ? {
+        id: 'admin-preview-student',
+        fullName: ADMIN_QUIZ_PREVIEW_STUDENT_NAME,
+      }
+    : null;
+}
+
+function buildScoreCenterPath(classCode = '', sessionNumber = 0) {
+  const params = new URLSearchParams();
+
+  params.set('workspace', 'quiz');
+  params.set('session', String(Number(sessionNumber || 0) || 5));
+
+  if (classCode) {
+    params.set('classCode', String(classCode || '').trim().toUpperCase());
+  }
+
+  return `#/admin/curriculum?${params.toString()}`;
+}
+
+function renderQuizPreviewControls({ program, sessionNumber, classCode = '' }) {
+  const selectedActivity = program ? getCurriculumSessionActivity(program, sessionNumber) : null;
+  const activityLabel = selectedActivity
+    ? getCurriculumActivityTypeLabel(selectedActivity.activityType)
+    : 'Kiểm tra';
+
   return `
-    <label class="form-label">${escapeHtml(label)}</label>
-    <div class="form-control locked-class-field bg-body-tertiary admin-quiz-preview-field">
-      <div class="locked-class-field__code">${escapeHtml(primary)}</div>
-      ${secondary ? `<div class="locked-class-field__name">${escapeHtml(secondary)}</div>` : ''}
+    <div class="admin-student-preview-bar admin-student-preview-bar--compact">
+      <a class="admin-student-preview-back" href="#/admin/curriculum" aria-label="Quay lại Học liệu">
+        <i class="bi bi-arrow-left"></i>
+        <span>Học liệu</span>
+      </a>
+      ${
+        program
+          ? `
+            <div class="admin-student-preview-field admin-student-preview-field--readonly admin-student-preview-field--wide">
+              <label class="form-label">Chương trình</label>
+              <div class="admin-student-preview-readonly">${escapeHtml(program.name || 'Chưa chọn chương trình')}</div>
+            </div>
+          `
+          : ''
+      }
+      <div class="admin-student-preview-field admin-student-preview-field--readonly">
+        <label class="form-label">Buổi</label>
+        <div class="admin-student-preview-readonly">Buổi ${Number(sessionNumber || 0) || '?'} · ${escapeHtml(activityLabel)}</div>
+      </div>
+      ${
+        classCode
+          ? `
+            <div class="admin-student-preview-field admin-student-preview-field--readonly">
+              <label class="form-label">Lớp ghi điểm</label>
+              <div class="admin-student-preview-readonly">${escapeHtml(classCode)}</div>
+            </div>
+          `
+          : ''
+      }
     </div>
   `;
 }
@@ -71,34 +169,26 @@ function renderProgramShortcutList(programs = []) {
     return renderEmptyState({
       icon: 'diagram-3',
       title: 'Chưa có chương trình học',
-      description: 'Hãy tạo hoặc seed chương trình học trước khi test quiz admin.',
+      description: 'Hãy tạo hoặc seed chương trình học trước khi test đề.',
     });
   }
 
   return `
-    <div class="card border-0 shadow-sm">
-      <div class="card-body p-4">
-        <h2 class="h5 mb-2">Chọn chương trình để test quiz</h2>
-        <p class="text-secondary mb-4">Trang này chỉ dùng lớp mẫu và học sinh mẫu, không lấy dữ liệu lớp thật.</p>
-        <div class="row g-3">
+    <div class="student-library-card card border-0 shadow-sm">
+      <div class="card-body">
+        <div class="student-library-title-label">Test quiz admin</div>
+        <h2 class="h5 mb-3">Chọn chương trình và buổi để làm thử</h2>
+        <div class="admin-student-preview-program-grid">
           ${programs
-            .map((program) => {
-              const firstSession = getCurriculumSessionActivities(program)[0]?.sessionNumber || 1;
-
-              return `
-                <div class="col-12 col-md-6">
-                  <a class="text-decoration-none" href="${escapeHtml(buildAdminQuizPreviewPath(program.id, firstSession))}">
-                    <div class="card h-100 border-0 bg-light-subtle">
-                      <div class="card-body">
-                        <div class="small text-secondary mb-2">${escapeHtml(program.subject || 'Chương trình')}</div>
-                        <h3 class="h6 text-dark mb-2">${escapeHtml(program.name)}</h3>
-                        <div class="text-secondary small">Tổng ${Number(program.totalSessionCount || 0)} buổi</div>
-                      </div>
-                    </div>
-                  </a>
-                </div>
-              `;
-            })
+            .flatMap((program) =>
+              [5, 9].map((sessionNumber) => `
+                <a class="admin-student-preview-program" href="${escapeHtml(buildAdminQuizPreviewPath(program.id, sessionNumber))}">
+                  <span>${escapeHtml(program.subject || 'Chương trình')} · Buổi ${sessionNumber}</span>
+                  <strong>${escapeHtml(program.name)}</strong>
+                  <small>Chọn lớp/học sinh ở bước tiếp theo để gửi điểm về trung tâm</small>
+                </a>
+              `),
+            )
             .join('')}
         </div>
       </div>
@@ -106,199 +196,435 @@ function renderProgramShortcutList(programs = []) {
   `;
 }
 
-function findQuizConfigForSession(configs = [], sessionNumber = 0) {
-  return configs.find((config) => Number(config.sessionNumber || 0) === Number(sessionNumber || 0)) || null;
+function renderScoreTargetPanel(state, { disabled = false } = {}) {
+  const classes = getPreviewClasses(state.classes, state.program);
+  const students = state.selectedClassCode
+    ? [{ id: state.selectedStudentId || 'admin-preview-student', fullName: ADMIN_QUIZ_PREVIEW_STUDENT_NAME }]
+    : [];
+  const selectedClass = getSelectedClass(state);
+  const selectedStudent = getSelectedStudent(state);
+  const scoreCenterPath = state.selectedClassCode
+    ? buildScoreCenterPath(state.selectedClassCode, state.sessionNumber)
+    : '#/admin/curriculum?workspace=quiz';
+  const disabledAttr = disabled || state.isSubmitting ? 'disabled' : '';
+
+  return `
+    <section class="admin-quiz-score-target">
+      <div>
+        <div class="student-library-title-label">Gửi kết quả test admin</div>
+        <h2 class="h6 mb-1">Chọn lớp để ghi nhận lượt test mẫu</h2>
+        <p class="text-secondary mb-0">Bài test admin luôn được lưu dưới tên ${escapeHtml(ADMIN_QUIZ_PREVIEW_STUDENT_NAME)}, không dùng học sinh thật.</p>
+      </div>
+      <div class="admin-quiz-score-target__controls">
+        <label class="admin-quiz-score-target__field">
+          <span>Lớp</span>
+          <select id="admin-quiz-preview-class-select" class="form-select" ${disabledAttr}>
+            ${
+              classes.length
+                ? classes.map((classItem) => `
+                    <option value="${escapeHtml(classItem.classCode)}" ${classItem.classCode === state.selectedClassCode ? 'selected' : ''}>
+                      ${escapeHtml(classItem.classCode)} - ${escapeHtml(classItem.className)}
+                    </option>
+                  `).join('')
+                : '<option value="">Chưa có lớp đang hoạt động</option>'
+            }
+          </select>
+        </label>
+        <label class="admin-quiz-score-target__field">
+          <span>Học sinh test</span>
+          <div class="form-control bg-white">${escapeHtml(ADMIN_QUIZ_PREVIEW_STUDENT_NAME)}</div>
+        </label>
+        <a class="btn btn-outline-secondary admin-quiz-score-target__link" href="${escapeHtml(scoreCenterPath)}">
+          <i class="bi bi-clipboard-data me-2"></i>Trung tâm điểm
+        </a>
+      </div>
+      ${
+        selectedClass && selectedStudent
+          ? ''
+          : renderAlert('Cần chọn lớp đang hoạt động để gửi kết quả test admin vào trung tâm điểm.', 'warning')
+      }
+    </section>
+  `;
+
+  return `
+    <section class="admin-quiz-score-target">
+      <div>
+        <div class="student-library-title-label">Gửi kết quả về trung tâm điểm</div>
+        <h2 class="h6 mb-1">Chọn lớp và học sinh để ghi nhận lượt nộp</h2>
+        <p class="text-secondary mb-0">Học sinh không thấy điểm sau khi nộp. Admin xem điểm trong Học liệu.</p>
+      </div>
+      <div class="admin-quiz-score-target__controls">
+        <label class="admin-quiz-score-target__field">
+          <span>Lớp</span>
+          <select id="admin-quiz-preview-class-select" class="form-select" ${disabledAttr}>
+            ${
+              classes.length
+                ? classes.map((classItem) => `
+                    <option value="${escapeHtml(classItem.classCode)}" ${classItem.classCode === state.selectedClassCode ? 'selected' : ''}>
+                      ${escapeHtml(classItem.classCode)} - ${escapeHtml(classItem.className)}
+                    </option>
+                  `).join('')
+                : '<option value="">Chưa có lớp đang hoạt động</option>'
+            }
+          </select>
+        </label>
+        <label class="admin-quiz-score-target__field">
+          <span>Học sinh</span>
+          <select id="admin-quiz-preview-student-select" class="form-select" ${disabledAttr || !students.length ? 'disabled' : ''}>
+            ${
+              students.length
+                ? students.map((student) => `
+                    <option value="${escapeHtml(student.id)}" ${student.id === state.selectedStudentId ? 'selected' : ''}>
+                      ${escapeHtml(student.fullName)}
+                    </option>
+                  `).join('')
+                : '<option value="">Chưa có học sinh trong lớp này</option>'
+            }
+          </select>
+        </label>
+        <a class="btn btn-outline-secondary admin-quiz-score-target__link" href="${escapeHtml(scoreCenterPath)}">
+          <i class="bi bi-clipboard-data me-2"></i>Trung tâm điểm
+        </a>
+      </div>
+      ${
+        selectedClass && selectedStudent
+          ? ''
+          : renderAlert('Cần có lớp đang hoạt động và học sinh trong lớp để gửi kết quả vào trung tâm điểm.', 'warning')
+      }
+    </section>
+  `;
 }
 
-function getQuestionById(config, questionId) {
-  return (config?.questions || []).find((question) => question.id === questionId) || null;
-}
+function renderQuizPreviewTabs(activeTab = 'take', hasSubmittedRecord = false) {
+  const tabs = [
+    { id: 'take', label: 'Làm bài thử', icon: 'play-circle' },
+    { id: 'target', label: 'Ghi điểm', icon: 'person-check' },
+  ];
 
-function getOptionText(question, optionId) {
-  return (question?.options || []).find((option) => option.id === optionId)?.text || '';
-}
-
-function buildPreviewResult(quizConfig, quizVariant, answers = {}) {
-  const gradedQuestions = (quizVariant?.questions || []).map((publicQuestion, index) => {
-    const privateQuestion = getQuestionById(quizConfig, publicQuestion.id) || publicQuestion;
-    const answerValue = String(answers[publicQuestion.id] ?? '').trim();
-    const isBlank = isFillBlankQuestion(privateQuestion);
-    const correctOptionId = privateQuestion.correctOptionId || '';
-    const isCorrect = isBlank
-      ? isQuizBlankAnswerCorrect(privateQuestion, answerValue)
-      : Boolean(answerValue) && answerValue === correctOptionId;
-
-    return {
-      questionId: publicQuestion.id,
-      order: index + 1,
-      type: privateQuestion.type,
-      prompt: publicQuestion.prompt || privateQuestion.prompt || '',
-      imageUrl: publicQuestion.imageUrl || privateQuestion.imageUrl || '',
-      imageAlt: publicQuestion.imageAlt || privateQuestion.imageAlt || '',
-      selectedText: isBlank ? answerValue : getOptionText(publicQuestion, answerValue) || getOptionText(privateQuestion, answerValue),
-      correctText: isBlank
-        ? (privateQuestion.acceptedAnswers || []).join(', ')
-        : getOptionText(privateQuestion, correctOptionId),
-      isCorrect,
-    };
-  });
-  const questionCount = gradedQuestions.length;
-  const correctCount = gradedQuestions.filter((question) => question.isCorrect).length;
-
-  return {
-    questionCount,
-    correctCount,
-    score: questionCount > 0 ? Math.round((correctCount / questionCount) * 100) : 0,
-    gradedQuestions,
-  };
-}
-
-function renderPreviewResult(result) {
-  if (!result) {
-    return '';
+  if (hasSubmittedRecord) {
+    tabs.push({ id: 'receipt', label: 'Sau khi nộp', icon: 'check2-circle' });
   }
 
   return `
-    <section class="card border-0 shadow-sm mt-3 admin-quiz-result">
-      <div class="card-header bg-white border-0">
-        <div class="d-flex flex-wrap justify-content-between gap-2 align-items-center">
-          <div>
-            <h3 class="h5 mb-1">Kết quả chấm thử</h3>
-            <p class="text-secondary mb-0">Chỉ admin thấy phần này, dữ liệu không ghi vào bài nộp thật.</p>
-          </div>
-          <span class="badge ${result.score >= 70 ? 'text-bg-success' : 'text-bg-warning text-dark'}">
-            ${result.correctCount}/${result.questionCount} (${result.score}%)
-          </span>
+    <div class="admin-quiz-preview-tabs" role="tablist" aria-label="Khu test quiz admin">
+      ${tabs
+        .map((tab) => `
+          <button
+            type="button"
+            class="admin-quiz-preview-tab ${tab.id === activeTab ? 'admin-quiz-preview-tab--active' : ''}"
+            data-action="switch-admin-quiz-preview-tab"
+            data-tab-id="${tab.id}"
+          >
+            <i class="bi bi-${tab.icon} me-2"></i>${tab.label}
+          </button>
+        `)
+        .join('')}
+    </div>
+  `;
+}
+
+function renderScoreTargetSummary(state) {
+  const selectedClass = getSelectedClass(state);
+  const selectedStudent = getSelectedStudent(state);
+
+  return `
+    <section class="admin-quiz-score-summary">
+      <div>
+        <div class="student-library-title-label">Ghi điểm về trung tâm</div>
+        <div class="admin-quiz-score-summary__title">
+          ${
+            selectedClass && selectedStudent
+              ? `${escapeHtml(selectedStudent.fullName)} · ${escapeHtml(selectedClass.classCode)}`
+              : 'Chưa chọn lớp/học sinh'
+          }
         </div>
       </div>
-      <div class="card-body">
-        <div class="row g-3">
-          ${result.gradedQuestions
-            .map(
-              (question) => `
-                <div class="col-12">
-                  <div class="card border ${question.isCorrect ? 'border-success-subtle' : 'border-danger-subtle'}">
-                    <div class="card-body">
-                      <div class="d-flex flex-wrap justify-content-between gap-2 align-items-start mb-2">
-                        <div class="d-flex flex-wrap gap-2">
-                          <span class="badge text-bg-light text-dark border">Câu ${question.order}</span>
-                          <span class="badge bg-white text-dark border">${escapeHtml(getQuizQuestionTypeLabel(question.type))}</span>
-                        </div>
-                        <span class="badge ${question.isCorrect ? 'text-bg-success' : 'text-bg-danger'}">
-                          ${question.isCorrect ? 'Đúng' : 'Sai'}
-                        </span>
-                      </div>
-                      <div class="fw-semibold mb-3">${renderMultilineText(question.prompt)}</div>
-                      ${
-                        question.imageUrl
-                          ? `
-                            <figure class="quiz-question-media quiz-question-media--admin">
-                              <img
-                                src="${escapeHtml(question.imageUrl)}"
-                                alt="${escapeHtml(question.imageAlt || question.prompt || 'Minh họa câu hỏi')}"
-                                class="quiz-question-media__image"
-                                loading="lazy"
-                              />
-                            </figure>
-                          `
-                          : ''
-                      }
-                      <div class="row g-3">
-                        <div class="col-12 col-md-6">
-                          <div class="quiz-status-meta h-100">
-                            <div class="quiz-status-meta__label">Học sinh mẫu chọn</div>
-                            <div class="fw-semibold">${escapeHtml(question.selectedText || 'Chưa trả lời')}</div>
-                          </div>
-                        </div>
-                        <div class="col-12 col-md-6">
-                          <div class="quiz-status-meta h-100">
-                            <div class="quiz-status-meta__label">Đáp án đúng</div>
-                            <div class="fw-semibold">${escapeHtml(question.correctText || 'Chưa có đáp án')}</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              `,
-            )
-            .join('')}
+      <button type="button" class="btn btn-outline-primary btn-sm" data-action="switch-admin-quiz-preview-tab" data-tab-id="target">
+        <i class="bi bi-sliders me-1"></i>Chọn nơi ghi điểm
+      </button>
+    </section>
+  `;
+}
+
+function renderStudentSubmittedPreview(state) {
+  const quiz = state.quizVariant;
+  const questionCount = Number(quiz?.questionCount || quiz?.questions?.length || 0);
+
+  return `
+    <section class="student-quiz-card student-quiz-submitted admin-quiz-student-submitted">
+      ${renderAlert('Bạn đã nộp bài kiểm tra thành công.', 'success')}
+      <div class="student-quiz-submitted__main">
+        <span class="student-quiz-submitted__icon" aria-hidden="true">
+          <i class="bi bi-check2-circle"></i>
+        </span>
+        <div>
+          <div class="student-quiz-eyebrow">Kiểm tra buổi ${Number(quiz?.sessionNumber || 0) || '?'}</div>
+          <h2 class="student-quiz-title">${escapeHtml(quiz?.title || 'Bài kiểm tra')}</h2>
+          <p class="student-quiz-description mb-0">
+            Hệ thống đã ghi nhận bài làm. Học sinh không thấy điểm, đáp án đúng hoặc thống kê sau khi nộp.
+          </p>
+        </div>
+      </div>
+      <div class="student-quiz-submitted__meta">
+        <div class="quiz-status-meta">
+          <div class="quiz-status-meta__label">Trạng thái</div>
+          <div class="fw-semibold text-success">Đã nộp</div>
+        </div>
+        <div class="quiz-status-meta">
+          <div class="quiz-status-meta__label">Số câu</div>
+          <div class="fw-semibold">${questionCount} câu</div>
+        </div>
+        <div class="quiz-status-meta">
+          <div class="quiz-status-meta__label">Kết quả</div>
+          <div class="fw-semibold">Đã gửi cho admin</div>
         </div>
       </div>
     </section>
   `;
 }
 
-function renderQuizPreviewShell({
-  program,
-  sessionNumber,
-  quizConfig,
-  quizVariant,
-  answers,
-  errors,
-  currentQuestionIndex,
-  result,
-}) {
-  const selectedActivity = getCurriculumSessionActivity(program, sessionNumber);
-  const questionPoolCount = Number(quizConfig?.questions?.length || 0);
-  const readiness = quizConfig ? getQuizReadiness(quizConfig) : null;
+function renderScoreCenterReceipt(state) {
+  const record = state.submittedRecord;
+  const scoreCenterPath = buildScoreCenterPath(record?.classCode || state.selectedClassCode, state.sessionNumber);
+
+  if (!record) {
+    return '';
+  }
 
   return `
-    <div class="admin-quiz-preview-toolbar mb-3">
+    <section class="admin-quiz-score-receipt">
+      <div class="admin-quiz-score-receipt__icon" aria-hidden="true">
+        <i class="bi bi-database-check"></i>
+      </div>
       <div>
-        <div class="small text-secondary mb-1">Màn test admin</div>
-        <h2 class="h5 mb-0">${escapeHtml(program.name)} · Buổi ${Number(sessionNumber || 0)}</h2>
+        <div class="student-library-title-label">Trung tâm điểm đã nhận</div>
+        <h3 class="h5 mb-2">Kết quả đã được gửi về Học liệu</h3>
+        <p class="text-secondary mb-3">
+          Lượt nộp của <strong>${escapeHtml(record.studentName || 'học sinh')}</strong>
+          trong lớp <strong>${escapeHtml(record.classCode || '')}</strong> đã được ghi vào danh sách bài nộp.
+          Màn review không hiển thị điểm để giữ đúng trải nghiệm học sinh.
+        </p>
+        <div class="d-flex flex-wrap gap-2">
+          <a class="btn btn-primary" href="${escapeHtml(scoreCenterPath)}">
+            <i class="bi bi-clipboard-data me-2"></i>Mở trung tâm điểm
+          </a>
+          <button type="button" class="btn btn-outline-secondary" data-action="reset-admin-quiz-preview">
+            Làm lại vai học sinh
+          </button>
+          <button type="button" class="btn btn-outline-secondary" data-action="refresh-admin-quiz-variant">
+            <i class="bi bi-shuffle me-2"></i>Đề thử khác
+          </button>
+        </div>
       </div>
-      <div class="d-flex flex-wrap gap-2">
-        <a class="btn btn-outline-secondary btn-sm" href="#/admin/curriculum?workspace=editor&session=${Number(sessionNumber || 0)}">
-          <i class="bi bi-arrow-left me-1"></i>Về Học liệu
-        </a>
-        <a class="btn btn-outline-secondary btn-sm" href="${escapeHtml(buildAdminLessonPreviewPath(program.id, sessionNumber))}">
-          <i class="bi bi-journal-richtext me-1"></i>Xem học liệu
-        </a>
-        <button type="button" class="btn btn-outline-primary btn-sm" data-action="refresh-admin-quiz-variant" ${quizConfig ? '' : 'disabled'}>
-          <i class="bi bi-shuffle me-1"></i>Đề thử khác
-        </button>
+    </section>
+  `;
+}
+
+function renderQuizPreviewContent(state) {
+  if (state.isLoading) {
+    return renderLoadingOverlay('Đang tải đề test...');
+  }
+
+  if (state.error) {
+    return renderAlert(escapeHtml(state.error), 'danger');
+  }
+
+  if (!state.program) {
+    return renderProgramShortcutList(state.programs);
+  }
+
+  if (!state.quizConfig) {
+    return renderEmptyState({
+      icon: 'patch-question',
+      title: `Chưa có bộ đề buổi ${state.sessionNumber}`,
+      description: 'Hãy quay lại Học liệu, dùng bộ mẫu hoặc thêm câu hỏi rồi bấm lưu đề trước khi test.',
+    });
+  }
+
+  const readiness = getQuizReadiness(state.quizConfig);
+  const selectedClass = getSelectedClass(state);
+  const selectedStudent = getSelectedStudent(state);
+  const canSubmitToScoreCenter = Boolean(selectedClass && selectedStudent);
+
+  if (state.submittedRecord) {
+    return `
+      ${renderScoreTargetPanel(state, { disabled: true })}
+      <div class="admin-quiz-preview-intro mb-3">
+        ${renderAlert(
+          'Mô phỏng sau khi học sinh nộp bài: học sinh chỉ thấy trạng thái đã nộp, còn điểm được quản lý trong trung tâm điểm.',
+          'info',
+        )}
       </div>
+      <div class="admin-quiz-review-grid">
+        <div>
+          <div class="admin-quiz-review-label">Màn học sinh sau khi nộp</div>
+          ${renderStudentSubmittedPreview(state)}
+        </div>
+        <div>
+          <div class="admin-quiz-review-label">Luồng admin nhận kết quả</div>
+          ${renderScoreCenterReceipt(state)}
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    ${renderScoreTargetPanel(state)}
+    <div class="admin-quiz-preview-intro mb-3">
+      ${renderAlert(
+        'Bạn đang nhập vai học sinh để kiểm tra luồng thật. Khi nộp, kết quả sẽ được ghi vào trung tâm điểm của lớp/học sinh đã chọn.',
+        'info',
+      )}
+      ${
+        state.submitError
+          ? renderAlert(escapeHtml(state.submitError), 'danger')
+          : ''
+      }
+      ${
+        readiness.isReady
+          ? ''
+          : renderAlert(
+              `Bộ đề chưa đủ tỉ lệ 4 dễ, 4 trung bình, 2 khó. ${formatQuizReadinessRequirement(readiness)} Bạn vẫn có thể làm thử các câu hiện có.`,
+              'warning',
+            )
+      }
     </div>
-
-    <div class="row g-3 mb-4">
-      <div class="col-12 col-md-6">
-        ${renderReadonlyField('Mã lớp', ADMIN_PREVIEW_CLASS.classCode, `${ADMIN_PREVIEW_CLASS.className} · ${getCurriculumActivityTypeLabel(selectedActivity.activityType)}`)}
-      </div>
-      <div class="col-12 col-md-6">
-        ${renderReadonlyField('Họ và tên', ADMIN_PREVIEW_STUDENT.fullName, 'Tài khoản mẫu chỉ dùng để test giao diện')}
-      </div>
-    </div>
-
-    ${renderAlert('Đây là lớp mẫu nội bộ để admin xem đúng giao diện học sinh. Không hiển thị cho học sinh, không nằm trong danh sách lớp và không lưu điểm.', 'info')}
     ${
-      quizConfig && !readiness?.isReady
-        ? renderAlert(`Bộ đề hiện có ${questionPoolCount} câu nhưng chưa đủ tỉ lệ 4 dễ, 4 trung bình, 2 khó. ${formatQuizReadinessRequirement(readiness)}`, 'warning')
-        : ''
-    }
-
-    ${
-      quizConfig && quizVariant
+      state.quizVariant
         ? `
-          ${renderQuizForm(quizVariant, answers, errors, {
-            helperText: 'Bạn đang xem giao diện giống học sinh. Bấm “Chấm thử” để admin xem kết quả, dữ liệu không được lưu.',
-            submitLabel: 'Chấm thử',
-            currentQuestionIndex,
+          ${renderQuizForm(state.quizVariant, state.answers, state.answerErrors, {
+            disabled: state.isSubmitting || !canSubmitToScoreCenter,
+            helperText: canSubmitToScoreCenter
+              ? 'Làm bài như học sinh thật. Sau khi nộp, học sinh chỉ thấy trạng thái đã nộp.'
+              : 'Hãy chọn lớp để bật nút nộp bài test admin vào trung tâm điểm.',
+            submitLabel: state.isSubmitting ? 'Đang gửi kết quả...' : 'Nộp bài kiểm tra',
+            currentQuestionIndex: state.currentQuestionIndex,
           })}
-          <div class="d-flex justify-content-end mt-2">
-            <button type="button" class="btn btn-link text-secondary" data-action="reset-admin-quiz-preview">
+          <div class="d-flex flex-wrap justify-content-end gap-2 mt-2">
+            <button type="button" class="btn btn-outline-secondary" data-action="refresh-admin-quiz-variant" ${state.isSubmitting ? 'disabled' : ''}>
+              <i class="bi bi-shuffle me-2"></i>Đề thử khác
+            </button>
+            <button type="button" class="btn btn-link text-secondary" data-action="reset-admin-quiz-preview" ${state.isSubmitting ? 'disabled' : ''}>
               Làm lại lượt test
             </button>
           </div>
-          ${renderPreviewResult(result)}
         `
         : renderEmptyState({
             icon: 'patch-question',
-            title: 'Buổi này chưa có đề quiz',
-            description:
-              'Hãy quay lại Học liệu, chọn buổi kiểm tra và thêm câu hỏi trước khi mở màn test này.',
+            title: 'Bộ đề chưa có câu hỏi',
+            description: 'Hãy thêm câu hỏi hoặc dùng bộ mẫu trong Học liệu trước khi test.',
           })
+    }
+  `;
+}
+
+function renderQuizPreviewContentV2(state) {
+  if (state.isLoading || state.error || !state.program || !state.quizConfig) {
+    return renderQuizPreviewContent(state);
+  }
+
+  const readiness = getQuizReadiness(state.quizConfig);
+  const selectedClass = getSelectedClass(state);
+  const selectedStudent = getSelectedStudent(state);
+  const canSubmitToScoreCenter = Boolean(selectedClass && selectedStudent);
+  const activeTab = state.submittedRecord
+    ? (state.activeTab || 'receipt')
+    : state.activeTab === 'target'
+      ? 'target'
+      : 'take';
+
+  if (state.submittedRecord) {
+    const submittedTab = ['take', 'target', 'receipt'].includes(activeTab) ? activeTab : 'receipt';
+
+    return `
+      ${renderQuizPreviewTabs(submittedTab, true)}
+      ${
+        submittedTab === 'target'
+          ? renderScoreTargetPanel(state, { disabled: true })
+          : submittedTab === 'take'
+            ? `
+              ${renderScoreTargetSummary(state)}
+              ${renderStudentSubmittedPreview(state)}
+              <div class="d-flex flex-wrap justify-content-end gap-2 mt-3">
+                <button type="button" class="btn btn-outline-secondary" data-action="reset-admin-quiz-preview">
+                  Làm lại lượt test
+                </button>
+                <button type="button" class="btn btn-outline-secondary" data-action="refresh-admin-quiz-variant">
+                  <i class="bi bi-shuffle me-2"></i>Đề thử khác
+                </button>
+              </div>
+            `
+            : `
+              <div class="admin-quiz-preview-intro mb-3">
+                ${renderAlert(
+                  'Mô phỏng sau khi học sinh nộp bài: học sinh chỉ thấy trạng thái đã nộp, còn điểm được quản lý trong trung tâm điểm.',
+                  'info',
+                )}
+              </div>
+              <div class="admin-quiz-review-grid">
+                <div>
+                  <div class="admin-quiz-review-label">Màn học sinh sau khi nộp</div>
+                  ${renderStudentSubmittedPreview(state)}
+                </div>
+                <div>
+                  <div class="admin-quiz-review-label">Luồng admin nhận kết quả</div>
+                  ${renderScoreCenterReceipt(state)}
+                </div>
+              </div>
+            `
+      }
+    `;
+  }
+
+  return `
+    ${renderQuizPreviewTabs(activeTab, false)}
+    ${
+      activeTab === 'target'
+        ? renderScoreTargetPanel(state)
+        : `
+          ${renderScoreTargetSummary(state)}
+          <div class="admin-quiz-preview-intro mb-3">
+            ${renderAlert(
+              'Bạn đang nhập vai học sinh để kiểm tra luồng thật. Khi nộp, kết quả sẽ được ghi vào trung tâm điểm của lớp/học sinh đã chọn.',
+              'info',
+            )}
+            ${state.submitError ? renderAlert(escapeHtml(state.submitError), 'danger') : ''}
+            ${
+              readiness.isReady
+                ? ''
+                : renderAlert(
+                    `Bộ đề chưa đủ tỉ lệ 4 dễ, 4 trung bình, 2 khó. ${formatQuizReadinessRequirement(readiness)} Bạn vẫn có thể làm thử các câu hiện có.`,
+                    'warning',
+                  )
+            }
+          </div>
+          ${
+            state.quizVariant
+              ? `
+                ${renderQuizForm(state.quizVariant, state.answers, state.answerErrors, {
+                  disabled: state.isSubmitting || !canSubmitToScoreCenter,
+                  helperText: canSubmitToScoreCenter
+                    ? 'Làm bài như học sinh thật. Sau khi nộp, học sinh chỉ thấy trạng thái đã nộp.'
+                    : 'Hãy chọn lớp trong tab Ghi điểm để bật nút nộp bài test admin vào trung tâm điểm.',
+                  submitLabel: state.isSubmitting ? 'Đang gửi kết quả...' : 'Nộp bài kiểm tra',
+                  currentQuestionIndex: state.currentQuestionIndex,
+                })}
+                <div class="d-flex flex-wrap justify-content-end gap-2 mt-2">
+                  <button type="button" class="btn btn-outline-secondary" data-action="refresh-admin-quiz-variant" ${state.isSubmitting ? 'disabled' : ''}>
+                    <i class="bi bi-shuffle me-2"></i>Đề thử khác
+                  </button>
+                  <button type="button" class="btn btn-link text-secondary" data-action="reset-admin-quiz-preview" ${state.isSubmitting ? 'disabled' : ''}>
+                    Làm lại lượt test
+                  </button>
+                </div>
+              `
+              : renderEmptyState({
+                  icon: 'patch-question',
+                  title: 'Bộ đề chưa có câu hỏi',
+                  description: 'Hãy thêm câu hỏi hoặc dùng bộ mẫu trong Học liệu trước khi test.',
+                })
+          }
+        `
     }
   `;
 }
@@ -306,31 +632,24 @@ function renderQuizPreviewShell({
 export const adminQuizPreviewPage = {
   async render() {
     return `
-      <div class="student-layout admin-quiz-preview-layout">
-        <section class="student-hero admin-quiz-preview-hero">
-          <div class="container-fluid student-page-shell py-4 py-lg-5">
-            <div class="row justify-content-center">
-              <div class="col-12">
-                <div class="student-hero-card shadow-lg border-0">
-                  <div class="row g-0">
-                    <div class="col-12 col-lg-4 col-xl-3 student-hero-panel">
-                      ${renderBrandLogo({
-                        id: 'admin-quiz-preview-brand',
-                        className: 'student-brand-lockup mb-4',
-                        tone: 'light',
-                        compact: true,
-                      })}
-                      <h1 class="student-hero-title fw-semibold mb-3">Kiểm tra trắc nghiệm</h1>
-                      <p class="student-hero-copy mb-0 text-white-50">
-                        Đây là màn giả lập học sinh cho admin kiểm tra đề, thứ tự câu hỏi và trải nghiệm làm bài.
-                      </p>
-                    </div>
-                    <div class="col-12 col-lg-8 col-xl-9 p-4 p-xl-5 bg-white student-main-panel">
-                      <div id="admin-quiz-preview-root">${renderLoadingOverlay('Đang tải đề quiz preview...')}</div>
-                    </div>
-                  </div>
-                </div>
+      <div class="student-layout admin-student-preview-layout">
+        <section class="admin-student-preview-controls">
+          <div class="container-fluid student-page-shell">
+            <div id="admin-quiz-preview-controls">${renderLoadingOverlay('Đang tải điều khiển...')}</div>
+          </div>
+        </section>
+        <section class="student-library-shell py-3 py-lg-4">
+          <div class="container-fluid student-page-shell">
+            <div class="student-library-page">
+              <div class="student-library-page__brand">
+                ${renderBrandLogo({
+                  id: 'admin-quiz-preview-brand',
+                  className: 'student-library-page__brand-lockup',
+                  tone: 'dark',
+                  compact: true,
+                })}
               </div>
+              <div id="admin-quiz-preview-root">${renderLoadingOverlay('Đang tải đề test...')}</div>
             </div>
           </div>
         </section>
@@ -340,41 +659,79 @@ export const adminQuizPreviewPage = {
   },
 
   async mount() {
+    const controls = document.getElementById('admin-quiz-preview-controls');
     const root = document.getElementById('admin-quiz-preview-root');
 
-    if (!root) {
+    if (!controls || !root) {
       return null;
     }
 
     const state = {
       programs: [],
+      classes: [],
+      students: [],
       program: null,
-      sessionNumber: 1,
+      sessionNumber: 5,
+      routeClassCode: '',
+      selectedClassCode: '',
+      selectedStudentId: '',
       quizConfigs: [],
       quizConfig: null,
       quizVariant: null,
       answers: {},
-      errors: {},
+      answerErrors: {},
       currentQuestionIndex: 0,
-      result: null,
+      submittedRecord: null,
+      isSubmitting: false,
+      submitError: '',
+      activeTab: 'take',
+      isLoading: true,
+      error: '',
       previewSeed: Date.now(),
     };
     let disposed = false;
 
+    function syncScoreTarget(preferredClassCode = '') {
+      const classes = getPreviewClasses(state.classes, state.program);
+      const preferred = String(preferredClassCode || '').trim().toUpperCase();
+      const hasPreferredClass = preferred && classes.some((classItem) => classItem.classCode === preferred);
+      const hasSelectedClass = classes.some((classItem) => classItem.classCode === state.selectedClassCode);
+
+      if (hasPreferredClass) {
+        state.selectedClassCode = preferred;
+      } else if (!hasSelectedClass) {
+        state.selectedClassCode = classes[0]?.classCode || '';
+      }
+
+      state.selectedStudentId = state.selectedClassCode ? 'admin-preview-student' : '';
+    }
+
     function syncQuizVariant() {
       state.quizConfig = findQuizConfigForSession(state.quizConfigs, state.sessionNumber);
 
-      if (!state.quizConfig) {
+      if (!state.quizConfig || !(state.quizConfig.questions || []).length) {
         state.quizVariant = null;
         return;
       }
 
       state.quizVariant = buildStudentQuizVariant(state.quizConfig, {
-        classCode: ADMIN_PREVIEW_CLASS.classCode,
-        studentId: `${ADMIN_PREVIEW_STUDENT.studentId}-${state.previewSeed}`,
+        classCode: state.selectedClassCode || ADMIN_PREVIEW_CLASS_CODE,
+        studentId: `admin-preview-student-${state.previewSeed}`,
         sessionNumber: state.sessionNumber,
+        submissionNumber: 1,
         questionLimit: QUIZ_QUESTION_LIMIT,
       });
+    }
+
+    function resetQuizWork({ keepSubmittedRecord = false } = {}) {
+      state.answers = {};
+      state.answerErrors = {};
+      state.currentQuestionIndex = 0;
+      state.submitError = '';
+
+      if (!keepSubmittedRecord) {
+        state.submittedRecord = null;
+      }
     }
 
     function renderView() {
@@ -382,22 +739,37 @@ export const adminQuizPreviewPage = {
         return;
       }
 
-      if (!state.program) {
-        root.innerHTML = renderProgramShortcutList(state.programs);
-        return;
-      }
-
-      root.innerHTML = renderQuizPreviewShell(state);
+      controls.innerHTML = renderQuizPreviewControls({
+        program: state.program,
+        sessionNumber: state.sessionNumber,
+        classCode: state.selectedClassCode,
+      });
+      root.innerHTML = renderQuizPreviewContentV2(state);
     }
 
     async function load() {
       const routeState = getHashRouteState();
-      root.innerHTML = renderLoadingOverlay('Đang tải đề quiz preview...');
+      state.isLoading = true;
+      state.error = '';
+      state.routeClassCode = routeState.classCode || '';
+      renderView();
 
       try {
-        state.programs = await listCurriculumPrograms();
+        const [programs, classes] = await Promise.all([
+          listCurriculumPrograms(),
+          getClassesOnce(),
+        ]);
+
+        state.programs = programs;
+        state.classes = classes;
+        state.students = [];
 
         if (!routeState.programId) {
+          state.program = null;
+          state.quizConfigs = [];
+          state.quizConfig = null;
+          state.quizVariant = null;
+          state.isLoading = false;
           renderView();
           return;
         }
@@ -410,57 +782,102 @@ export const adminQuizPreviewPage = {
 
         state.sessionNumber = resolveSessionNumber(state.program, routeState.sessionNumber);
         state.quizConfigs = await listQuizConfigs(state.program);
+        syncScoreTarget(state.routeClassCode);
+        resetQuizWork();
         syncQuizVariant();
-        renderView();
       } catch (error) {
-        if (!disposed) {
-          root.innerHTML = renderAlert(escapeHtml(error?.message || 'Không thể tải đề quiz preview.'), 'danger');
-        }
+        state.error = error?.message || 'Không thể tải đề test quiz.';
+      } finally {
+        state.isLoading = false;
+        renderView();
       }
     }
 
     root.addEventListener('change', (event) => {
-      const choiceInput = event.target.closest('[data-answer-kind="choice"]');
+      const classSelect = event.target.closest('#admin-quiz-preview-class-select');
+      const studentSelect = event.target.closest('#admin-quiz-preview-student-select');
+      const answerInput = event.target.closest('[data-answer-kind="choice"][data-question-id]');
 
-      if (!choiceInput) {
+      if (classSelect) {
+        state.selectedClassCode = String(classSelect.value || '').trim().toUpperCase();
+        state.selectedStudentId = '';
+        syncScoreTarget(state.selectedClassCode);
+        resetQuizWork();
+        syncQuizVariant();
+        renderView();
+        return;
+      }
+
+      if (studentSelect) {
+        state.selectedStudentId = studentSelect.value || '';
+        resetQuizWork();
+        syncQuizVariant();
+        renderView();
+        return;
+      }
+
+      if (!answerInput) {
         return;
       }
 
       state.answers = {
         ...state.answers,
-        [choiceInput.dataset.questionId]: choiceInput.value,
+        [answerInput.dataset.questionId]: answerInput.value || '',
       };
-      state.errors = {
-        ...state.errors,
-        [choiceInput.dataset.questionId]: '',
-      };
-      state.result = null;
+
+      if (state.answerErrors[answerInput.dataset.questionId]) {
+        const nextErrors = { ...state.answerErrors };
+        delete nextErrors[answerInput.dataset.questionId];
+        state.answerErrors = nextErrors;
+      }
+
+      state.submittedRecord = null;
+      state.submitError = '';
       renderView();
     });
 
     root.addEventListener('input', (event) => {
-      const blankInput = event.target.closest('[data-answer-kind="blank"]');
+      const blankInput = event.target.closest('[data-answer-kind="blank"][data-question-id]');
 
       if (!blankInput) {
         return;
       }
 
+      const questionId = blankInput.dataset.questionId || '';
       state.answers = {
         ...state.answers,
-        [blankInput.dataset.questionId]: blankInput.value,
+        [questionId]: blankInput.value || '',
       };
-      state.errors = {
-        ...state.errors,
-        [blankInput.dataset.questionId]: '',
-      };
-      state.result = null;
+
+      if (state.answerErrors[questionId]) {
+        const nextErrors = { ...state.answerErrors };
+        delete nextErrors[questionId];
+        state.answerErrors = nextErrors;
+        renderView();
+      }
+
+      state.submittedRecord = null;
+      state.submitError = '';
     });
 
     root.addEventListener('click', (event) => {
       const previousButton = event.target.closest('[data-action="previous-question"]');
       const nextButton = event.target.closest('[data-action="next-question"]');
-      const refreshVariantButton = event.target.closest('[data-action="refresh-admin-quiz-variant"]');
+      const refreshButton = event.target.closest('[data-action="refresh-admin-quiz-variant"]');
       const resetButton = event.target.closest('[data-action="reset-admin-quiz-preview"]');
+      const tabButton = event.target.closest('[data-action="switch-admin-quiz-preview-tab"]');
+
+      if (state.isSubmitting) {
+        return;
+      }
+
+      if (tabButton) {
+        state.activeTab = ['take', 'target', 'receipt'].includes(tabButton.dataset.tabId)
+          ? tabButton.dataset.tabId
+          : 'take';
+        renderView();
+        return;
+      }
 
       if (previousButton) {
         state.currentQuestionIndex = Math.max(0, state.currentQuestionIndex - 1);
@@ -469,69 +886,109 @@ export const adminQuizPreviewPage = {
       }
 
       if (nextButton) {
+        const currentQuestion = state.quizVariant?.questions?.[state.currentQuestionIndex] || null;
+
+        if (currentQuestion && !isQuizQuestionAnswered(currentQuestion, state.answers[currentQuestion.id])) {
+          state.answerErrors = {
+            ...state.answerErrors,
+            [currentQuestion.id]: getRequiredAnswerMessage(currentQuestion),
+          };
+          renderView();
+          return;
+        }
+
         state.currentQuestionIndex = Math.min(
-          Number(state.quizVariant?.questions?.length || 1) - 1,
+          Math.max(0, Number(state.quizVariant?.questions?.length || 1) - 1),
           state.currentQuestionIndex + 1,
         );
         renderView();
         return;
       }
 
-      if (refreshVariantButton) {
+      if (refreshButton) {
         state.previewSeed = Date.now();
-        state.answers = {};
-        state.errors = {};
-        state.currentQuestionIndex = 0;
-        state.result = null;
+        resetQuizWork();
+        state.activeTab = 'take';
         syncQuizVariant();
         renderView();
         showToast({
           title: 'Đã tạo đề thử mới',
-          message: 'Bộ câu hỏi/đáp án đã được random lại cho lượt test admin này.',
+          message: 'Hệ thống đã random lại câu hỏi/đáp án cho lượt test admin này.',
           variant: 'success',
         });
         return;
       }
 
       if (resetButton) {
-        state.answers = {};
-        state.errors = {};
-        state.currentQuestionIndex = 0;
-        state.result = null;
+        resetQuizWork();
+        state.activeTab = 'take';
         renderView();
       }
     });
 
-    root.addEventListener('submit', (event) => {
+    root.addEventListener('submit', async (event) => {
       if (!event.target.closest('#student-quiz-form') || !state.quizVariant || !state.quizConfig) {
         return;
       }
 
       event.preventDefault();
 
-      const validation = validateQuizAnswerMap(state.quizVariant, state.answers);
+      const selectedClass = getSelectedClass(state);
+      const selectedStudent = getSelectedStudent(state);
 
-      if (!validation.isValid) {
-        const firstInvalidQuestionId = Object.keys(validation.errors)[0];
-        const firstInvalidIndex = (state.quizVariant.questions || []).findIndex(
-          (question) => question.id === firstInvalidQuestionId,
-        );
-
-        state.errors = validation.errors;
-        state.currentQuestionIndex = firstInvalidIndex >= 0 ? firstInvalidIndex : state.currentQuestionIndex;
-        state.result = null;
+      if (!selectedClass || !selectedStudent) {
+        state.submitError = 'Hãy chọn lớp trước khi gửi kết quả test admin vào trung tâm điểm.';
         renderView();
         return;
       }
 
-      state.errors = {};
-      state.result = buildPreviewResult(state.quizConfig, state.quizVariant, state.answers);
+      const validation = validateQuizAnswerMap(state.quizVariant, state.answers);
+
+      if (!validation.isValid) {
+        const firstInvalidQuestionId = Object.keys(validation.errors)[0] || '';
+        const firstInvalidIndex = (state.quizVariant.questions || []).findIndex(
+          (question) => question.id === firstInvalidQuestionId,
+        );
+
+        state.answerErrors = normalizeAnswerErrors(state.quizVariant, validation.errors);
+        state.currentQuestionIndex = firstInvalidIndex >= 0 ? firstInvalidIndex : state.currentQuestionIndex;
+        state.submittedRecord = null;
+        state.submitError = '';
+        renderView();
+        return;
+      }
+
+      state.answerErrors = {};
+      state.isSubmitting = true;
+      state.submitError = '';
       renderView();
-      showToast({
-        title: 'Đã chấm thử',
-        message: `Kết quả admin test: ${state.result.correctCount}/${state.result.questionCount} (${state.result.score}%).`,
-        variant: 'success',
-      });
+
+      try {
+        state.submittedRecord = await recordAdminQuizPreviewSubmission({
+          classItem: selectedClass,
+          program: state.program,
+          quizConfig: state.quizConfig,
+          quizVariant: state.quizVariant,
+          answers: state.answers,
+        });
+        state.activeTab = 'receipt';
+        showToast({
+          title: 'Đã gửi vào trung tâm điểm',
+          message: `Bài nộp của ${selectedStudent.fullName} đã xuất hiện trong khu quản lý điểm của lớp ${selectedClass.classCode}.`,
+          variant: 'success',
+        });
+      } catch (error) {
+        state.submittedRecord = null;
+        state.submitError = error?.message || 'Không thể gửi kết quả vào trung tâm điểm.';
+        showToast({
+          title: 'Chưa gửi được kết quả',
+          message: state.submitError,
+          variant: 'danger',
+        });
+      } finally {
+        state.isSubmitting = false;
+        renderView();
+      }
     });
 
     await load();
