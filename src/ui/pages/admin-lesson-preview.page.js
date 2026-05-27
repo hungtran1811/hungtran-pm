@@ -79,9 +79,9 @@ function renderPreviewControls({
 
   return `
     <div class="admin-student-preview-bar admin-student-preview-bar--compact">
-      <a class="admin-student-preview-back" href="#/admin/curriculum" aria-label="Quay lại Học liệu">
+      <a class="admin-student-preview-back" href="#/admin/curriculum" aria-label="Quay lại Bài giảng">
         <i class="bi bi-arrow-left"></i>
-        <span>Học liệu</span>
+        <span>Bài giảng</span>
       </a>
       ${
         program
@@ -102,9 +102,9 @@ function renderPreviewControls({
 
   return `
     <div class="admin-student-preview-bar">
-      <a class="admin-student-preview-back" href="#/admin/curriculum" aria-label="Quay lại Học liệu">
+      <a class="admin-student-preview-back" href="#/admin/curriculum" aria-label="Quay lại Bài giảng">
         <i class="bi bi-arrow-left"></i>
-        <span>Học liệu</span>
+        <span>Bài giảng</span>
       </a>
       <div class="admin-student-preview-field">
         <label class="form-label" for="admin-lesson-preview-class">Lớp</label>
@@ -206,12 +206,12 @@ function renderStudentPreviewContent({
   }
 
   if (!capabilities?.hasProgram) {
-    return renderAlert('Lớp này chưa được gán chương trình học nên học sinh chưa thể xem học liệu.', 'warning');
+    return renderAlert('Lớp này chưa được gán chương trình học nên học sinh chưa thể xem bài giảng.', 'warning');
   }
 
   if (!capabilities.canViewLibrary) {
     return renderAlert(
-      'Lớp này hiện không mở để học sinh xem học liệu. Nếu lớp đang ẩn hoặc đã hoàn thành, học sinh thật cũng sẽ không truy cập được.',
+      'Lớp này hiện không mở để học sinh xem bài giảng. Nếu lớp đang ẩn hoặc đã hoàn thành, học sinh thật cũng sẽ không truy cập được.',
       'warning',
     );
   }
@@ -253,7 +253,7 @@ export const adminLessonPreviewPage = {
                   compact: true,
                 })}
               </div>
-              <div id="admin-lesson-preview-root">${renderLoadingOverlay('Đang tải học liệu...')}</div>
+              <div id="admin-lesson-preview-root">${renderLoadingOverlay('Đang tải bài giảng...')}</div>
             </div>
           </div>
         </section>
@@ -376,7 +376,7 @@ export const adminLessonPreviewPage = {
       program = null;
       preview = null;
       capabilities = null;
-      root.innerHTML = renderLoadingOverlay('Đang tải học liệu...');
+      root.innerHTML = renderLoadingOverlay('Đang tải bài giảng...');
 
       try {
         programs = await listCurriculumPrograms();
@@ -429,7 +429,7 @@ export const adminLessonPreviewPage = {
         renderView();
       } catch (error) {
         root.innerHTML = renderAlert(
-          escapeHtml(error?.message || 'Không thể tải học liệu để xem thử.'),
+          escapeHtml(error?.message || 'Không thể tải bài giảng để xem thử.'),
           'danger',
         );
         renderControls();
@@ -504,7 +504,7 @@ export const adminLessonPreviewPage = {
         openLightbox({
           url: markdownImage.currentSrc || markdownImage.src || '',
           alt: markdownImage.alt || '',
-          label: markdownImage.alt || 'Ảnh trong học liệu',
+          label: markdownImage.alt || 'Ảnh trong bài giảng',
         });
         return;
       }

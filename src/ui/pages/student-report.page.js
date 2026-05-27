@@ -94,7 +94,7 @@ function renderReportAvailabilityNotice(curriculumPreview) {
 
   if (getReportMode(curriculumPreview) === 'quiz') {
     return renderAlert(
-      'Buổi này là bài kiểm tra. Hãy vào trang Học liệu của lớp để làm bài khi giáo viên mở kiểm tra.',
+      'Buổi này là bài kiểm tra. Hãy vào trang Bài giảng của lớp để làm bài khi giáo viên mở kiểm tra.',
       'info',
     );
   }
@@ -320,7 +320,7 @@ export const studentReportPage = {
         curriculumError = '';
       } else {
         curriculumPreview = null;
-        curriculumError = getErrorMessage(curriculumResult.reason, 'Không tải được phần học liệu của lớp này.');
+        curriculumError = getErrorMessage(curriculumResult.reason, 'Không tải được phần bài giảng của lớp này.');
       }
 
       curriculumLoading = false;

@@ -25,6 +25,13 @@ import {
   resolveClassQuizActivity,
 } from './shared.js';
 
+function buildCompleteAnswerMap(quizVariant = {}, answers = {}) {
+  return (quizVariant.questions || []).reduce((result, question) => {
+    result[question.id] = String(answers?.[question.id] ?? '').trim();
+    return result;
+  }, {});
+}
+
 export async function submitStudentQuiz(payload = {}) {
   const classCode = String(payload.classCode ?? '').trim().toUpperCase();
   const studentId = normalizeText(payload.studentId);
@@ -54,6 +61,7 @@ export async function submitStudentQuiz(payload = {}) {
                 ? QUIZ_ATTEMPT_STATUS_REOPENED
                 : QUIZ_ATTEMPT_STATUS_SUBMITTED,
             submissionCount: Math.max(0, Number(attemptStateData.submissionCount || 0)),
+            reopenedAt: attemptStateData.reopenedAt ?? null,
           }
         : null;
 
@@ -81,8 +89,21 @@ export async function submitStudentQuiz(payload = {}) {
       classItem,
       studentId,
       submissionNumber,
+      attemptState?.reopenedAt || null,
     );
-    const validation = validateQuizAnswerMap(quizVariant, payload.answers || {});
+    const allowIncomplete = Boolean(payload.allowIncomplete);
+    const submittedAnswers = allowIncomplete
+      ? buildCompleteAnswerMap(quizVariant, payload.answers || {})
+      : payload.answers || {};
+    const isPastDeadline = quizVariant.deadlineAtMs > 0 && Date.now() > quizVariant.deadlineAtMs;
+
+    if (isPastDeadline && !allowIncomplete) {
+      throw new Error('Bài kiểm tra đã hết giờ. Hệ thống chỉ ghi nhận phần đã chọn khi tự nộp.');
+    }
+
+    const validation = allowIncomplete
+      ? { isValid: true, errors: {} }
+      : validateQuizAnswerMap(quizVariant, submittedAnswers);
 
     if (!validation.isValid) {
       throw new Error('Bài làm chưa hợp lệ. Hãy trả lời đầy đủ trước khi nộp.');
@@ -108,7 +129,7 @@ export async function submitStudentQuiz(payload = {}) {
       quizTitle: quizVariant.title,
       questionCount: quizVariant.questionCount,
       questionIds: quizVariant.questionIds,
-      answers: payload.answers || {},
+      answers: submittedAnswers,
       status: QUIZ_ATTEMPT_STATUS_SUBMITTED,
       source: 'student',
     };
@@ -167,7 +188,7 @@ export async function submitStudentQuiz(payload = {}) {
       submissionNumber: submissionCount,
       questionCount: quizVariant.questionCount,
       questionIds: quizVariant.questionIds,
-      answers: payload.answers || {},
+      answers: submittedAnswers,
       source: 'student',
       submittedAt,
       createdAt: submittedAt,

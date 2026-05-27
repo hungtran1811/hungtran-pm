@@ -60,11 +60,11 @@ function renderLibraryState({
   quizState,
 }) {
   if (!classCode) {
-    return renderAlert('Link học liệu không hợp lệ.', 'danger');
+    return renderAlert('Link bài giảng không hợp lệ.', 'danger');
   }
 
   if (isLoading) {
-    return renderLoadingOverlay('Đang tải học liệu...');
+    return renderLoadingOverlay('Đang tải bài giảng...');
   }
 
   if (error) {
@@ -72,7 +72,7 @@ function renderLibraryState({
   }
 
   if (!preview?.program) {
-    return renderAlert('Lớp này chưa được gán chương trình học liệu để hiển thị.', 'warning');
+    return renderAlert('Lớp này chưa được gán chương trình bài giảng để hiển thị.', 'warning');
   }
 
   return renderStudentLibraryBrowser(preview, activeLessonId, imageSelections, {
@@ -84,7 +84,7 @@ function renderLibraryState({
 }
 
 export const studentLibraryPage = {
-  title: 'Học liệu',
+  title: 'Bài giảng',
   async render() {
     return `
       <div class="student-layout">
@@ -99,7 +99,7 @@ export const studentLibraryPage = {
                   compact: true,
                 })}
               </div>
-              <div id="student-library-slot">${renderLoadingOverlay('Đang tải học liệu...')}</div>
+              <div id="student-library-slot">${renderLoadingOverlay('Đang tải bài giảng...')}</div>
             </div>
           </div>
         </section>
@@ -564,7 +564,7 @@ export const studentLibraryPage = {
         openLightbox({
           url: markdownImage.currentSrc || markdownImage.src || '',
           alt: markdownImage.alt || '',
-          label: markdownImage.alt || 'Ảnh trong học liệu',
+          label: markdownImage.alt || 'Ảnh trong bài giảng',
         });
         return;
       }
@@ -728,7 +728,7 @@ export const studentLibraryPage = {
 
     if (!lockedClassCode) {
       isLoading = false;
-      error = 'Link học liệu không hợp lệ hoặc thiếu mã lớp.';
+      error = 'Link bài giảng không hợp lệ hoặc thiếu mã lớp.';
       renderView();
       return () => {
         disposed = true;
@@ -748,7 +748,7 @@ export const studentLibraryPage = {
       syncUrlState();
     } catch (nextError) {
       preview = null;
-      error = getErrorMessage(nextError, 'Không tải được học liệu của lớp này.');
+      error = getErrorMessage(nextError, 'Không tải được bài giảng của lớp này.');
     } finally {
       isLoading = false;
       renderView();

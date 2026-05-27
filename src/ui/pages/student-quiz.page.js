@@ -15,14 +15,33 @@ import { renderStudentSelect } from '../components/StudentSelect.js';
 import { renderToastStack, showToast } from '../components/ToastStack.js';
 
 const QUIZ_CONTEXT_POLL_INTERVAL_MS = 5000;
+const QUIZ_TIMER_INTERVAL_MS = 1000;
 
 function getErrorMessage(error, fallback) {
   return error?.message || fallback;
 }
 
+function getQuizRemainingMs(quizContext) {
+  const deadlineAtMs = Number(quizContext?.quiz?.deadlineAtMs || 0);
+
+  if (deadlineAtMs > 0) {
+    return Math.max(0, deadlineAtMs - Date.now());
+  }
+
+  return Math.max(0, Number(quizContext?.quiz?.timeLimitMinutes || 30) * 60 * 1000);
+}
+
+function formatTimer(ms = 0) {
+  const totalSeconds = Math.max(0, Math.floor(Number(ms || 0) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
 function renderLockedClassField(classInfo) {
   const classCode = classInfo?.classCode || 'Chưa xác định';
-  const className = classInfo?.className || 'Lớp này đang được mở theo đường dẫn riêng.';
+  const className = classInfo?.className || 'Lớp đang được mở theo đường dẫn riêng.';
 
   return `
     <label class="form-label">Mã lớp</label>
@@ -121,18 +140,19 @@ function renderQuizState({
     return renderAlert('Bài kiểm tra hiện chưa được cấu hình đầy đủ.', 'warning');
   }
 
+  const remainingMs = getQuizRemainingMs(quizContext);
   const helperText =
     quizContext?.attempt?.status === 'reopened'
-      ? 'Giáo viên đã mở lại lượt làm bài này. Bạn có thể làm lại và hệ thống sẽ ghi nhận lần nộp mới.'
-      : 'Chọn một đáp án cho mỗi câu rồi bấm nộp bài. Sau khi nộp, hệ thống chỉ báo đã nộp, không hiện điểm ngay.';
+      ? 'Giáo viên đã mở lại lượt làm này. Hệ thống sẽ lấy kết quả tốt nhất để giáo viên xem.'
+      : 'Làm từng câu một. Sau khi nộp, bạn chỉ thấy trạng thái đã nộp, không thấy điểm.';
 
   return renderQuizForm(quizContext.quiz, answers, answerErrors, {
-    disabled: isSubmitting,
+    disabled: isSubmitting || remainingMs <= 0,
     helperText,
-    submitLabel: isSubmitting
-      ? 'Đang nộp bài...'
-      : 'Nộp bài kiểm tra',
+    submitLabel: isSubmitting ? 'Đang nộp bài...' : 'Nộp bài kiểm tra',
     currentQuestionIndex,
+    layout: 'assessment',
+    timeRemainingMs: remainingMs,
   });
 }
 
@@ -143,7 +163,7 @@ export const studentQuizPage = {
       return `
         <div class="student-layout student-quiz-layout">
           <main class="student-quiz-page">
-            <div class="student-page-shell">
+            <div class="student-page-shell student-quiz-shell">
               <section class="student-quiz-portal-card student-quiz-portal-card--narrow">
                 <header class="student-quiz-portal-header">
                   ${renderBrandLogo({
@@ -156,12 +176,10 @@ export const studentQuizPage = {
                 <div class="student-quiz-portal-body">
                   <h1>Bài kiểm tra chưa mở cho học sinh</h1>
                   ${renderAlert(
-                    'Giáo viên đang chuẩn bị ngân hàng câu hỏi. Khi chức năng kiểm tra được bật, bài làm sẽ hiển thị trong trang Học liệu.',
+                    'Giáo viên đang chuẩn bị ngân hàng câu hỏi. Khi bài kiểm tra được mở, bạn sẽ làm bài tại trang này.',
                     'info',
                   )}
-                  <a class="btn btn-primary" href="#/student/report">
-                    Về trang học sinh
-                  </a>
+                  <a class="btn btn-primary" href="#/student/report">Về trang học sinh</a>
                 </div>
               </section>
             </div>
@@ -174,9 +192,9 @@ export const studentQuizPage = {
     return `
       <div class="student-layout student-quiz-layout">
         <main class="student-quiz-page">
-          <div class="student-page-shell">
+          <div class="student-page-shell student-quiz-shell">
             <section class="student-quiz-portal-card">
-              <header class="student-quiz-portal-header">
+              <header class="student-quiz-portal-header student-quiz-portal-header--assessment">
                 ${renderBrandLogo({
                   id: 'student-quiz-brand-trigger',
                   className: 'student-brand-lockup',
@@ -238,6 +256,8 @@ export const studentQuizPage = {
     let currentQuestionIndex = 0;
     let isSubmitting = false;
     let quizContextPollTimer = 0;
+    let quizTimer = 0;
+    let autoSubmittingForTimeout = false;
 
     function getSelectedStudent() {
       return students.find((student) => student.studentId === selectedStudentId) || null;
@@ -247,6 +267,7 @@ export const studentQuizPage = {
       answers = {};
       answerErrors = {};
       currentQuestionIndex = 0;
+      autoSubmittingForTimeout = false;
     }
 
     function renderPageAlertState() {
@@ -261,6 +282,41 @@ export const studentQuizPage = {
       }
 
       pageAlert.innerHTML = '';
+    }
+
+    function updateTimerDisplay() {
+      const timerElement = quizSlot.querySelector('[data-quiz-timer]');
+
+      if (!timerElement || !quizContext?.quiz || quizContext?.attempt?.status === 'submitted') {
+        return;
+      }
+
+      const remainingMs = getQuizRemainingMs(quizContext);
+      timerElement.textContent = formatTimer(remainingMs);
+      timerElement.classList.toggle('student-quiz-timer__value--danger', remainingMs <= 60_000);
+
+      if (remainingMs <= 0 && !autoSubmittingForTimeout && !isSubmitting) {
+        autoSubmittingForTimeout = true;
+        void submitCurrentQuiz({ allowIncomplete: true, isTimeout: true });
+      }
+    }
+
+    function stopQuizTimer() {
+      if (quizTimer) {
+        window.clearInterval(quizTimer);
+        quizTimer = 0;
+      }
+    }
+
+    function restartQuizTimer() {
+      stopQuizTimer();
+
+      if (!quizContext?.availability?.isEligible || quizContext?.attempt?.status === 'submitted') {
+        return;
+      }
+
+      updateTimerDisplay();
+      quizTimer = window.setInterval(updateTimerDisplay, QUIZ_TIMER_INTERVAL_MS);
     }
 
     function renderSelections() {
@@ -282,6 +338,7 @@ export const studentQuizPage = {
         isSubmitting,
         currentQuestionIndex,
       });
+      restartQuizTimer();
     }
 
     function updateAnswer(questionId, value) {
@@ -377,11 +434,10 @@ export const studentQuizPage = {
           } else if (!wasEligible && nextEligible) {
             resetLocalAttemptProgress();
             showToast({
-              title:
-                nextAttemptStatus === 'reopened' ? 'Đã được mở lại lượt làm' : 'Bài kiểm tra đã bắt đầu',
+              title: nextAttemptStatus === 'reopened' ? 'Đã được mở lại lượt làm' : 'Bài kiểm tra đã bắt đầu',
               message:
                 nextAttemptStatus === 'reopened'
-                  ? 'Giáo viên đã mở lại lượt làm bài cho bạn. Bạn có thể làm lại và nộp lần mới.'
+                  ? 'Giáo viên đã mở lại lượt làm bài cho bạn.'
                   : 'Giáo viên đã bắt đầu bài kiểm tra cho lớp này.',
               variant: 'success',
             });
@@ -481,6 +537,60 @@ export const studentQuizPage = {
       }
     }
 
+    async function submitCurrentQuiz({ allowIncomplete = false, isTimeout = false } = {}) {
+      if (!quizContext?.quiz || !selectedStudentId || !selectedClassCode || isSubmitting) {
+        return;
+      }
+
+      if (!allowIncomplete) {
+        const validation = validateQuizAnswerMap(quizContext.quiz, answers);
+
+        if (!validation.isValid) {
+          answerErrors = validation.errors;
+          const firstInvalidQuestionId = Object.keys(validation.errors)[0] || '';
+          const firstInvalidIndex = findQuestionIndex(quizContext.quiz, firstInvalidQuestionId);
+
+          if (firstInvalidIndex >= 0) {
+            currentQuestionIndex = firstInvalidIndex;
+          }
+
+          renderSelections();
+          return;
+        }
+      }
+
+      isSubmitting = true;
+      answerErrors = {};
+      renderSelections();
+
+      try {
+        await submitStudentQuiz({
+          classCode: selectedClassCode,
+          studentId: selectedStudentId,
+          answers,
+          allowIncomplete,
+        });
+        resetLocalAttemptProgress();
+        showToast({
+          title: isTimeout ? 'Đã hết giờ' : 'Đã nộp bài',
+          message: isTimeout
+            ? 'Hệ thống đã tự nộp các câu bạn đã chọn.'
+            : 'Hệ thống đã ghi nhận bài kiểm tra của bạn.',
+          variant: 'success',
+        });
+        await loadQuizContext();
+      } catch (error) {
+        showToast({
+          title: 'Chưa nộp được bài',
+          message: getErrorMessage(error, 'Không thể nộp bài kiểm tra lúc này.'),
+          variant: 'danger',
+        });
+      } finally {
+        isSubmitting = false;
+        renderSelections();
+      }
+    }
+
     const cleanupShortcut = attachHiddenAdminShortcut({
       brandElement: brandTrigger,
       onTrigger: () => {
@@ -518,8 +628,7 @@ export const studentQuizPage = {
         return;
       }
 
-      const questionId = answerInput.dataset.questionId || '';
-      updateAnswer(questionId, answerInput.value || '');
+      updateAnswer(answerInput.dataset.questionId || '', answerInput.value || '');
       renderSelections();
     });
 
@@ -542,9 +651,19 @@ export const studentQuizPage = {
     quizSlot.addEventListener('click', (event) => {
       const previousButton = event.target.closest('[data-action="previous-question"]');
       const nextButton = event.target.closest('[data-action="next-question"]');
+      const questionMapButton = event.target.closest('[data-action="go-to-question"]');
 
       if (previousButton) {
         currentQuestionIndex = Math.max(0, currentQuestionIndex - 1);
+        renderSelections();
+        return;
+      }
+
+      if (questionMapButton) {
+        currentQuestionIndex = Math.min(
+          Math.max(0, Number(quizContext?.quiz?.questionCount || 0) - 1),
+          Math.max(0, Number(questionMapButton.dataset.questionIndex || 0)),
+        );
         renderSelections();
         return;
       }
@@ -580,53 +699,7 @@ export const studentQuizPage = {
       }
 
       event.preventDefault();
-
-      if (!quizContext?.quiz || !selectedStudentId || !selectedClassCode) {
-        return;
-      }
-
-      const validation = validateQuizAnswerMap(quizContext.quiz, answers);
-
-      if (!validation.isValid) {
-        answerErrors = validation.errors;
-        const firstInvalidQuestionId = Object.keys(validation.errors)[0] || '';
-        const firstInvalidIndex = findQuestionIndex(quizContext.quiz, firstInvalidQuestionId);
-
-        if (firstInvalidIndex >= 0) {
-          currentQuestionIndex = firstInvalidIndex;
-        }
-
-        renderSelections();
-        return;
-      }
-
-      isSubmitting = true;
-      answerErrors = {};
-      renderSelections();
-
-      try {
-        await submitStudentQuiz({
-          classCode: selectedClassCode,
-          studentId: selectedStudentId,
-          answers,
-        });
-        resetLocalAttemptProgress();
-        showToast({
-          title: 'Đã nộp bài',
-          message: 'Hệ thống đã ghi nhận bài kiểm tra của bạn.',
-          variant: 'success',
-        });
-        await loadQuizContext();
-      } catch (error) {
-        showToast({
-          title: 'Chưa nộp được bài',
-          message: getErrorMessage(error, 'Không thể nộp bài kiểm tra lúc này.'),
-          variant: 'danger',
-        });
-      } finally {
-        isSubmitting = false;
-        renderSelections();
-      }
+      await submitCurrentQuiz();
     });
 
     renderSelections();
@@ -634,6 +707,7 @@ export const studentQuizPage = {
 
     return () => {
       stopQuizContextWatch();
+      stopQuizTimer();
       cleanupShortcut?.();
     };
   },

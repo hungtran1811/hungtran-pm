@@ -19,6 +19,14 @@ function getOptionLetter(index) {
   return String.fromCharCode(65 + Number(index || 0));
 }
 
+function formatTimer(ms = 0) {
+  const totalSeconds = Math.max(0, Math.floor(Number(ms || 0) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
 function renderQuestionImage(question) {
   if (!question?.imageUrl) {
     return '';
@@ -36,7 +44,7 @@ function renderQuestionImage(question) {
   `;
 }
 
-function renderProgressDots(quiz, answers, activeIndex) {
+function renderQuestionMap(quiz, answers, activeIndex) {
   const questions = quiz?.questions || [];
 
   if (questions.length <= 0) {
@@ -44,22 +52,46 @@ function renderProgressDots(quiz, answers, activeIndex) {
   }
 
   return `
-    <div class="student-quiz-dots" aria-label="Tiến độ câu hỏi">
-      ${questions
-        .map((question, index) => {
-          const isAnswered = isQuizQuestionAnswered(question, answers[question.id]);
-          const stateClass = [
-            'student-quiz-dot',
-            index === activeIndex ? 'student-quiz-dot--active' : '',
-            isAnswered ? 'student-quiz-dot--answered' : '',
-          ]
-            .filter(Boolean)
-            .join(' ');
+    <aside class="student-quiz-map-panel" aria-label="Bản đồ câu hỏi">
+      <div class="student-quiz-map-panel__top">
+        <div>
+          <div class="student-quiz-map-panel__label">Question map</div>
+          <strong>${countAnsweredQuestions(quiz, answers)} / ${questions.length}</strong>
+        </div>
+        <span>đã trả lời</span>
+      </div>
+      <div class="student-quiz-map-grid">
+        ${questions
+          .map((question, index) => {
+            const isAnswered = isQuizQuestionAnswered(question, answers[question.id]);
+            const classes = [
+              'student-quiz-map-button',
+              index === activeIndex ? 'student-quiz-map-button--current' : '',
+              isAnswered ? 'student-quiz-map-button--answered' : '',
+            ]
+              .filter(Boolean)
+              .join(' ');
 
-          return `<span class="${stateClass}" title="Câu ${index + 1}${isAnswered ? ' đã trả lời' : ''}"></span>`;
-        })
-        .join('')}
-    </div>
+            return `
+              <button
+                type="button"
+                class="${classes}"
+                data-action="go-to-question"
+                data-question-index="${index}"
+                aria-label="Câu ${index + 1}${isAnswered ? ' đã trả lời' : ' chưa trả lời'}"
+              >
+                ${index + 1}
+              </button>
+            `;
+          })
+          .join('')}
+      </div>
+      <div class="student-quiz-map-legend">
+        <span><i class="student-quiz-map-legend__box student-quiz-map-legend__box--answered"></i>Đã trả lời</span>
+        <span><i class="student-quiz-map-legend__box student-quiz-map-legend__box--current"></i>Đang làm</span>
+        <span><i class="student-quiz-map-legend__box"></i>Chưa trả lời</span>
+      </div>
+    </aside>
   `;
 }
 
@@ -124,6 +156,8 @@ export function renderQuizForm(
     helperText = '',
     submitLabel = 'Nộp bài kiểm tra',
     currentQuestionIndex = 0,
+    layout = 'standard',
+    timeRemainingMs = null,
   } = {},
 ) {
   const disabledAttr = disabled ? 'disabled' : '';
@@ -135,9 +169,15 @@ export function renderQuizForm(
   const progressPercent = questionCount > 0 ? Math.round((answeredCount / questionCount) * 100) : 0;
   const isLastQuestion = activeIndex >= questionCount - 1;
   const sessionNumber = Number(quiz?.sessionNumber || 0);
+  const isAssessment = layout === 'assessment';
+  const remainingMs = Number(timeRemainingMs ?? 0);
 
   return `
-    <form id="student-quiz-form" class="student-quiz-card" style="--quiz-progress: ${progressPercent}%;">
+    <form
+      id="student-quiz-form"
+      class="student-quiz-card ${isAssessment ? 'student-quiz-card--assessment' : ''}"
+      style="--quiz-progress: ${progressPercent}%;"
+    >
       <div class="student-quiz-card__header">
         <div>
           <div class="student-quiz-eyebrow">Kiểm tra buổi ${sessionNumber || '?'}</div>
@@ -149,8 +189,19 @@ export function renderQuizForm(
           }
         </div>
         <div class="student-quiz-summary" aria-label="Tổng quan bài làm">
-          <span>${questionCount} câu</span>
-          <strong>${answeredCount}/${questionCount}</strong>
+          <span>Câu ${activeIndex + 1} / ${questionCount}</span>
+          ${
+            isAssessment
+              ? `
+                <strong
+                  class="student-quiz-timer__value ${remainingMs <= 60_000 ? 'student-quiz-timer__value--danger' : ''}"
+                  data-quiz-timer
+                >
+                  ${formatTimer(remainingMs)}
+                </strong>
+              `
+              : `<strong>${answeredCount}/${questionCount}</strong>`
+          }
         </div>
       </div>
 
@@ -158,37 +209,37 @@ export function renderQuizForm(
         <div class="student-quiz-progress__track">
           <div class="student-quiz-progress__bar"></div>
         </div>
-        ${renderProgressDots(quiz, answers, activeIndex)}
       </div>
 
-      ${
-        helperText
-          ? `<p class="student-quiz-helper">${escapeHtml(helperText)}</p>`
-          : ''
-      }
+      ${helperText ? `<p class="student-quiz-helper">${escapeHtml(helperText)}</p>` : ''}
 
-      ${
-        currentQuestion
-          ? `
-            <section class="student-quiz-question quiz-question-card" data-question-index="${activeIndex}">
-              <div class="student-quiz-question__top">
-                <span class="student-quiz-question__number">Câu ${activeIndex + 1}</span>
-                <span class="student-quiz-question__type">
-                  ${isFillBlankQuestion(currentQuestion) ? 'Điền vào chỗ trống' : 'Chọn 1 đáp án'}
-                </span>
-              </div>
-              <div class="student-quiz-question__prompt">${renderTextWithCodeBlocks(currentQuestion.prompt)}</div>
-              ${renderQuestionImage(currentQuestion)}
-              ${renderAnswerInput(currentQuestion, currentAnswerValue, disabledAttr)}
-              ${
-                errors[currentQuestion.id]
-                  ? `<div class="student-quiz-error">${escapeHtml(errors[currentQuestion.id])}</div>`
-                  : ''
-              }
-            </section>
-          `
-          : '<div class="student-quiz-empty">Chưa có câu hỏi để hiển thị.</div>'
-      }
+      <div class="${isAssessment ? 'student-quiz-assessment-grid' : ''}">
+        <div class="student-quiz-assessment-main">
+          ${
+            currentQuestion
+              ? `
+                <section class="student-quiz-question quiz-question-card" data-question-index="${activeIndex}">
+                  <div class="student-quiz-question__top">
+                    <span class="student-quiz-question__number">Câu ${activeIndex + 1}</span>
+                    <span class="student-quiz-question__type">
+                      ${isFillBlankQuestion(currentQuestion) ? 'Điền vào chỗ trống' : 'Chọn 1 đáp án'}
+                    </span>
+                  </div>
+                  <div class="student-quiz-question__prompt">${renderTextWithCodeBlocks(currentQuestion.prompt)}</div>
+                  ${renderQuestionImage(currentQuestion)}
+                  ${renderAnswerInput(currentQuestion, currentAnswerValue, disabledAttr)}
+                  ${
+                    errors[currentQuestion.id]
+                      ? `<div class="student-quiz-error">${escapeHtml(errors[currentQuestion.id])}</div>`
+                      : ''
+                  }
+                </section>
+              `
+              : '<div class="student-quiz-empty">Chưa có câu hỏi để hiển thị.</div>'
+          }
+        </div>
+        ${isAssessment ? renderQuestionMap(quiz, answers, activeIndex) : ''}
+      </div>
 
       <div class="student-quiz-card__footer">
         <button

@@ -232,7 +232,7 @@ export async function setClassQuizStatus(classCode, { sessionNumber, isStarted }
       const sessionActivity = getCurriculumSessionActivity(program, currentSession);
 
       if (!isCurriculumQuizActivity(sessionActivity.activityType)) {
-        throw new Error('Buổi hiện tại chưa được cấu hình là Kiểm tra trong Học liệu.');
+        throw new Error('Buổi hiện tại chưa được cấu hình là Kiểm tra trong Bài giảng.');
       }
 
       const quizConfig = await getQuizConfigForProgramSession(program, currentSession);

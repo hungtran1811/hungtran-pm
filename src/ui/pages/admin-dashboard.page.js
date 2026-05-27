@@ -514,7 +514,7 @@ function renderCurrentLessonCard(snapshot) {
       </div>
       <div class="ops-quick-actions ops-quick-actions--compact">
         <a class="btn btn-outline-primary" href="${escapeHtml(libraryPath)}" target="_blank" rel="noreferrer">
-          <i class="bi bi-box-arrow-up-right me-2"></i>Mở học liệu
+          <i class="bi bi-box-arrow-up-right me-2"></i>Mở bài giảng
         </a>
         <button type="button" class="btn btn-outline-secondary" data-action="copy-report-link" data-class-code="${escapeHtml(classCode)}">
           <i class="bi bi-send me-2"></i>Link báo cáo
@@ -523,7 +523,7 @@ function renderCurrentLessonCard(snapshot) {
           <i class="bi bi-clipboard-data me-2"></i>Báo cáo lớp
         </a>
         <a class="btn btn-primary" href="${escapeHtml(buildCurriculumPath(classCode))}">
-          <i class="bi bi-journal-text me-2"></i>Học liệu
+          <i class="bi bi-journal-text me-2"></i>Bài giảng
         </a>
         <button type="button" class="btn btn-success" data-action="copy-class-summary">
           <i class="bi bi-clipboard-check me-2"></i>Copy tóm tắt
@@ -573,7 +573,7 @@ function renderCurrentLessonCard(snapshot) {
       </div>
       <div class="ops-quick-actions">
         <a class="btn btn-outline-primary" href="${escapeHtml(libraryPath)}" target="_blank" rel="noreferrer">
-          <i class="bi bi-box-arrow-up-right me-2"></i>Mở học liệu
+          <i class="bi bi-box-arrow-up-right me-2"></i>Mở bài giảng
         </a>
         <button type="button" class="btn btn-outline-secondary" data-action="copy-report-link" data-class-code="${escapeHtml(classCode)}">
           <i class="bi bi-send me-2"></i>Gửi link báo cáo
@@ -582,7 +582,7 @@ function renderCurrentLessonCard(snapshot) {
           <i class="bi bi-clipboard-data me-2"></i>Xem báo cáo lớp
         </a>
         <a class="btn btn-primary" href="${escapeHtml(buildCurriculumPath(classCode))}">
-          <i class="bi bi-journal-text me-2"></i>Đi tới Học liệu
+          <i class="bi bi-journal-text me-2"></i>Đi tới Bài giảng
         </a>
         <button type="button" class="btn btn-success" data-action="copy-class-summary">
           <i class="bi bi-clipboard-check me-2"></i>Copy tóm tắt lớp
@@ -709,7 +709,7 @@ function renderDashboardSessionControl(snapshot) {
     return `
       <div class="ops-session-control ops-session-control--empty">
         <span>Chưa gán chương trình học</span>
-        <small>Vào Học liệu để gán chương trình trước khi set buổi.</small>
+        <small>Vào Bài giảng để gán chương trình trước khi set buổi.</small>
       </div>
     `;
   }
@@ -808,13 +808,13 @@ function renderDashboardClassOperationPanel(snapshot) {
       </div>
       <div class="ops-quick-actions ops-quick-actions--compact">
         <a class="btn btn-outline-primary" href="${escapeHtml(libraryPath)}" target="_blank" rel="noreferrer">
-          <i class="bi bi-box-arrow-up-right me-2"></i>Mở học liệu
+          <i class="bi bi-box-arrow-up-right me-2"></i>Mở bài giảng
         </a>
         <button type="button" class="btn btn-outline-secondary" data-action="copy-report-link" data-class-code="${escapeHtml(classCode)}">
           <i class="bi bi-send me-2"></i>Link báo cáo
         </button>
         <a class="btn btn-primary" href="${escapeHtml(buildCurriculumPath(classCode))}">
-          <i class="bi bi-journal-text me-2"></i>Học liệu
+          <i class="bi bi-journal-text me-2"></i>Bài giảng
         </a>
         ${renderDashboardExerciseControl(snapshot)}
         ${renderDashboardQuizControl(snapshot)}
@@ -1526,7 +1526,7 @@ export const adminDashboardPage = {
           showToast({
             title: shouldStart ? 'Đã mở bài kiểm tra' : 'Đã kết thúc bài kiểm tra',
             message: shouldStart
-              ? `Học sinh lớp ${snapshot.classInfo.classCode} có thể vào học liệu để làm bài.`
+              ? `Học sinh lớp ${snapshot.classInfo.classCode} có thể vào bài giảng để làm bài.`
               : `Đã ghi nhận ${result?.finalizedCount || 0} bài đang làm dở.`,
             variant: 'success',
           });

@@ -1,4 +1,4 @@
-﻿import { subscribeClasses } from '../../services/classes.service.js';
+import { subscribeClasses } from '../../services/classes.service.js';
 import { subscribeCurriculumPrograms } from '../../services/curriculum.service.js';
 import { QUIZ_OPERATIONS_ENABLED } from '../../config/features.js';
 import {
@@ -95,6 +95,7 @@ function createEmptyQuizDraft(sessionNumber = QUIZ_DEFAULT_OFFICIAL_SESSION_NUMB
       subject: program?.subject || '',
       level: program?.level || '',
       questionPickPolicy: QUIZ_DEFAULT_PICK_POLICY,
+      timeLimitMinutes: 30,
       title: `Kiểm tra trắc nghiệm buổi ${sessionNumber}`,
       description: '',
       questions: [],
@@ -275,7 +276,7 @@ function renderClassQuizLaunchControl({
 
   if (!isCurriculumQuizActivity(activityType)) {
     return renderAlert(
-      `Lớp này đang ở buổi ${currentSession || '?'} và được cấu hình là "${activityLabel}". Hãy đổi loại buổi sang "Kiểm tra" trong Học liệu trước khi mở.`,
+      `Lớp này đang ở buổi ${currentSession || '?'} và được cấu hình là "${activityLabel}". Hãy đổi loại buổi sang "Kiểm tra" trong Bài giảng trước khi mở.`,
       'info',
     );
   }
@@ -1029,6 +1030,7 @@ export async function mountQuizManagement({
 
     editorSlot?.addEventListener('input', (event) => {
       const titleInput = event.target.closest('#quiz-title-input');
+      const timeLimitInput = event.target.closest('#quiz-time-limit-input');
       const descriptionInput = event.target.closest('#quiz-description-input');
       const promptInput = event.target.closest('[data-field="prompt"]');
       const imageUrlInput = event.target.closest('[data-field="image-url"]');
@@ -1041,6 +1043,14 @@ export async function mountQuizManagement({
         state.draft = {
           ...state.draft,
           title: titleInput.value,
+        };
+        return;
+      }
+
+      if (timeLimitInput) {
+        state.draft = {
+          ...state.draft,
+          timeLimitMinutes: Math.min(180, Math.max(1, Math.round(Number(timeLimitInput.value || 30)))),
         };
         return;
       }

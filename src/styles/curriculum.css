@@ -1525,3 +1525,72 @@
 .curriculum-session-chip--active {
   animation: portalSoftPop var(--motion-normal) var(--ease-out);
 }
+
+/* Compact Bài giảng admin workspace */
+.curriculum-page-root .card,
+.curriculum-page-root .curriculum-admin-card,
+.curriculum-page-root .curriculum-section,
+.curriculum-page-root .curriculum-workspace,
+.curriculum-page-root .curriculum-program-group,
+.curriculum-page-root .curriculum-preview-note,
+.curriculum-page-root .curriculum-detail-box,
+.curriculum-page-root .quiz-editor-readiness,
+.curriculum-page-root .quiz-editor-question-card,
+.curriculum-page-root .quiz-attempt-card {
+  border-radius: var(--portal-radius) !important;
+  box-shadow: var(--portal-shadow-soft) !important;
+}
+
+.curriculum-page-root .card-header,
+.curriculum-page-root .card-body,
+.curriculum-page-root .card-footer {
+  padding: 0.85rem 1rem !important;
+}
+
+.curriculum-page-root .curriculum-admin-card--compact .card-header,
+.curriculum-page-root .curriculum-admin-card--compact .card-body,
+.curriculum-page-root .curriculum-admin-card--compact .card-footer {
+  padding: 0.68rem 0.82rem !important;
+}
+
+.curriculum-page-root .curriculum-top-tabs,
+.curriculum-page-root .quiz-control-tabs,
+.curriculum-page-root .admin-quiz-preview-tabs {
+  gap: 0.3rem !important;
+  padding: 0.28rem !important;
+  border-radius: var(--portal-radius) !important;
+}
+
+.curriculum-page-root .curriculum-top-tab,
+.curriculum-page-root .quiz-control-tab,
+.curriculum-page-root .admin-quiz-preview-tab {
+  min-height: 2.05rem !important;
+  padding: 0.35rem 0.72rem !important;
+  border-radius: var(--portal-radius-sm) !important;
+}
+
+.curriculum-page-root .curriculum-program-group,
+.curriculum-page-root .curriculum-assignment-status-board,
+.curriculum-page-root .curriculum-session-grid,
+.curriculum-page-root .curriculum-lesson-editor-grid {
+  gap: 0.65rem !important;
+}
+
+.curriculum-page-root .curriculum-program-button,
+.curriculum-page-root .curriculum-session-card,
+.curriculum-page-root .curriculum-assignment-card,
+.curriculum-page-root .curriculum-archive-card {
+  padding: 0.68rem 0.75rem !important;
+  border-radius: var(--portal-radius-sm) !important;
+}
+
+.curriculum-page-root .curriculum-markdown-preview,
+.curriculum-page-root .curriculum-lesson-markdown-editor,
+.curriculum-page-root textarea.form-control {
+  min-height: 9rem;
+}
+
+.curriculum-page-root .quiz-summary-card,
+.curriculum-page-root .quiz-editor-readiness {
+  padding: 0.75rem !important;
+}

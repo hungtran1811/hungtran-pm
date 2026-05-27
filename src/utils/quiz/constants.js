@@ -5,6 +5,7 @@ export const QUIZ_ATTEMPT_STATUS_REOPENED = 'reopened';
 export const QUIZ_CLASS_STATUS_IDLE = 'idle';
 export const QUIZ_CLASS_STATUS_STARTED = 'started';
 export const QUIZ_QUESTION_LIMIT = 10;
+export const QUIZ_DEFAULT_TIME_LIMIT_MINUTES = 30;
 export const QUIZ_MODE_OFFICIAL = 'official_quiz';
 export const QUIZ_MODE_PRACTICE = 'practice_quiz';
 export const QUIZ_MODES = [QUIZ_MODE_OFFICIAL];

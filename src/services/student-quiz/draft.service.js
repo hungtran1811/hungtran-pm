@@ -69,6 +69,7 @@ export async function saveStudentQuizDraft(payload = {}) {
       classItem,
       studentId,
       submissionNumber,
+      attemptState?.reopenedAt || null,
     );
     const answers = normalizeDraftAnswers(quizVariant, payload.answers || {});
     const { db } = getFirebaseServices();

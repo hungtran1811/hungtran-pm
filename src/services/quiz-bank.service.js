@@ -42,6 +42,7 @@ function toPublicQuizConfigDoc(config) {
     sessionNumber: config.sessionNumber,
     quizMode: QUIZ_MODE_OFFICIAL,
     questionPickPolicy: config.questionPickPolicy,
+    timeLimitMinutes: config.timeLimitMinutes,
     title: config.title,
     description: config.description,
     questionCount: config.questions.length,

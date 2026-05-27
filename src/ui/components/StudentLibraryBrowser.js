@@ -14,6 +14,8 @@ import {
 import { QUIZ_STUDENT_ENABLED } from '../../config/features.js';
 import { formatDateTime } from '../../utils/date.js';
 import { escapeHtml } from '../../utils/html.js';
+import { buildPublicQuizPath } from '../../utils/route.js';
+import { isQuizStartedForClass } from '../../utils/quiz.js';
 import { renderAlert } from './Alert.js';
 import { renderLoadingOverlay } from './LoadingOverlay.js';
 import { renderQuizForm } from './QuizForm.js';
@@ -97,7 +99,7 @@ function renderLessonMeta(preview, reportLink = '') {
   return `
     <div class="student-library-header student-library-header--compact">
       <div>
-        <div class="student-library-title-label">Học liệu</div>
+        <div class="student-library-title-label">Bài giảng</div>
         <h2 class="h4 mb-1">${escapeHtml(preview.program.name)}</h2>
         <div class="small text-secondary">
           ${escapeHtml(classCode)}${className ? ` · ${escapeHtml(className)}` : ''}
@@ -400,6 +402,74 @@ function renderLessonQuizArticle(lesson, selectedImageId, preview, quizState = {
   const lessonSession = Number(lesson?.sessionNumber || 0);
   const sessionActivity = getCurriculumSessionActivity(preview?.program, lessonSession);
   const activityLabel = getCurriculumActivityTypeLabel(sessionActivity.activityType);
+  const quizClassCodeForCta = preview?.classInfo?.classCode || '';
+  const quizHrefForCta = quizClassCodeForCta ? buildPublicQuizPath(quizClassCodeForCta) : '';
+  const activeSessionForCta = Number(preview?.assignment?.currentSession || 0) === lessonSession;
+  const ctaQuizContext = quizState.quizContext || null;
+  const ctaEligible =
+    Boolean(ctaQuizContext?.availability?.isEligible) ||
+    (activeSessionForCta && isQuizStartedForClass(preview?.classInfo, lessonSession));
+  const ctaReason =
+    ctaQuizContext?.availability?.reason ||
+    (activeSessionForCta
+      ? 'Giáo viên chưa mở bài kiểm tra cho học sinh.'
+      : `Bài kiểm tra buổi ${lessonSession} chỉ mở khi lớp đang ở đúng buổi này.`);
+
+  return `
+    <section class="student-library-workspace">
+      <div class="student-library-workspace__top">
+        <div>
+          <div class="student-library-detail__label">Buổi ${lessonSession} · ${escapeHtml(activityLabel)}</div>
+          <h3 class="h4 mb-1">${escapeHtml(lesson?.title || `Kiểm tra buổi ${lessonSession}`)}</h3>
+        </div>
+        <div class="student-library-workspace__nav">
+          <button
+            type="button"
+            class="btn btn-outline-secondary btn-sm"
+            data-action="go-to-library-neighbor"
+            data-direction="prev"
+            ${lesson?.previousLessonId ? `data-lesson-id="${escapeHtml(lesson.previousLessonId)}"` : 'disabled'}
+          >
+            <i class="bi bi-chevron-left me-1"></i>Buổi trước
+          </button>
+          <button
+            type="button"
+            class="btn btn-outline-secondary btn-sm"
+            data-action="go-to-library-neighbor"
+            data-direction="next"
+            ${lesson?.nextLessonId ? `data-lesson-id="${escapeHtml(lesson.nextLessonId)}"` : 'disabled'}
+          >
+            Buổi sau<i class="bi bi-chevron-right ms-1"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="student-library-article student-library-article--quiz">
+        <div class="student-library-article__body">
+          <div class="student-library-quiz-cta">
+            <div>
+              <div class="student-library-detail__label">Kiểm tra trắc nghiệm</div>
+              <h4>${escapeHtml(ctaQuizContext?.quiz?.title || `Bài kiểm tra buổi ${lessonSession}`)}</h4>
+              <p>
+                Bài kiểm tra sẽ mở ở trang làm bài riêng để bạn xem thời gian, tiến độ và từng câu rõ ràng hơn.
+              </p>
+            </div>
+            ${
+              !QUIZ_STUDENT_ENABLED
+                ? renderAlert('Bài kiểm tra đang được giáo viên chuẩn bị và chưa mở cho học sinh trên website.', 'info')
+                : !activeSessionForCta || !ctaEligible
+                  ? renderAlert(escapeHtml(ctaReason), 'info')
+                  : `
+                    <a class="btn btn-primary" href="${escapeHtml(quizHrefForCta)}">
+                      <i class="bi bi-play-circle me-2"></i>Bắt đầu làm bài
+                    </a>
+                  `
+            }
+          </div>
+        </div>
+      </div>
+    </section>
+  `;
   if (!QUIZ_STUDENT_ENABLED) {
     return `
       <section class="student-library-workspace">
@@ -642,7 +712,7 @@ export function renderStudentLibraryBrowser(
     return `
       <div class="card border-0 shadow-sm student-library-card ${embedded ? 'student-library-card--embedded' : ''}">
         <div class="card-body">
-          <div class="student-library-title-label">Học liệu</div>
+          <div class="student-library-title-label">Bài giảng</div>
           <h2 class="h5 mb-2">Chưa có bài học để hiển thị</h2>
           <p class="text-secondary mb-0">Giáo viên chưa cập nhật bài học cho lớp này hoặc lớp chưa học đến buổi nào.</p>
         </div>

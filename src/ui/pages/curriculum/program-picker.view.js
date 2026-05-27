@@ -306,7 +306,7 @@ export function renderContentWorkspaceHorizontal({
                                 ${
                                   isQuizSession
                                     ? 'Soạn ngân hàng câu hỏi cho buổi kiểm tra này.'
-                                    : 'Soạn bài giảng và bài tập cho học sinh xem trong học liệu.'
+                                    : 'Soạn bài giảng và bài tập cho học sinh xem trong bài giảng.'
                                 }
                               </p>
                             </div>

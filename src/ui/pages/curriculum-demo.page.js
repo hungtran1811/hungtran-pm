@@ -1,4 +1,4 @@
-﻿import {
+import {
   getClassCurriculumView,
   getCurriculumProgram,
   getCurriculumProgramGroups,
@@ -132,12 +132,12 @@ function renderCompactCurriculumPageV3(state) {
 
     ${
       state.isLoadingClasses || state.isLoadingPrograms
-        ? renderLoadingOverlay('Đang tải dữ liệu học liệu...')
+        ? renderLoadingOverlay('Đang tải dữ liệu bài giảng...')
         : state.programs.length === 0
           ? renderEmptyState({
               icon: 'journal-richtext',
               title: 'Chưa có chương trình mẫu trong Firestore',
-              description: 'Hãy chạy script seed curriculum trước khi gán học liệu hoặc chỉnh lesson cho lớp.',
+              description: 'Hãy chạy script seed curriculum trước khi gán bài giảng hoặc chỉnh lesson cho lớp.',
             })
           : classes.length === 0
             ? renderEmptyState({
@@ -170,12 +170,12 @@ function renderCompactCurriculumPageV3(state) {
 }
 
 export const curriculumDemoPage = {
-  title: 'Học liệu',
+  title: 'Bài giảng',
   async render() {
     const authState = getAuthState();
 
     return renderAppShell({
-      title: 'Học liệu',
+      title: 'Bài giảng',
       subtitle: '',
       currentRoute: '/admin/curriculum',
       user: authState.user,
@@ -843,7 +843,7 @@ export const curriculumDemoPage = {
           showToast({
             title: isStarting ? 'Đã mở bài kiểm tra' : 'Đã kết thúc bài kiểm tra',
             message: isStarting
-              ? `Học sinh lớp ${selectedClass.classCode} có thể vào Học liệu để làm bài buổi ${sessionNumber}.`
+              ? `Học sinh lớp ${selectedClass.classCode} có thể vào Bài giảng để làm bài buổi ${sessionNumber}.`
               : `Đã ẩn đề khỏi học sinh và ghi nhận ${Number(statusResult?.finalizedCount || 0)} bài đang làm.`,
             variant: 'success',
           });
@@ -898,14 +898,14 @@ export const curriculumDemoPage = {
           await persistClassAssignment(selectedClass, assignment);
 
           showToast({
-            title: 'Đã lưu học liệu',
+            title: 'Đã lưu bài giảng',
             message: `Lớp ${selectedClass.classCode} đã được cập nhật chương trình, buổi hiện tại và pha lớp học.`,
             variant: 'success',
           });
         } catch (error) {
           showToast({
             title: 'Không thể lưu',
-            message: mapFirebaseError(error, 'Không thể lưu cấu hình học liệu cho lớp này.'),
+            message: mapFirebaseError(error, 'Không thể lưu cấu hình bài giảng cho lớp này.'),
             variant: 'danger',
           });
         } finally {
@@ -1626,7 +1626,7 @@ export const curriculumDemoPage = {
         },
         (error) => {
           state.isLoadingClasses = false;
-          state.error = mapFirebaseError(error, 'Không tải được danh sách lớp cho trang học liệu.');
+          state.error = mapFirebaseError(error, 'Không tải được danh sách lớp cho trang bài giảng.');
           renderView();
         },
       ),

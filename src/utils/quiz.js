@@ -17,6 +17,7 @@ import {
   QUIZ_QUESTION_TYPES,
   QUIZ_SESSION_NUMBERS,
   QUIZ_DEFAULT_OFFICIAL_SESSION_NUMBERS,
+  QUIZ_DEFAULT_TIME_LIMIT_MINUTES,
 } from './quiz/constants.js';
 import {
   buildQuizAttemptId,
@@ -35,6 +36,7 @@ export {
   QUIZ_CLASS_STATUS_STARTED,
   QUIZ_DEFAULT_OFFICIAL_SESSION_NUMBERS,
   QUIZ_DEFAULT_PICK_POLICY,
+  QUIZ_DEFAULT_TIME_LIMIT_MINUTES,
   QUIZ_DIFFICULTIES,
   QUIZ_DIFFICULTY_EASY,
   QUIZ_DIFFICULTY_HARD,
@@ -84,6 +86,16 @@ function normalizeBoolean(value, fallback = false) {
   }
 
   return fallback;
+}
+
+export function normalizeQuizTimeLimitMinutes(value = QUIZ_DEFAULT_TIME_LIMIT_MINUTES) {
+  const numericValue = Number(value || QUIZ_DEFAULT_TIME_LIMIT_MINUTES);
+
+  if (!Number.isFinite(numericValue)) {
+    return QUIZ_DEFAULT_TIME_LIMIT_MINUTES;
+  }
+
+  return Math.min(180, Math.max(1, Math.round(numericValue)));
 }
 
 function normalizeQuestionType(value) {
@@ -433,6 +445,7 @@ export function normalizeQuizConfigRecord(
     sessionNumber: normalizedSessionNumber,
     quizMode: QUIZ_MODE_OFFICIAL,
     questionPickPolicy,
+    timeLimitMinutes: normalizeQuizTimeLimitMinutes(input.timeLimitMinutes),
     title: coerceText(input.title),
     description: coerceText(input.description),
     questions: sortQuizQuestions(
@@ -510,6 +523,7 @@ export function toPublicQuizConfig(config = {}) {
     title: coerceText(normalizedConfig.title),
     description: coerceText(normalizedConfig.description),
     questionPickPolicy: normalizeQuestionPickPolicy(normalizedConfig.questionPickPolicy),
+    timeLimitMinutes: normalizeQuizTimeLimitMinutes(normalizedConfig.timeLimitMinutes),
     questionCount: coerceArray(normalizedConfig.questions).length,
     questions: sortQuizQuestions(normalizedConfig.questions || []).map((question) => ({
       id: coerceText(question.id),
@@ -591,6 +605,7 @@ export function buildStudentQuizVariant(
     title: normalizedQuiz.title,
     description: normalizedQuiz.description,
     questionPickPolicy: policy,
+    timeLimitMinutes: normalizeQuizTimeLimitMinutes(normalizedQuiz.timeLimitMinutes),
     questionCount: selectedQuestions.length,
     poolQuestionCount: normalizedQuiz.questions.length,
     questionIds: selectedQuestions.map((question) => question.id),

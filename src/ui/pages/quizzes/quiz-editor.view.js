@@ -137,6 +137,18 @@ export function renderQuizEditor({
             <label class="form-label">Tiêu đề</label>
             <input class="form-control form-control-sm" id="quiz-title-input" value="${escapeHtml(draft?.title || '')}" ${isLoading ? 'disabled' : ''} />
           </div>
+          <div class="quiz-editor-setup__time">
+            <label class="form-label">Thời gian làm bài</label>
+            <input
+              class="form-control form-control-sm"
+              id="quiz-time-limit-input"
+              type="number"
+              min="1"
+              max="180"
+              value="${Number(draft?.timeLimitMinutes || 30)}"
+              ${isLoading ? 'disabled' : ''}
+            />
+          </div>
           ${
             contextLocked
               ? ''

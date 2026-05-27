@@ -361,7 +361,7 @@ export function renderCurriculumReviewPanel(preview, classInfo = null) {
       <div class="card border-0 shadow-sm student-review-card">
         <div class="card-body">
           <div class="student-review-card__label">Ôn lại bài cũ</div>
-          <h2 class="h5 mb-2">Lớp này chưa được gán học liệu</h2>
+          <h2 class="h5 mb-2">Lớp này chưa được gán bài giảng</h2>
           <p class="text-secondary mb-0">
             Giáo viên chưa cập nhật chương trình học cho lớp ${escapeHtml(classInfo.classCode)} nên phần ôn tập chưa hiển thị.
           </p>

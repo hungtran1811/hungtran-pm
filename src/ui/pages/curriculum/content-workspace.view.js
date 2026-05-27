@@ -1,6 +1,6 @@
 export function renderCurriculumWorkspaceSwitch(activeSection) {
   return `
-    <div class="curriculum-workspace-switch" role="tablist" aria-label="Chuyển khu học liệu">
+    <div class="curriculum-workspace-switch" role="tablist" aria-label="Chuyển khu bài giảng">
       <button
         type="button"
         class="curriculum-workspace-switch__button ${activeSection === 'assignment' ? 'curriculum-workspace-switch__button--active' : ''}"

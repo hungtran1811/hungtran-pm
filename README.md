@@ -1,6 +1,6 @@
 # hungtranPM
 
-Web app quản lý lớp học lập trình, học liệu, báo cáo tiến độ sản phẩm và kiểm tra trắc nghiệm.
+Web app quản lý lớp học lập trình, bài giảng, báo cáo tiến độ sản phẩm và kiểm tra trắc nghiệm.
 
 ## Stack
 

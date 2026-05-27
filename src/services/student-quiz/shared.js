@@ -17,6 +17,7 @@ import {
   QUIZ_MODE_OFFICIAL,
   QUIZ_QUESTION_LIMIT,
   normalizeQuizMode,
+  normalizeQuizTimeLimitMinutes,
   isQuizStartedForClass,
 } from '../../utils/quiz.js';
 
@@ -100,6 +101,35 @@ export function normalizeDraftAnswers(quiz = {}, answers = {}) {
 
     return result;
   }, {});
+}
+
+export function toMillis(value) {
+  if (!value) {
+    return 0;
+  }
+
+  if (typeof value.toMillis === 'function') {
+    return value.toMillis();
+  }
+
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+
+  if (typeof value === 'number') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  if (typeof value.seconds === 'number') {
+    return value.seconds * 1000;
+  }
+
+  return 0;
 }
 
 export async function getValidatedClass(classCode) {
@@ -196,7 +226,11 @@ export async function getQuizLiveAttempt(classCode, studentId, sessionNumber, su
   };
 }
 
-export function buildStartedQuizVariant(quizPool, classItem, studentId = '', submissionNumber = 1) {
+export function buildStartedQuizVariant(quizPool, classItem, studentId = '', submissionNumber = 1, timingStartAt = null) {
+  const timeLimitMinutes = normalizeQuizTimeLimitMinutes(quizPool?.timeLimitMinutes);
+  const startedAtValue = timingStartAt || classItem.quizStartedAt;
+  const startedAtMs = toMillis(startedAtValue);
+  const deadlineAtMs = startedAtMs > 0 ? startedAtMs + timeLimitMinutes * 60 * 1000 : 0;
   const variant = studentId
     ? buildStudentQuizVariant(quizPool, {
         classCode: classItem.classCode,
@@ -223,7 +257,9 @@ export function buildStartedQuizVariant(quizPool, classItem, studentId = '', sub
 
   return {
     ...variant,
-    startedAt: classItem.quizStartedAt || null,
+    timeLimitMinutes,
+    startedAt: startedAtValue || null,
+    deadlineAtMs,
   };
 }
 

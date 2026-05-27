@@ -13,7 +13,7 @@ const NAV_ITEMS = [
       { href: '#/admin/reports', label: 'Báo cáo', icon: 'file-earmark-text' },
     ],
   },
-  { href: '#/admin/curriculum', label: 'Học liệu', icon: 'journal-richtext' },
+  { href: '#/admin/curriculum', label: 'Bài giảng', icon: 'journal-richtext' },
 ];
 
 export function renderSidebar(currentRoute) {

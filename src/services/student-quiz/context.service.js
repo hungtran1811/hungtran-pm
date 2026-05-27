@@ -91,6 +91,7 @@ export async function getStudentQuizContext(payloadOrClassCode, studentId = '') 
         classItem,
         request.studentId,
         submissionNumber,
+        attemptState?.reopenedAt || null,
       ),
       attempt: attemptState,
       liveAttempt,

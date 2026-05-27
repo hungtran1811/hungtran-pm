@@ -124,11 +124,11 @@ export const adminAnalyticsPage = {
 
         return `
           <tr>
-            <td class="text-secondary" style="width: 40px;">${index + 1}</td>
-            <td class="analytics-table-student-name">${escapeHtml(student.fullName)}</td>
-            <td>${classCodeMarkup}</td>
-            <td class="analytics-table-project-name">${escapeHtml(student.projectName || 'Không đăng ký')}</td>
-            <td>
+            <td data-label="#" class="text-secondary" style="width: 40px;">${index + 1}</td>
+            <td data-label="Học viên" class="analytics-table-student-name">${escapeHtml(student.fullName)}</td>
+            <td data-label="Lớp">${classCodeMarkup}</td>
+            <td data-label="Dự án" class="analytics-table-project-name">${escapeHtml(student.projectName || 'Không đăng ký')}</td>
+            <td data-label="Tiến độ">
               <div class="d-flex align-items-center gap-2">
                 <span class="fw-bold small">${progress}%</span>
                 <div class="progress flex-grow-1" style="height: 6px; min-width: 80px; max-width: 120px;">
@@ -136,7 +136,7 @@ export const adminAnalyticsPage = {
                 </div>
               </div>
             </td>
-            <td>${renderStatusBadge(student.currentStatus)}</td>
+            <td data-label="Trạng thái">${renderStatusBadge(student.currentStatus)}</td>
           </tr>
         `;
       }).join('');

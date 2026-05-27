@@ -132,9 +132,9 @@ function renderQuizPreviewControls({ program, sessionNumber, classCode = '' }) {
 
   return `
     <div class="admin-student-preview-bar admin-student-preview-bar--compact">
-      <a class="admin-student-preview-back" href="#/admin/curriculum" aria-label="Quay lại Học liệu">
+      <a class="admin-student-preview-back" href="#/admin/curriculum" aria-label="Quay lại Bài giảng">
         <i class="bi bi-arrow-left"></i>
-        <span>Học liệu</span>
+        <span>Bài giảng</span>
       </a>
       ${
         program
@@ -251,7 +251,7 @@ function renderScoreTargetPanel(state, { disabled = false } = {}) {
       <div>
         <div class="student-library-title-label">Gửi kết quả về trung tâm điểm</div>
         <h2 class="h6 mb-1">Chọn lớp và học sinh để ghi nhận lượt nộp</h2>
-        <p class="text-secondary mb-0">Học sinh không thấy điểm sau khi nộp. Admin xem điểm trong Học liệu.</p>
+        <p class="text-secondary mb-0">Học sinh không thấy điểm sau khi nộp. Admin xem điểm trong Bài giảng.</p>
       </div>
       <div class="admin-quiz-score-target__controls">
         <label class="admin-quiz-score-target__field">
@@ -398,7 +398,7 @@ function renderScoreCenterReceipt(state) {
       </div>
       <div>
         <div class="student-library-title-label">Trung tâm điểm đã nhận</div>
-        <h3 class="h5 mb-2">Kết quả đã được gửi về Học liệu</h3>
+        <h3 class="h5 mb-2">Kết quả đã được gửi về Bài giảng</h3>
         <p class="text-secondary mb-3">
           Lượt nộp của <strong>${escapeHtml(record.studentName || 'học sinh')}</strong>
           trong lớp <strong>${escapeHtml(record.classCode || '')}</strong> đã được ghi vào danh sách bài nộp.
@@ -437,7 +437,7 @@ function renderQuizPreviewContent(state) {
     return renderEmptyState({
       icon: 'patch-question',
       title: `Chưa có bộ đề buổi ${state.sessionNumber}`,
-      description: 'Hãy quay lại Học liệu, dùng bộ mẫu hoặc thêm câu hỏi rồi bấm lưu đề trước khi test.',
+      description: 'Hãy quay lại Bài giảng, dùng bộ mẫu hoặc thêm câu hỏi rồi bấm lưu đề trước khi test.',
     });
   }
 
@@ -512,7 +512,7 @@ function renderQuizPreviewContent(state) {
         : renderEmptyState({
             icon: 'patch-question',
             title: 'Bộ đề chưa có câu hỏi',
-            description: 'Hãy thêm câu hỏi hoặc dùng bộ mẫu trong Học liệu trước khi test.',
+            description: 'Hãy thêm câu hỏi hoặc dùng bộ mẫu trong Bài giảng trước khi test.',
           })
     }
   `;
@@ -621,7 +621,7 @@ function renderQuizPreviewContentV2(state) {
               : renderEmptyState({
                   icon: 'patch-question',
                   title: 'Bộ đề chưa có câu hỏi',
-                  description: 'Hãy thêm câu hỏi hoặc dùng bộ mẫu trong Học liệu trước khi test.',
+                  description: 'Hãy thêm câu hỏi hoặc dùng bộ mẫu trong Bài giảng trước khi test.',
                 })
           }
         `

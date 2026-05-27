@@ -2166,4 +2166,87 @@
   box-shadow: 0 0.55rem 1.2rem rgba(15, 76, 129, 0.16);
 }
 
+/* Compact Bài giảng student surface */
+.student-library-card,
+.admin-lesson-student-preview .student-library-card {
+  border: 1px solid var(--app-border) !important;
+  border-radius: var(--portal-radius) !important;
+  box-shadow: var(--portal-shadow-soft) !important;
+}
+
+.student-library-card .card-body {
+  padding: 1rem !important;
+}
+
+.student-library-layout--article {
+  gap: 0.95rem !important;
+}
+
+.student-library-sidebar,
+.student-library-workspace,
+.student-library-article,
+.student-library-media__frame,
+.student-library-resource-card,
+.student-library-lesson-item,
+.student-library-quiz-cta {
+  border-radius: var(--portal-radius-sm) !important;
+}
+
+.student-library-sidebar {
+  padding: 0.75rem !important;
+}
+
+.student-library-lesson-list {
+  gap: 0.45rem !important;
+}
+
+.student-library-lesson-item {
+  padding: 0.65rem 0.72rem !important;
+}
+
+.student-library-workspace__top {
+  margin-bottom: 0.8rem !important;
+}
+
+.student-library-article {
+  gap: 0.9rem !important;
+}
+
+.student-library-media__frame--article {
+  min-height: 0 !important;
+}
+
+.student-library-article__body {
+  padding: 0.9rem !important;
+}
+
+.student-library-tabbar {
+  gap: 0.35rem !important;
+  padding: 0.25rem !important;
+}
+
+.student-library-tab {
+  min-height: 2rem !important;
+  padding: 0.28rem 0.65rem !important;
+}
+
+.student-library-quiz-cta {
+  display: grid;
+  gap: 0.9rem;
+  border: 1px solid var(--app-border);
+  background: #ffffff;
+  padding: 1rem;
+}
+
+.student-library-quiz-cta h4 {
+  margin: 0.15rem 0 0.3rem;
+  font-size: 1.18rem;
+}
+
+.student-library-quiz-cta p {
+  max-width: 44rem;
+  margin: 0;
+  color: var(--app-muted);
+}
+
 

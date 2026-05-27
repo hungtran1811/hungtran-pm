@@ -233,7 +233,7 @@ function renderCompactAssignmentControls(classes, programs, selectedClassCode, c
             <div>
               <div class="fw-semibold">Bài tập buổi ${currentSession}</div>
               <div class="small text-secondary">
-                ${hasExerciseContent ? 'Bật để học sinh lớp này thấy tab Bài tập.' : 'Buổi này chưa có nội dung Bài tập trong kho học liệu.'}
+                ${hasExerciseContent ? 'Bật để học sinh lớp này thấy tab Bài tập.' : 'Buổi này chưa có nội dung Bài tập trong kho bài giảng.'}
               </div>
             </div>
             <div class="form-check form-switch mb-0">
@@ -273,7 +273,7 @@ function renderCompactAssignmentControls(classes, programs, selectedClassCode, c
             libraryPath
               ? `
                 <a class="btn btn-outline-secondary" href="${escapeHtml(libraryPath)}" target="_blank" rel="noreferrer">
-                  <i class="bi bi-journal-richtext me-2"></i>Xem học liệu của lớp
+                  <i class="bi bi-journal-richtext me-2"></i>Xem bài giảng của lớp
                 </a>
               `
               : ''
@@ -322,7 +322,7 @@ function renderAssignmentStatusBoard(classes, programs, draftsByClassCode, selec
       <div class="card-header bg-white border-0">
         <div class="d-flex flex-wrap justify-content-between gap-2 align-items-center">
           <div>
-            <h2 class="h6 mb-1">Danh sách lớp đang dùng học liệu</h2>
+            <h2 class="h6 mb-1">Danh sách lớp đang dùng bài giảng</h2>
             <div class="small text-secondary">Bấm vào một card để chỉnh nhanh cấu hình lớp đó.</div>
           </div>
           <span class="badge text-bg-light text-dark border">${classes.length} lớp</span>

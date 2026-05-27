@@ -11,7 +11,7 @@ export function renderStudentLibraryCta(curriculumPreview, classInfo, isLoading 
     return `
       <div class="student-report-library-action student-report-library-action--muted">
         <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
-        <span>Đang tải học liệu...</span>
+        <span>Đang tải bài giảng...</span>
       </div>
     `;
   }
@@ -38,12 +38,12 @@ export function renderStudentLibraryCta(curriculumPreview, classInfo, isLoading 
   return `
     <a class="student-report-library-action" href="${escapeHtml(href)}">
       <span>
-        <span class="student-report-eyebrow">Học liệu</span>
+        <span class="student-report-eyebrow">Bài giảng</span>
         <strong>${escapeHtml(curriculumPreview.program.name)}</strong>
         <small>${visibleLessonCount} buổi đã mở · Buổi hiện tại ${currentSession}</small>
       </span>
       <span class="btn btn-outline-primary btn-sm">
-        <i class="bi bi-journal-richtext me-1"></i>Xem học liệu
+        <i class="bi bi-journal-richtext me-1"></i>Xem bài giảng
       </span>
     </a>
   `;

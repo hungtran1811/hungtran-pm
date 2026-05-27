@@ -1,4 +1,4 @@
-﻿import {
+import {
   collection,
   doc,
   getDoc,
@@ -123,7 +123,7 @@ function validateLessonPayload(program, lesson, lessons, currentLessonId = '') {
   );
 
   if (!hasMarkdownContent && !hasLegacyStructuredContent) {
-    throw new Error('Hãy nhập nội dung học liệu cho buổi học này.');
+    throw new Error('Hãy nhập nội dung bài giảng cho buổi học này.');
   }
   const invalidReviewLink = (lesson.reviewLinks || []).find(
     (item) => !item.label || !item.url || !isCurriculumReviewLinkValid(item),
@@ -281,7 +281,7 @@ export async function saveClassCurriculumAssignment(classCode, payload) {
         updatedAt: serverTimestamp(),
       });
   } catch (error) {
-    throw toAppError(error, 'Không thể lưu cấu hình học liệu cho lớp này.');
+    throw toAppError(error, 'Không thể lưu cấu hình bài giảng cho lớp này.');
   }
 }
 
@@ -616,7 +616,7 @@ export async function getClassCurriculumView(classCode, { publicAccess = true } 
     const classItem = toClassModel(classSnapshot);
 
     if (publicAccess && (classItem.status !== 'active' || classItem.hidden)) {
-      throw new Error('Lớp học hiện không mở để xem học liệu.');
+      throw new Error('Lớp học hiện không mở để xem bài giảng.');
     }
 
     if (!classItem.curriculumProgramId) {
@@ -633,7 +633,7 @@ export async function getClassCurriculumView(classCode, { publicAccess = true } 
     const program = await getCurriculumProgram(classItem.curriculumProgramId);
     return buildCurriculumView(classItem, program);
   } catch (error) {
-    throw toAppError(error, 'Không tải được học liệu của lớp này.');
+    throw toAppError(error, 'Không tải được bài giảng của lớp này.');
   }
 }
 
