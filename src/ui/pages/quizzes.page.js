@@ -655,6 +655,12 @@ export async function mountQuizManagement({
       }
 
       if (attemptModalSlot) {
+        const existingAttemptModalEl = document.body.querySelector('#quiz-attempt-detail-modal');
+        if (existingAttemptModalEl) {
+          window.bootstrap?.Modal?.getInstance(existingAttemptModalEl)?.dispose();
+          existingAttemptModalEl.remove();
+        }
+
         attemptModalSlot.innerHTML = operationsEnabled
           ? renderAttemptDetailModal(selectedAttempt, state.isAttemptModalOpen, {
               submissionHistory: getAttemptSubmissionHistory(selectedAttempt),
@@ -666,6 +672,26 @@ export async function mountQuizManagement({
               error: state.attemptModalError,
             })
           : '';
+
+        const attemptModalEl = attemptModalSlot.querySelector('#quiz-attempt-detail-modal');
+        if (attemptModalEl && state.isAttemptModalOpen && window.bootstrap?.Modal) {
+          document.body.appendChild(attemptModalEl);
+          const attemptModal = window.bootstrap.Modal.getOrCreateInstance(attemptModalEl);
+          attemptModal.show();
+          attemptModalEl.addEventListener('hidden.bs.modal', () => {
+            attemptModal.dispose();
+            const shouldRender = state.isAttemptModalOpen;
+            state.isAttemptModalOpen = false;
+            state.attemptModalInfo = '';
+            state.attemptModalError = '';
+            state.reopeningAttemptId = '';
+            attemptModalEl.remove();
+            attemptModalSlot.innerHTML = '';
+            if (shouldRender) {
+              renderView();
+            }
+          }, { once: true });
+        }
       }
     }
 
@@ -1389,20 +1415,18 @@ export async function mountQuizManagement({
       renderView();
     });
 
-    attemptModalSlot?.addEventListener('click', async (event) => {
+    const handleAttemptModalClick = async (event) => {
       if (!operationsEnabled) {
         return;
       }
 
       const closeButton = event.target.closest('[data-action="close-attempt-modal"]');
-      const modalBackdrop = attemptModalSlot.firstElementChild;
 
-      if (closeButton || (modalBackdrop && event.target === modalBackdrop)) {
+      if (closeButton) {
         state.isAttemptModalOpen = false;
         state.attemptModalInfo = '';
         state.attemptModalError = '';
         state.reopeningAttemptId = '';
-        renderView();
         return;
       }
 
@@ -1462,11 +1486,14 @@ export async function mountQuizManagement({
         });
         renderView();
       }
-    });
+    };
+
+    document.addEventListener('click', handleAttemptModalClick);
 
     renderView();
 
     return () => {
+      document.removeEventListener('click', handleAttemptModalClick);
       unsubscribePrograms?.();
       unsubscribeClasses?.();
     };

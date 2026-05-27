@@ -913,11 +913,15 @@ function renderKnowledgeReportModal(student, report) {
                     </section>
                   </div>
                 `
-                : renderEmptyState({
-                    icon: 'chat-square-text',
-                    title: 'Chưa có phản hồi',
-                    description: 'Học sinh này chưa gửi phản hồi hiểu bài cho buổi hiện tại.',
-                  })
+                : `
+                  <div class="ops-knowledge-empty">
+                    <i class="bi bi-chat-square-text"></i>
+                    <div>
+                      <strong>Chưa có phản hồi</strong>
+                      <span>Học sinh này chưa gửi phản hồi hiểu bài cho buổi hiện tại.</span>
+                    </div>
+                  </div>
+                `
             }
           </div>
         </div>
@@ -1131,7 +1135,9 @@ function renderReportHistoryContent(student, history) {
   `;
 }
 
-function renderStudentOperationModal(student, history, status) {
+function renderStudentOperationModal(student, history, status, options = {}) {
+  const modalError = String(options.error || '').trim();
+
   return `
     <div class="modal fade" id="dashboard-student-modal" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
@@ -1161,6 +1167,11 @@ function renderStudentOperationModal(student, history, status) {
             ${
               status.reasons.length > 0
                 ? `<div class="ops-modal-reasons">${status.reasons.map((reason) => `<span>${escapeHtml(reason)}</span>`).join('')}</div>`
+                : ''
+            }
+            ${
+              modalError
+                ? `<div class="alert alert-warning mb-3" role="alert">${escapeHtml(modalError)}</div>`
                 : ''
             }
             ${renderReportHistoryContent(student, history)}
@@ -1282,6 +1293,43 @@ export const adminDashboardPage = {
       }
     }
 
+    function showDashboardModal(modalId) {
+      const modalEl = document.getElementById(modalId);
+
+      if (!modalEl || !window.bootstrap?.Modal) {
+        modalSlot.innerHTML = '';
+        showToast({
+          title: 'Không thể mở popup',
+          message: 'Thành phần popup chưa sẵn sàng. Vui lòng thử lại sau vài giây.',
+          variant: 'danger',
+        });
+        return;
+      }
+
+      document.body.appendChild(modalEl);
+      const modal = window.bootstrap.Modal.getOrCreateInstance(modalEl);
+      modal.show();
+      modalEl.addEventListener('hidden.bs.modal', () => {
+        modal.dispose();
+        modalEl.remove();
+        modalSlot.innerHTML = '';
+      }, { once: true });
+    }
+
+    async function getSafeStudentReportHistory(studentId, limitSize) {
+      try {
+        return {
+          history: await getStudentReportHistory(studentId, limitSize),
+          error: '',
+        };
+      } catch (error) {
+        return {
+          history: [],
+          error: mapFirebaseError(error, 'Không thể tải lịch sử báo cáo của học sinh này.'),
+        };
+      }
+    }
+
     async function openStudentModal(studentId) {
       const snapshot = getSelectedSnapshot();
       const student = snapshot?.classStudents.find((item) => item.id === studentId) || null;
@@ -1292,24 +1340,19 @@ export const adminDashboardPage = {
 
       modalSlot.innerHTML = renderLoadingOverlay('Đang tải lịch sử báo cáo...');
 
-      try {
-        const history = await getStudentReportHistory(student.id, 8);
-        const status = getStudentOperationState(student, snapshot.todayReportsMap);
+      const historyResult = await getSafeStudentReportHistory(student.id, 8);
+      const status = getStudentOperationState(student, snapshot.todayReportsMap);
 
-        modalSlot.innerHTML = renderStudentOperationModal(student, history, status);
-        const modalEl = document.getElementById('dashboard-student-modal');
-        const modal = new window.bootstrap.Modal(modalEl);
-        modal.show();
-        modalEl.addEventListener('hidden.bs.modal', () => {
-          modal.dispose();
-          modalSlot.innerHTML = '';
-        }, { once: true });
-      } catch (error) {
-        modalSlot.innerHTML = '';
+      modalSlot.innerHTML = renderStudentOperationModal(student, historyResult.history, status, {
+        error: historyResult.error,
+      });
+      showDashboardModal('dashboard-student-modal');
+
+      if (historyResult.error) {
         showToast({
-          title: 'Không tải được báo cáo',
-          message: mapFirebaseError(error, 'Không thể tải lịch sử báo cáo của học sinh này.'),
-          variant: 'danger',
+          title: 'Chưa tải được lịch sử',
+          message: historyResult.error,
+          variant: 'warning',
         });
       }
     }
@@ -1324,13 +1367,7 @@ export const adminDashboardPage = {
 
       const report = getKnowledgeReportForStudent(snapshot, student);
       modalSlot.innerHTML = renderKnowledgeReportModal(student, report);
-      const modalEl = document.getElementById('dashboard-knowledge-modal');
-      const modal = new window.bootstrap.Modal(modalEl);
-      modal.show();
-      modalEl.addEventListener('hidden.bs.modal', () => {
-        modal.dispose();
-        modalSlot.innerHTML = '';
-      }, { once: true });
+      showDashboardModal('dashboard-knowledge-modal');
     }
 
     const unsubscribers = [

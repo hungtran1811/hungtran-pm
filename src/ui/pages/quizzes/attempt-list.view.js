@@ -72,7 +72,13 @@ export function renderAttemptList({
                       ${attempts
                         .map(
                           (attempt) => `
-                            <article class="quiz-attempt-card ${attempt.id === selectedAttemptId ? 'quiz-attempt-card--active' : ''}">
+                            <article
+                              class="quiz-attempt-card ${attempt.id === selectedAttemptId ? 'quiz-attempt-card--active' : ''}"
+                              role="button"
+                              tabindex="0"
+                              data-action="open-attempt-modal"
+                              data-attempt-id="${escapeHtml(attempt.id)}"
+                            >
                               <button
                                 type="button"
                                 class="quiz-attempt-card__main"

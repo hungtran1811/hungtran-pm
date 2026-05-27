@@ -51,6 +51,7 @@ function renderAttemptDetail(attempt, options = {}) {
   const latestSubmissionNumber = Number(latestSubmission?.submissionNumber || 0);
   const questionComparisonRows = buildQuestionComparisonRows(submissionHistory);
   const statusMeta = getAttemptStatusMeta(attempt);
+  const responseColumnClass = submissionHistory.length > 1 ? 'col-12 col-xl-6' : 'col-12';
 
   if (!attempt) {
     return renderEmptyState({
@@ -247,7 +248,7 @@ function renderAttemptDetail(attempt, options = {}) {
                               }</span>`;
 
                         return `
-                          <div class="col-12 col-xl-6">
+                          <div class="${responseColumnClass}">
                             <div class="quiz-status-meta h-100">
                               <div class="d-flex flex-wrap justify-content-between gap-2 align-items-center mb-2">
                                 <div class="quiz-status-meta__label mb-0">Lần ${submissionNumber || '?'}</div>
@@ -278,14 +279,17 @@ export function renderAttemptDetailModal(attempt, isOpen = false, options = {}) 
   }
 
   return `
-    <div class="quiz-modal-backdrop" data-action="close-attempt-modal">
-      <div class="quiz-modal-dialog" role="dialog" aria-modal="true" aria-label="Chi tiết bài nộp">
-        <div class="d-flex justify-content-end mb-3">
-          <button type="button" class="btn btn-outline-secondary btn-sm" data-action="close-attempt-modal">
-            <i class="bi bi-x-lg me-2"></i>Đóng
-          </button>
+    <div class="modal fade quiz-attempt-detail-modal" id="quiz-attempt-detail-modal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow admin-modal">
+          <div class="modal-header">
+            <h2 class="modal-title fs-5">Chi tiết bài nộp</h2>
+            <button type="button" class="btn-close" data-action="close-attempt-modal" data-bs-dismiss="modal" aria-label="Đóng"></button>
+          </div>
+          <div class="modal-body">
+            ${renderAttemptDetail(attempt, options)}
+          </div>
         </div>
-        ${renderAttemptDetail(attempt, options)}
       </div>
     </div>
   `;
