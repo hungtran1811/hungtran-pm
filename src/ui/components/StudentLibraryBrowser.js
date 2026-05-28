@@ -278,7 +278,7 @@ function renderLessonReferences(lesson) {
   `;
 }
 
-function renderLibraryImageLightbox(image = null) {
+export function renderLibraryImageLightbox(image = null) {
   if (!image?.url) {
     return '';
   }

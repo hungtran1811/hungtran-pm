@@ -2174,8 +2174,90 @@
   box-shadow: var(--portal-shadow-soft) !important;
 }
 
+.student-layout,
+.admin-student-preview-layout {
+  overflow-x: hidden;
+  overflow-x: clip;
+}
+
 .student-library-card .card-body {
   padding: 1rem !important;
+}
+
+.student-library-lightbox {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2147483000 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  display: grid !important;
+  place-items: center !important;
+  padding: clamp(0.9rem, 2.4vw, 1.8rem) !important;
+  background: rgba(6, 12, 22, 0.88) !important;
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+
+.student-library-lightbox__figure {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 1120px) !important;
+  max-height: calc(100dvh - 4rem) !important;
+  display: grid;
+  place-items: center;
+  gap: 0.62rem;
+  margin: 0 !important;
+}
+
+.student-library-lightbox__image {
+  display: block;
+  width: auto;
+  max-width: min(100%, 1120px) !important;
+  max-height: calc(100dvh - 6rem) !important;
+  object-fit: contain !important;
+  border-radius: var(--portal-radius-sm) !important;
+  background: #ffffff;
+  box-shadow: 0 1.1rem 3rem rgba(0, 0, 0, 0.42);
+}
+
+.student-library-lightbox__close {
+  position: fixed !important;
+  top: clamp(0.75rem, 2vw, 1.25rem) !important;
+  right: clamp(0.75rem, 2vw, 1.25rem) !important;
+  z-index: 2;
+  border-radius: var(--portal-radius-sm) !important;
+}
+
+.admin-student-preview-controls .student-page-shell {
+  width: min(calc(100% - 1rem), 1220px);
+}
+
+.admin-student-preview-bar {
+  gap: 0.45rem !important;
+  min-height: 2.8rem !important;
+  padding: 0.28rem !important;
+  border-radius: var(--portal-radius-sm) !important;
+  box-shadow: none !important;
+}
+
+.admin-student-preview-back {
+  min-height: 2.25rem !important;
+  border-radius: var(--portal-radius-sm) !important;
+}
+
+.admin-student-preview-field {
+  min-width: min(100%, 13rem) !important;
+}
+
+.admin-student-preview-field--wide {
+  flex-basis: 22rem !important;
+}
+
+.admin-student-preview-field .admin-student-preview-select,
+.admin-student-preview-readonly {
+  min-height: 2.35rem !important;
+  border-radius: var(--portal-radius-sm) !important;
 }
 
 .student-library-layout--article {

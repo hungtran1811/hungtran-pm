@@ -22,7 +22,7 @@ import { renderAlert } from '../components/Alert.js';
 import { renderBrandLogo } from '../components/BrandLogo.js';
 import { renderEmptyState } from '../components/EmptyState.js';
 import { renderLoadingOverlay } from '../components/LoadingOverlay.js';
-import { renderStudentLibraryBrowser } from '../components/StudentLibraryBrowser.js';
+import { renderLibraryImageLightbox, renderStudentLibraryBrowser } from '../components/StudentLibraryBrowser.js';
 import { renderToastStack } from '../components/ToastStack.js';
 
 function resolveSessionNumber(program, requestedSessionNumber) {
@@ -228,7 +228,7 @@ function renderStudentPreviewContent({
     ${renderStudentLibraryBrowser(preview, activeLessonId, imageSelections || {}, {
       activeTab: normalizeLessonMarkdownTab(activeTab),
       embedded: false,
-      lightboxImage: lightboxImage || null,
+      lightboxImage: null,
     })}
   `;
 }
@@ -259,12 +259,14 @@ export const adminLessonPreviewPage = {
         </section>
         ${renderToastStack()}
       </div>
+      <div id="admin-lesson-preview-lightbox-root"></div>
     `;
   },
 
   async mount() {
     const root = document.getElementById('admin-lesson-preview-root');
     const controls = document.getElementById('admin-lesson-preview-controls');
+    const lightboxRoot = document.getElementById('admin-lesson-preview-lightbox-root');
 
     if (!root || !controls) {
       return null;
@@ -302,6 +304,9 @@ export const adminLessonPreviewPage = {
 
       if (!program && !selectedClassCode) {
         root.innerHTML = renderProgramShortcutList(programs);
+        if (lightboxRoot) {
+          lightboxRoot.innerHTML = '';
+        }
         return;
       }
 
@@ -314,6 +319,9 @@ export const adminLessonPreviewPage = {
         capabilities,
         selectedClassCode,
       });
+      if (lightboxRoot) {
+        lightboxRoot.innerHTML = renderLibraryImageLightbox(lightboxImage);
+      }
     }
 
     function setHash(nextHash) {
@@ -428,6 +436,9 @@ export const adminLessonPreviewPage = {
 
         renderView();
       } catch (error) {
+        if (lightboxRoot) {
+          lightboxRoot.innerHTML = '';
+        }
         root.innerHTML = renderAlert(
           escapeHtml(error?.message || 'Không thể tải bài giảng để xem thử.'),
           'danger',
@@ -474,6 +485,14 @@ export const adminLessonPreviewPage = {
         activeLessonId = '';
         setHash(buildAdminLessonPreviewPath(program.id, sessionNumber));
         void load();
+      }
+    });
+
+    lightboxRoot?.addEventListener('click', (event) => {
+      const closeLightboxButton = event.target.closest('[data-action="close-library-image-lightbox"]');
+
+      if (closeLightboxButton) {
+        closeLightbox();
       }
     });
 

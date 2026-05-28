@@ -24,7 +24,7 @@ import {
 import { renderAlert } from '../components/Alert.js';
 import { renderBrandLogo } from '../components/BrandLogo.js';
 import { renderLoadingOverlay } from '../components/LoadingOverlay.js';
-import { renderStudentLibraryBrowser } from '../components/StudentLibraryBrowser.js';
+import { renderLibraryImageLightbox, renderStudentLibraryBrowser } from '../components/StudentLibraryBrowser.js';
 import { renderToastStack, showToast } from '../components/ToastStack.js';
 
 const QUIZ_CONTEXT_POLL_INTERVAL_MS = 5000;
@@ -77,7 +77,7 @@ function renderLibraryState({
 
   return renderStudentLibraryBrowser(preview, activeLessonId, imageSelections, {
     activeTab,
-    lightboxImage,
+    lightboxImage: null,
     reportLink,
     quizState,
   });
@@ -105,10 +105,12 @@ export const studentLibraryPage = {
         </section>
         ${renderToastStack()}
       </div>
+      <div id="student-library-lightbox-root"></div>
     `;
   },
   async mount() {
     const slot = document.getElementById('student-library-slot');
+    const lightboxRoot = document.getElementById('student-library-lightbox-root');
     const brandTrigger = document.getElementById('student-library-brand-trigger');
     const routeState = getStudentLibraryRouteState();
     const lockedClassCode = routeState.classCode;
@@ -213,6 +215,9 @@ export const studentLibraryPage = {
           currentQuestionIndex: quizCurrentQuestionIndex,
         },
       });
+      if (lightboxRoot) {
+        lightboxRoot.innerHTML = renderLibraryImageLightbox(lightboxImage);
+      }
     }
 
     function clearQuizDraftTimer() {
@@ -533,6 +538,14 @@ export const studentLibraryPage = {
       onTrigger: () => {
         window.location.assign('/#/admin/login');
       },
+    });
+
+    lightboxRoot?.addEventListener('click', (event) => {
+      const closeLightboxButton = event.target.closest('[data-action="close-library-image-lightbox"]');
+
+      if (closeLightboxButton) {
+        closeLightbox();
+      }
     });
 
     slot.addEventListener('click', (event) => {
