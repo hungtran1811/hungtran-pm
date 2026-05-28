@@ -954,6 +954,26 @@
   align-items: center;
 }
 
+.quiz-editor-case-switch.form-switch {
+  gap: 0.65rem;
+  min-height: 2.35rem;
+  margin: 0;
+  padding-left: 0.75rem !important;
+}
+
+.quiz-editor-case-switch .form-check-input {
+  flex: 0 0 auto;
+  float: none;
+  margin-top: 0;
+  margin-left: 0;
+}
+
+.quiz-editor-case-switch .form-check-label {
+  margin: 0;
+  color: var(--app-text);
+  line-height: 1.35;
+}
+
 .quiz-import-panel {
   border: 1px solid rgba(15, 76, 129, 0.12);
   border-radius: 1rem;

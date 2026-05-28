@@ -165,10 +165,27 @@ export const studentsPage = {
     let classes = [];
     let students = [];
     let currentStudent = null;
+    let activeModal = null;
+    let activeModalEl = null;
     let filters = {
       viewScope: 'active',
       classFilter: '',
     };
+
+    function cleanupActiveModal() {
+      if (activeModal) {
+        activeModal.hide();
+        activeModal.dispose();
+      }
+
+      if (activeModalEl) {
+        activeModalEl.remove();
+      }
+
+      activeModal = null;
+      activeModalEl = null;
+      modalSlot.innerHTML = '';
+    }
 
     function getScopedClasses(viewScope) {
       return classes.filter(viewScope === 'archive' ? isArchivedStudentClass : isOperationalClass);
@@ -204,12 +221,30 @@ export const studentsPage = {
     }
 
     function openModal(student = null) {
+      cleanupActiveModal();
       currentStudent = student;
       modalSlot.innerHTML = renderStudentFormModal(getModalClasses(student), student || {}, { isEditing: Boolean(student) });
       const modalEl = document.getElementById('student-form-modal');
-      const modal = new window.bootstrap.Modal(modalEl);
+      document.body.appendChild(modalEl);
+      const modal = window.bootstrap.Modal.getOrCreateInstance(modalEl);
       const form = document.getElementById('student-form');
       const alertSlot = document.getElementById('student-form-alert');
+      activeModal = modal;
+      activeModalEl = modalEl;
+
+      modalEl.addEventListener(
+        'hidden.bs.modal',
+        () => {
+          if (activeModalEl === modalEl) {
+            activeModal?.dispose();
+            modalEl.remove();
+            modalSlot.innerHTML = '';
+            activeModal = null;
+            activeModalEl = null;
+          }
+        },
+        { once: true },
+      );
 
       form.addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -368,6 +403,9 @@ export const studentsPage = {
 
     renderView();
 
-    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+    return () => {
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+      cleanupActiveModal();
+    };
   },
 };

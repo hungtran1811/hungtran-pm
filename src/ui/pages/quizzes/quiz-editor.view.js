@@ -356,7 +356,7 @@ export function renderQuizEditor({
                                   </div>
                                   <div class="col-12 col-lg-4">
                                     <label class="form-label">So khớp chữ hoa/thường</label>
-                                    <div class="form-check form-switch border rounded-3 px-3 py-2 h-100 d-flex align-items-center">
+                                    <div class="form-check form-switch quiz-editor-case-switch border rounded-3 px-3 py-2 h-100 d-flex align-items-center">
                                       <input
                                         class="form-check-input me-2"
                                         type="checkbox"

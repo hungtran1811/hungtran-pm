@@ -231,7 +231,8 @@ export const classesPage = {
     const tableSlot = document.getElementById('classes-table-slot');
     const modalEl = document.getElementById('class-form-modal');
     const form = document.getElementById('class-form');
-    const modal = new window.bootstrap.Modal(modalEl);
+    document.body.appendChild(modalEl);
+    const modal = window.bootstrap.Modal.getOrCreateInstance(modalEl);
     const createButton = document.getElementById('create-class-button');
     let classes = [];
     let students = [];
@@ -528,6 +529,11 @@ export const classesPage = {
 
     renderView();
 
-    return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
+    return () => {
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+      modal.hide();
+      modal.dispose();
+      modalEl.remove();
+    };
   },
 };
