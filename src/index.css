@@ -1,0 +1,101 @@
+/* Brand assets: public/logo-wordmark.svg, public/logo-icon.svg */
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-brand-50: #eef5ff;
+  --color-brand-100: #d9e8ff;
+  --color-brand-200: #bcd6ff;
+  --color-brand-300: #8ebcff;
+  --color-brand-400: #5996ff;
+  --color-brand-500: #316ffd;
+  --color-brand-600: #1b50f2;
+  --color-brand-700: #163ddf;
+  --color-brand-800: #1833b4;
+  --color-brand-900: #1a318e;
+  --color-brand-950: #151f56;
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-slate-50 text-slate-800 antialiased;
+    font-family: var(--font-sans);
+  }
+
+  .dark body {
+    @apply bg-slate-950 text-slate-100;
+  }
+
+  * {
+    scrollbar-width: thin;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900;
+  }
+
+  .input-base {
+    @apply w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-800 shadow-sm outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500;
+  }
+
+  .label-base {
+    @apply mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300;
+  }
+}
+
+.prose-content {
+  line-height: 1.75;
+}
+.prose-content h1 {
+  @apply mt-6 mb-3 text-2xl font-bold text-slate-900 dark:text-slate-50;
+}
+.prose-content h2 {
+  @apply mt-5 mb-2.5 text-xl font-bold text-slate-900 dark:text-slate-50;
+}
+.prose-content h3 {
+  @apply mt-4 mb-2 text-lg font-semibold text-slate-900 dark:text-slate-100;
+}
+.prose-content p {
+  @apply my-3;
+}
+.prose-content ul {
+  @apply my-3 list-disc space-y-1 pl-6;
+}
+.prose-content ol {
+  @apply my-3 list-decimal space-y-1 pl-6;
+}
+.prose-content a {
+  @apply font-medium text-brand-600 underline dark:text-brand-300;
+}
+.prose-content blockquote {
+  @apply my-3 border-l-4 border-brand-300 pl-4 italic text-slate-600 dark:text-slate-300;
+}
+.prose-content code {
+  @apply rounded bg-slate-100 px-1.5 py-0.5 text-sm text-pink-600 dark:bg-slate-800 dark:text-pink-300;
+}
+.prose-content pre {
+  @apply my-4 overflow-x-auto rounded-xl bg-slate-900 p-4 text-sm text-slate-100;
+}
+.prose-content pre code {
+  @apply bg-transparent p-0 text-slate-100;
+}
+.prose-content img {
+  @apply my-4 max-w-full cursor-zoom-in rounded-xl transition hover:opacity-90 hover:ring-2 hover:ring-brand-400/50;
+}
+.prose-content table {
+  @apply my-4 w-full border-collapse text-sm;
+}
+.prose-content th,
+.prose-content td {
+  @apply border border-slate-300 px-3 py-2 dark:border-slate-700;
+}

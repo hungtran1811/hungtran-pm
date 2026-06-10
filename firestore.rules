@@ -13,11 +13,15 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/admins/$(normalizedEmail()));
     }
 
+    function isAdminActive(active) {
+      return active == true || active == 'true';
+    }
+
     function isAdmin() {
       return isSignedIn()
         && request.auth.token.email != null
         && exists(/databases/$(database)/documents/admins/$(normalizedEmail()))
-        && adminDoc().data.active == true;
+        && isAdminActive(adminDoc().data.active);
     }
 
     function classDoc(classId) {
@@ -30,10 +34,6 @@ service cloud.firestore {
 
     function curriculumProgramDoc(programId) {
       return get(/databases/$(database)/documents/curriculumPrograms/$(programId));
-    }
-
-    function isQuizMode(mode) {
-      return mode == 'official_quiz' || mode == 'practice_quiz';
     }
 
     function isValidStage(stage) {
@@ -56,10 +56,6 @@ service cloud.firestore {
       return progress is int && progress >= 0 && progress <= 100;
     }
 
-    function isQuizSessionNumber(sessionNumber) {
-      return sessionNumber is int && sessionNumber >= 1 && sessionNumber <= 50;
-    }
-
     function isOpenClass(classId) {
       return classId is string
         && exists(/databases/$(database)/documents/classes/$(classId))
@@ -80,94 +76,11 @@ service cloud.firestore {
         && curriculumProgramDoc(programId).data.active == true;
     }
 
-    function quizPublicConfigExists(programId, sessionNumber) {
-      return programId is string
-        && programId.size() > 0
-        && isQuizSessionNumber(sessionNumber);
-    }
-
-    function matchesQuizAttemptId(attemptId, classCode, studentId, sessionNumber, quizMode) {
-      return classCode is string
-        && studentId is string
-        && isQuizMode(quizMode)
-        && attemptId is string
-        && isQuizSessionNumber(sessionNumber)
-        && attemptId.matches('^' + classCode + '__' + studentId + '__' + sessionNumber + '(__practice)?$');
-    }
-
-    function isQuizAnswerMap(answers, questionCount) {
-      return answers is map
-        && questionCount is int
-        && questionCount > 0
-        && answers.keys().size() == questionCount;
-    }
-
-    function isQuizPartialAnswerMap(answers, questionCount) {
-      return answers is map
-        && questionCount is int
-        && questionCount > 0
-        && answers.keys().size() <= questionCount;
-    }
-
-    function isQuizQuestionIdList(questionIds, questionCount) {
-      return questionIds is list
-        && questionCount is int
-        && questionCount > 0
-        && questionIds.size() == questionCount;
-    }
-
-    function isQuizStartedForClass(classCode, sessionNumber) {
-      return isOpenClass(classCode)
-        && isQuizSessionNumber(sessionNumber)
-        && classDoc(classCode).data.quizStatus == 'started'
-        && classDoc(classCode).data.activeQuizSessionNumber == sessionNumber;
-    }
-
-    function isQuizAttemptReopened(attemptId) {
-      return attemptId is string
-        && exists(/databases/$(database)/documents/quizAttemptStates/$(attemptId))
-        && get(/databases/$(database)/documents/quizAttemptStates/$(attemptId)).data.status == 'reopened';
-    }
-
-    function canWriteQuizLiveAttempt(data) {
-      return isQuizStartedForClass(data.classCode, data.sessionNumber)
-        || isQuizAttemptReopened(data.attemptId);
-    }
-
     function isValidPublicReportCreate() {
       return request.resource.data.keys().hasOnly([
-          'classId',
-          'classCode',
-          'studentId',
-          'studentName',
-          'projectName',
-          'progressPercent',
-          'stage',
-          'status',
-          'doneToday',
-          'nextGoal',
-          'difficulties',
-          'submittedAt',
-          'submittedDateKey',
-          'source',
-          'createdAt'
-        ])
-        && request.resource.data.keys().hasAll([
-          'classId',
-          'classCode',
-          'studentId',
-          'studentName',
-          'projectName',
-          'progressPercent',
-          'stage',
-          'status',
-          'doneToday',
-          'nextGoal',
-          'difficulties',
-          'submittedAt',
-          'submittedDateKey',
-          'source',
-          'createdAt'
+          'classId', 'classCode', 'studentId', 'studentName', 'projectName',
+          'progressPercent', 'stage', 'status', 'doneToday', 'nextGoal',
+          'difficulties', 'submittedAt', 'submittedDateKey', 'source', 'createdAt'
         ])
         && request.resource.data.classId == request.resource.data.classCode
         && isOpenClass(request.resource.data.classCode)
@@ -179,95 +92,309 @@ service cloud.firestore {
         && isValidStatus(request.resource.data.status)
         && request.resource.data.doneToday is string
         && request.resource.data.doneToday.size() >= 10
-        && request.resource.data.doneToday.size() <= 2000
         && request.resource.data.nextGoal is string
         && request.resource.data.nextGoal.size() >= 10
-        && request.resource.data.nextGoal.size() <= 2000
         && request.resource.data.difficulties is string
-        && request.resource.data.difficulties.size() <= 2000
         && (request.resource.data.status != 'Cần hỗ trợ' || request.resource.data.difficulties.size() >= 15)
         && (request.resource.data.status != 'Hoàn thành' || request.resource.data.progressPercent == 100)
         && request.resource.data.submittedAt == request.time
         && request.resource.data.createdAt == request.time
-        && request.resource.data.submittedDateKey is string
-        && request.resource.data.submittedDateKey.size() == 10
         && request.resource.data.source == 'student-form';
     }
 
-    function isValidPublicKnowledgeReportCreate() {
-      return request.resource.data.keys().hasOnly([
-          'classCode',
-          'studentId',
-          'studentName',
-          'curriculumProgramId',
-          'sessionNumber',
-          'lessonId',
-          'understoodTopics',
-          'unclearTopics',
-          'understandingLevel',
-          'supportRequest',
-          'submittedAt',
-          'createdAt'
-        ])
-        && request.resource.data.keys().hasAll([
-          'classCode',
-          'studentId',
-          'studentName',
-          'curriculumProgramId',
-          'sessionNumber',
-          'lessonId',
-          'understoodTopics',
-          'unclearTopics',
-          'understandingLevel',
-          'supportRequest',
-          'submittedAt',
-          'createdAt'
-        ])
+    function isKnowledgeFeedbackId(feedbackId, data) {
+      return feedbackId is string
+        && data.feedbackId == feedbackId
+        && data.classCode is string
+        && data.studentId is string
+        && data.lessonId is string
+        && feedbackId == data.classCode + '__' + data.studentId + '__' + data.lessonId;
+    }
+
+    function isOpenKnowledgeFeedbackTarget(data) {
+      return data.curriculumProgramId is string
+        && data.curriculumProgramId.size() > 0
+        && isActiveProgram(data.curriculumProgramId)
+        && (
+          !classDoc(data.classCode).data.keys().hasAny(['curriculumProgramId'])
+          || classDoc(data.classCode).data.curriculumProgramId == ''
+          || classDoc(data.classCode).data.curriculumProgramId == data.curriculumProgramId
+        )
+        && data.sessionNumber is number
+        && data.sessionNumber >= 1
+        && data.sessionNumber <= 50
+        && (
+          !classDoc(data.classCode).data.keys().hasAny(['curriculumCurrentSession'])
+          || classDoc(data.classCode).data.curriculumCurrentSession <= 0
+          || classDoc(data.classCode).data.curriculumPhase == 'final'
+          || data.sessionNumber <= classDoc(data.classCode).data.curriculumCurrentSession
+        );
+    }
+
+    function knowledgeReportAfter(feedbackId) {
+      return getAfter(/databases/$(database)/documents/knowledgeReports/$(feedbackId));
+    }
+
+    function hasMatchingKnowledgeReportAfter(feedbackId, data) {
+      return knowledgeReportAfter(feedbackId).data != null
+        && knowledgeReportAfter(feedbackId).data.feedbackId == data.feedbackId
+        && knowledgeReportAfter(feedbackId).data.classCode == data.classCode
+        && knowledgeReportAfter(feedbackId).data.studentId == data.studentId
+        && knowledgeReportAfter(feedbackId).data.submittedAt == data.submittedAt;
+    }
+
+    function isValidPublicKnowledgeReportCreate(reportId) {
+      return isKnowledgeFeedbackId(reportId, request.resource.data)
         && isOpenClass(request.resource.data.classCode)
         && isActiveStudentInClass(request.resource.data.studentId, request.resource.data.classCode)
         && studentDoc(request.resource.data.studentId).data.fullName == request.resource.data.studentName
-        && request.resource.data.curriculumProgramId is string
-        && request.resource.data.curriculumProgramId.size() > 0
-        && (
-          !classDoc(request.resource.data.classCode).data.keys().hasAny(['curriculumProgramId'])
-          || classDoc(request.resource.data.classCode).data.curriculumProgramId == ''
-          || classDoc(request.resource.data.classCode).data.curriculumProgramId == request.resource.data.curriculumProgramId
-        )
-        && request.resource.data.sessionNumber is number
-        && request.resource.data.sessionNumber >= 1
-        && request.resource.data.sessionNumber <= 50
-        && (
-          !classDoc(request.resource.data.classCode).data.keys().hasAny(['curriculumCurrentSession'])
-          || classDoc(request.resource.data.classCode).data.curriculumCurrentSession <= 0
-          || request.resource.data.sessionNumber == classDoc(request.resource.data.classCode).data.curriculumCurrentSession
-        )
-        && request.resource.data.lessonId is string
-        && request.resource.data.lessonId.size() <= 160
+        && isOpenKnowledgeFeedbackTarget(request.resource.data)
         && request.resource.data.understoodTopics is string
         && request.resource.data.understoodTopics.size() >= 5
-        && request.resource.data.understoodTopics.size() <= 2000
         && request.resource.data.unclearTopics is string
         && request.resource.data.unclearTopics.size() >= 5
-        && request.resource.data.unclearTopics.size() <= 2000
-        && request.resource.data.understandingLevel is int
+        && request.resource.data.understandingLevel is number
         && request.resource.data.understandingLevel >= 1
         && request.resource.data.understandingLevel <= 5
-        && request.resource.data.supportRequest is string
-        && request.resource.data.supportRequest.size() <= 2000
         && request.resource.data.submittedAt == request.time
         && request.resource.data.createdAt == request.time;
     }
 
+    function isReadablePublicKnowledgeReportReceipt(receiptId, data) {
+      return data != null
+        && isKnowledgeFeedbackId(receiptId, data)
+        && isOpenClass(data.classCode)
+        && isActiveStudentInClass(data.studentId, data.classCode);
+    }
+
+    function isKnowledgeReceiptIdShape(receiptId) {
+      return receiptId is string
+        && receiptId.size() > 0
+        && receiptId.matches('^.+__.+__.+$');
+    }
+
+    function isValidPublicKnowledgeReportReceiptCreate(receiptId) {
+      return isKnowledgeFeedbackId(receiptId, request.resource.data)
+        && isOpenClass(request.resource.data.classCode)
+        && isActiveStudentInClass(request.resource.data.studentId, request.resource.data.classCode)
+        && isOpenKnowledgeFeedbackTarget(request.resource.data)
+        && request.resource.data.submittedAt == request.time
+        && request.resource.data.createdAt == request.time
+        && hasMatchingKnowledgeReportAfter(receiptId, request.resource.data);
+    }
+
+    function isQuizAttemptId(attemptId, data) {
+      return attemptId is string
+        && data.attemptId == attemptId
+        && data.classCode is string
+        && data.studentId is string
+        && data.lessonId is string
+        && attemptId == data.classCode + '__' + data.studentId + '__' + data.lessonId;
+    }
+
+    function quizBankId(data) {
+      return data.programId + '__' + data.lessonId;
+    }
+
+    function isQuizEnabledForLesson(data) {
+      return data.programId is string
+        && data.programId.size() > 0
+        && data.lessonId is string
+        && data.lessonId.size() > 0
+        && exists(/databases/$(database)/documents/quizPublicQuestionBanks/$(quizBankId(data)))
+        && get(/databases/$(database)/documents/quizPublicQuestionBanks/$(quizBankId(data))).data.enabled == true;
+    }
+
+    function isOpenQuizTarget(data) {
+      return isOpenKnowledgeFeedbackTarget(data)
+        && isQuizEnabledForLesson(data);
+    }
+
+    function isPracticeEnabledForLesson(data) {
+      return data.programId is string
+        && data.programId.size() > 0
+        && data.lessonId is string
+        && data.lessonId.size() > 0
+        && exists(/databases/$(database)/documents/practiceQuizPublicBanks/$(quizBankId(data)))
+        && get(/databases/$(database)/documents/practiceQuizPublicBanks/$(quizBankId(data))).data.enabled == true;
+    }
+
+    function isOpenPracticeTarget(data) {
+      return isOpenKnowledgeFeedbackTarget(data)
+        && isPracticeEnabledForLesson(data);
+    }
+
+    function isPracticeSubmissionId(submissionId, data) {
+      return submissionId is string
+        && data.submissionId == submissionId
+        && data.classCode is string
+        && data.studentId is string
+        && data.lessonId is string
+        && submissionId == data.classCode + '__' + data.studentId + '__' + data.lessonId;
+    }
+
+    function isValidPublicPracticeSubmissionWrite(submissionId) {
+      return isPracticeSubmissionId(submissionId, request.resource.data)
+        && isOpenClass(request.resource.data.classCode)
+        && isActiveStudentInClass(request.resource.data.studentId, request.resource.data.classCode)
+        && studentDoc(request.resource.data.studentId).data.fullName == request.resource.data.studentName
+        && isOpenPracticeTarget(request.resource.data)
+        && request.resource.data.responses is list
+        && request.resource.data.responses.size() > 0
+        && request.resource.data.mcqTotal is int
+        && request.resource.data.mcqTotal >= 1
+        && request.resource.data.source == 'practice-quiz-v1'
+        && request.resource.data.submittedAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function quizAttemptAfter(attemptId) {
+      return getAfter(/databases/$(database)/documents/quizAttempts/$(attemptId));
+    }
+
+    function hasMatchingQuizAttemptAfter(attemptId, data) {
+      return quizAttemptAfter(attemptId).data != null
+        && quizAttemptAfter(attemptId).data.attemptId == data.attemptId
+        && quizAttemptAfter(attemptId).data.classCode == data.classCode
+        && quizAttemptAfter(attemptId).data.studentId == data.studentId
+        && quizAttemptAfter(attemptId).data.submittedAt == data.submittedAt;
+    }
+
+    function isValidPublicQuizAttemptCreate(attemptId) {
+      return isQuizAttemptId(attemptId, request.resource.data)
+        && isOpenClass(request.resource.data.classCode)
+        && isActiveStudentInClass(request.resource.data.studentId, request.resource.data.classCode)
+        && studentDoc(request.resource.data.studentId).data.fullName == request.resource.data.studentName
+        && isOpenQuizTarget(request.resource.data)
+        && request.resource.data.programId is string
+        && request.resource.data.programId.size() > 0
+        && request.resource.data.answers is map
+        && request.resource.data.answers.size() > 0
+        && request.resource.data.submittedAt == request.time
+        && request.resource.data.createdAt == request.time;
+    }
+
+    function isReadableQuizAttemptReceipt(receiptId, data) {
+      return data != null
+        && isQuizAttemptId(receiptId, data)
+        && isOpenClass(data.classCode)
+        && isActiveStudentInClass(data.studentId, data.classCode);
+    }
+
+    function isValidPublicQuizAttemptReceiptCreate(receiptId) {
+      return isQuizAttemptId(receiptId, request.resource.data)
+        && isOpenClass(request.resource.data.classCode)
+        && isActiveStudentInClass(request.resource.data.studentId, request.resource.data.classCode)
+        && isOpenQuizTarget(request.resource.data)
+        && request.resource.data.submittedAt == request.time
+        && request.resource.data.createdAt == request.time
+        && hasMatchingQuizAttemptAfter(receiptId, request.resource.data);
+    }
+
+    function isQuizLatestId(latestId, data) {
+      return latestId is string
+        && data.classCode is string
+        && data.studentId is string
+        && data.lessonId is string
+        && latestId == data.classCode + '__' + data.studentId + '__' + data.lessonId;
+    }
+
+    function isReadableQuizLatest(latestId, data) {
+      return data != null
+        && isQuizLatestId(latestId, data)
+        && isOpenClass(data.classCode)
+        && isActiveStudentInClass(data.studentId, data.classCode);
+    }
+
+    function quizPublicBankDoc(programId, lessonId) {
+      return get(/databases/$(database)/documents/quizPublicQuestionBanks/$(programId + '__' + lessonId));
+    }
+
+    function effectiveQuizMaxAttempts(programId, lessonId) {
+      let bank = quizPublicBankDoc(programId, lessonId);
+      return bank.data != null
+        && bank.data.maxAttempts is int
+        && bank.data.maxAttempts >= 1
+        ? bank.data.maxAttempts
+        : (bank.data != null && bank.data.allowRetake == false ? 1 : 3);
+    }
+
+    function currentQuizAttemptCount(classCode, studentId, lessonId) {
+      let latestId = classCode + '__' + studentId + '__' + lessonId;
+      let latestDoc = get(/databases/$(database)/documents/studentQuizLatest/$(latestId));
+      return latestDoc.data != null && latestDoc.data.attemptNumber is int
+        ? latestDoc.data.attemptNumber
+        : 0;
+    }
+
+    function isValidQuizAttemptNumber(data) {
+      return data.attemptNumber is int
+        && data.attemptNumber == currentQuizAttemptCount(data.classCode, data.studentId, data.lessonId) + 1
+        && data.attemptNumber <= effectiveQuizMaxAttempts(data.programId, data.lessonId);
+    }
+
+    function isValidPublicQuizSubmissionCreate() {
+      return request.resource.data.classCode is string
+        && request.resource.data.studentId is string
+        && request.resource.data.lessonId is string
+        && request.resource.data.studentName is string
+        && request.resource.data.programId is string
+        && request.resource.data.programId.size() > 0
+        && isOpenClass(request.resource.data.classCode)
+        && isActiveStudentInClass(request.resource.data.studentId, request.resource.data.classCode)
+        && studentDoc(request.resource.data.studentId).data.fullName == request.resource.data.studentName
+        && isOpenQuizTarget(request.resource.data)
+        && request.resource.data.responses is list
+        && request.resource.data.responses.size() > 0
+        && isValidQuizAttemptNumber(request.resource.data)
+        && request.resource.data.source == 'student-quiz-v2'
+        && request.resource.data.submittedAt == request.time
+        && request.resource.data.createdAt == request.time;
+    }
+
+    function isValidPublicQuizLatestWrite(latestId) {
+      return isQuizLatestId(latestId, request.resource.data)
+        && isOpenClass(request.resource.data.classCode)
+        && isActiveStudentInClass(request.resource.data.studentId, request.resource.data.classCode)
+        && isOpenQuizTarget(request.resource.data)
+        && request.resource.data.submissionId is string
+        && request.resource.data.submissionId.size() > 0
+        && isValidQuizAttemptNumber(request.resource.data)
+        && request.resource.data.submittedAt == request.time;
+    }
+
+    function classUsesProjectNames(classId) {
+      return classId is string
+        && exists(/databases/$(database)/documents/classes/$(classId))
+        && (!classDoc(classId).data.keys().hasAny(['finalMode']) || classDoc(classId).data.finalMode != 'exam');
+    }
+
+    function isValidPublicProjectNameSubmit(studentId) {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'projectNameSubmission', 'projectNameStatus', 'projectNameReviewNote',
+          'projectNameSubmittedAt', 'updatedAt'
+        ])
+        && resource.data.active == true
+        && isOpenClass(resource.data.classId)
+        && classUsesProjectNames(resource.data.classId)
+        && (
+          resource.data.projectNameStatus == ''
+          || resource.data.projectNameStatus == 'rejected'
+        )
+        && request.resource.data.projectNameStatus == 'pending'
+        && request.resource.data.projectNameSubmission is string
+        && request.resource.data.projectNameSubmission.size() >= 3
+        && request.resource.data.projectNameSubmission.size() <= 80
+        && request.resource.data.projectNameReviewNote == ''
+        && request.resource.data.projectNameSubmittedAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
     function isValidPublicStudentSnapshotUpdate(studentId) {
       return request.resource.data.diff(resource.data).changedKeys().hasOnly([
-          'currentProgressPercent',
-          'currentStage',
-          'currentStatus',
-          'currentDifficulties',
-          'lastReportedAt',
-          'latestReportId',
-          'progressStalledCount',
-          'updatedAt'
+          'currentProgressPercent', 'currentStage', 'currentStatus',
+          'currentDifficulties', 'lastReportedAt', 'latestReportId',
+          'progressStalledCount', 'updatedAt'
         ])
         && resource.data.active == true
         && isOpenClass(resource.data.classId)
@@ -275,446 +402,19 @@ service cloud.firestore {
         && isValidStage(request.resource.data.currentStage)
         && isValidStatus(request.resource.data.currentStatus)
         && request.resource.data.currentDifficulties is string
-        && request.resource.data.currentDifficulties.size() <= 2000
         && request.resource.data.lastReportedAt == request.time
         && request.resource.data.updatedAt == request.time
         && request.resource.data.latestReportId is string
         && request.resource.data.latestReportId.size() > 0
-        && request.resource.data.progressStalledCount is int
-        && request.resource.data.progressStalledCount >= 0
-        && (
-          (
-            resource.data.progressStalledCount is int
-            && request.resource.data.progressStalledCount <= resource.data.progressStalledCount + 1
-          )
-          || (
-            !resource.data.keys().hasAny(['progressStalledCount'])
-            && request.resource.data.progressStalledCount <= 1
-          )
-        )
         && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data != null
         && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.studentId == studentId
         && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.classCode == resource.data.classId
         && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.status == request.resource.data.currentStatus
         && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.stage == request.resource.data.currentStage
-        && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.progressPercent == request.resource.data.currentProgressPercent
-        && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.difficulties == request.resource.data.currentDifficulties
-        && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.submittedAt == request.resource.data.lastReportedAt;
+        && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.progressPercent == request.resource.data.currentProgressPercent;
     }
 
-    function isReadableQuizAttemptState(attemptId, data) {
-      return data != null
-        && data.classCode is string
-        && data.studentId is string
-        && (data.quizMode == null || isQuizMode(data.quizMode))
-        && isQuizSessionNumber(data.sessionNumber)
-        && isOpenClass(data.classCode)
-        && isActiveStudentInClass(data.studentId, data.classCode)
-        && matchesQuizAttemptId(
-          attemptId,
-          data.classCode,
-          data.studentId,
-          data.sessionNumber,
-          data.quizMode == 'practice_quiz' ? 'practice_quiz' : 'official_quiz'
-        );
-    }
-
-    function isValidQuizAttemptCreate(attemptId) {
-      return request.resource.data.keys().hasOnly([
-          'classCode',
-          'className',
-          'studentId',
-          'studentName',
-          'curriculumProgramId',
-          'subject',
-          'level',
-          'bankId',
-          'sessionNumber',
-          'quizMode',
-          'quizTitle',
-          'questionCount',
-          'questionIds',
-          'answers',
-          'status',
-          'submissionCount',
-          'submittedAt',
-          'createdAt',
-          'updatedAt'
-        ])
-        && request.resource.data.keys().hasAll([
-          'classCode',
-          'className',
-          'studentId',
-          'studentName',
-          'curriculumProgramId',
-          'subject',
-          'level',
-          'bankId',
-          'sessionNumber',
-          'quizMode',
-          'quizTitle',
-          'questionCount',
-          'questionIds',
-          'answers',
-          'status',
-          'submissionCount',
-          'submittedAt',
-          'createdAt',
-          'updatedAt'
-        ])
-        && request.resource.data.classCode is string
-        && request.resource.data.className is string
-        && request.resource.data.studentId is string
-        && request.resource.data.studentName is string
-        && request.resource.data.curriculumProgramId is string
-        && request.resource.data.subject is string
-        && request.resource.data.level is string
-        && request.resource.data.bankId is string
-        && isQuizMode(request.resource.data.quizMode)
-        && request.resource.data.quizTitle is string
-        && request.resource.data.questionCount is int
-        && isQuizSessionNumber(request.resource.data.sessionNumber)
-        && matchesQuizAttemptId(
-          attemptId,
-          request.resource.data.classCode,
-          request.resource.data.studentId,
-          request.resource.data.sessionNumber,
-          request.resource.data.quizMode
-        )
-        && isOpenClass(request.resource.data.classCode)
-        && isQuizStartedForClass(request.resource.data.classCode, request.resource.data.sessionNumber)
-        && isActiveStudentInClass(request.resource.data.studentId, request.resource.data.classCode)
-        && request.resource.data.className == classDoc(request.resource.data.classCode).data.className
-        && request.resource.data.studentName == studentDoc(request.resource.data.studentId).data.fullName
-        && request.resource.data.curriculumProgramId == classDoc(request.resource.data.classCode).data.curriculumProgramId
-        && request.resource.data.sessionNumber == classDoc(request.resource.data.classCode).data.curriculumCurrentSession
-        && quizPublicConfigExists(request.resource.data.curriculumProgramId, request.resource.data.sessionNumber)
-        && request.resource.data.questionCount <= 10
-        && isQuizQuestionIdList(request.resource.data.questionIds, request.resource.data.questionCount)
-        && isQuizAnswerMap(request.resource.data.answers, request.resource.data.questionCount)
-        && request.resource.data.status == 'submitted'
-        && request.resource.data.submissionCount == 1
-        && request.resource.data.submittedAt == request.time
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.updatedAt == request.time;
-    }
-
-    function isValidQuizAttemptUpdate(attemptId) {
-      return (resource.data.status == 'reopened' || resource.data.quizMode == 'practice_quiz')
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
-          'answers',
-          'subject',
-          'level',
-          'bankId',
-          'status',
-          'submissionCount',
-          'submittedAt',
-          'updatedAt'
-        ])
-        && matchesQuizAttemptId(attemptId, resource.data.classCode, resource.data.studentId, resource.data.sessionNumber, resource.data.quizMode)
-        && request.resource.data.classCode == resource.data.classCode
-        && request.resource.data.className == resource.data.className
-        && request.resource.data.studentId == resource.data.studentId
-        && request.resource.data.studentName == resource.data.studentName
-        && request.resource.data.curriculumProgramId == resource.data.curriculumProgramId
-        && request.resource.data.subject is string
-        && request.resource.data.level is string
-        && request.resource.data.bankId is string
-        && (!resource.data.keys().hasAny(['subject']) || request.resource.data.subject == resource.data.subject)
-        && (!resource.data.keys().hasAny(['level']) || request.resource.data.level == resource.data.level)
-        && (!resource.data.keys().hasAny(['bankId']) || request.resource.data.bankId == resource.data.bankId)
-        && request.resource.data.sessionNumber == resource.data.sessionNumber
-        && request.resource.data.quizMode == resource.data.quizMode
-        && request.resource.data.quizTitle == resource.data.quizTitle
-        && request.resource.data.questionCount == resource.data.questionCount
-        && request.resource.data.questionIds == resource.data.questionIds
-        && isOpenClass(resource.data.classCode)
-        && isActiveStudentInClass(resource.data.studentId, resource.data.classCode)
-        && isQuizAnswerMap(request.resource.data.answers, request.resource.data.questionCount)
-        && request.resource.data.status == 'submitted'
-        && request.resource.data.submissionCount == resource.data.submissionCount + 1
-        && request.resource.data.submittedAt == request.time
-        && request.resource.data.updatedAt == request.time;
-    }
-
-    function isValidQuizAttemptStateCreate(attemptId) {
-      return request.resource.data.keys().hasOnly([
-          'classCode',
-          'studentId',
-          'subject',
-          'level',
-          'bankId',
-          'sessionNumber',
-          'quizMode',
-          'status',
-          'submissionCount',
-          'submittedAt',
-          'createdAt',
-          'updatedAt'
-        ])
-        && request.resource.data.keys().hasAll([
-          'classCode',
-          'studentId',
-          'subject',
-          'level',
-          'bankId',
-          'sessionNumber',
-          'quizMode',
-          'status',
-          'submissionCount',
-          'submittedAt',
-          'createdAt',
-          'updatedAt'
-        ])
-        && request.resource.data.classCode is string
-        && request.resource.data.studentId is string
-        && request.resource.data.subject is string
-        && request.resource.data.level is string
-        && request.resource.data.bankId is string
-        && isQuizMode(request.resource.data.quizMode)
-        && isQuizSessionNumber(request.resource.data.sessionNumber)
-        && matchesQuizAttemptId(
-          attemptId,
-          request.resource.data.classCode,
-          request.resource.data.studentId,
-          request.resource.data.sessionNumber,
-          request.resource.data.quizMode
-        )
-        && isOpenClass(request.resource.data.classCode)
-        && isQuizStartedForClass(request.resource.data.classCode, request.resource.data.sessionNumber)
-        && isActiveStudentInClass(request.resource.data.studentId, request.resource.data.classCode)
-        && request.resource.data.sessionNumber == classDoc(request.resource.data.classCode).data.curriculumCurrentSession
-        && quizPublicConfigExists(classDoc(request.resource.data.classCode).data.curriculumProgramId, request.resource.data.sessionNumber)
-        && request.resource.data.status == 'submitted'
-        && request.resource.data.submissionCount == 1
-        && request.resource.data.submittedAt == request.time
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.updatedAt == request.time;
-    }
-
-    function isValidQuizAttemptStateUpdate(attemptId) {
-      return (resource.data.status == 'reopened' || resource.data.quizMode == 'practice_quiz')
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
-          'status',
-          'subject',
-          'level',
-          'bankId',
-          'submissionCount',
-          'submittedAt',
-          'updatedAt'
-        ])
-        && matchesQuizAttemptId(attemptId, resource.data.classCode, resource.data.studentId, resource.data.sessionNumber, resource.data.quizMode)
-        && request.resource.data.classCode == resource.data.classCode
-        && request.resource.data.studentId == resource.data.studentId
-        && request.resource.data.subject is string
-        && request.resource.data.level is string
-        && request.resource.data.bankId is string
-        && (!resource.data.keys().hasAny(['subject']) || request.resource.data.subject == resource.data.subject)
-        && (!resource.data.keys().hasAny(['level']) || request.resource.data.level == resource.data.level)
-        && (!resource.data.keys().hasAny(['bankId']) || request.resource.data.bankId == resource.data.bankId)
-        && request.resource.data.sessionNumber == resource.data.sessionNumber
-        && request.resource.data.quizMode == resource.data.quizMode
-        && isOpenClass(resource.data.classCode)
-        && isActiveStudentInClass(resource.data.studentId, resource.data.classCode)
-        && request.resource.data.status == 'submitted'
-        && request.resource.data.submissionCount == resource.data.submissionCount + 1
-        && request.resource.data.submittedAt == request.time
-        && request.resource.data.updatedAt == request.time;
-    }
-
-    function isValidQuizAttemptSubmissionCreate(attemptSubmissionId) {
-      return request.resource.data.keys().hasOnly([
-          'attemptId',
-          'classCode',
-          'studentId',
-          'subject',
-          'level',
-          'bankId',
-          'sessionNumber',
-          'quizMode',
-          'submissionNumber',
-          'questionCount',
-          'questionIds',
-          'answers',
-          'submittedAt',
-          'createdAt'
-        ])
-        && request.resource.data.keys().hasAll([
-          'attemptId',
-          'classCode',
-          'studentId',
-          'subject',
-          'level',
-          'bankId',
-          'sessionNumber',
-          'quizMode',
-          'submissionNumber',
-          'questionCount',
-          'questionIds',
-          'answers',
-          'submittedAt',
-          'createdAt'
-        ])
-        && request.resource.data.attemptId is string
-        && request.resource.data.classCode is string
-        && request.resource.data.studentId is string
-        && request.resource.data.subject is string
-        && request.resource.data.level is string
-        && request.resource.data.bankId is string
-        && isQuizMode(request.resource.data.quizMode)
-        && request.resource.data.submissionNumber is int
-        && request.resource.data.submissionNumber > 0
-        && request.resource.data.questionCount is int
-        && request.resource.data.questionCount > 0
-        && request.resource.data.questionCount <= 10
-        && isQuizSessionNumber(request.resource.data.sessionNumber)
-        && matchesQuizAttemptId(
-          request.resource.data.attemptId,
-          request.resource.data.classCode,
-          request.resource.data.studentId,
-          request.resource.data.sessionNumber,
-          request.resource.data.quizMode
-        )
-        && attemptSubmissionId == request.resource.data.attemptId + '__submission__' + request.resource.data.submissionNumber
-        && isQuizQuestionIdList(request.resource.data.questionIds, request.resource.data.questionCount)
-        && isQuizAnswerMap(request.resource.data.answers, request.resource.data.questionCount)
-        && getAfter(/databases/$(database)/documents/quizAttempts/$(request.resource.data.attemptId)).data != null
-        && getAfter(/databases/$(database)/documents/quizAttemptStates/$(request.resource.data.attemptId)).data != null
-        && request.resource.data.classCode == getAfter(/databases/$(database)/documents/quizAttempts/$(request.resource.data.attemptId)).data.classCode
-        && request.resource.data.studentId == getAfter(/databases/$(database)/documents/quizAttempts/$(request.resource.data.attemptId)).data.studentId
-        && request.resource.data.sessionNumber == getAfter(/databases/$(database)/documents/quizAttempts/$(request.resource.data.attemptId)).data.sessionNumber
-        && request.resource.data.quizMode == getAfter(/databases/$(database)/documents/quizAttempts/$(request.resource.data.attemptId)).data.quizMode
-        && request.resource.data.questionCount == getAfter(/databases/$(database)/documents/quizAttempts/$(request.resource.data.attemptId)).data.questionCount
-        && request.resource.data.questionIds == getAfter(/databases/$(database)/documents/quizAttempts/$(request.resource.data.attemptId)).data.questionIds
-        && request.resource.data.answers == getAfter(/databases/$(database)/documents/quizAttempts/$(request.resource.data.attemptId)).data.answers
-        && request.resource.data.submittedAt == request.time
-        && request.resource.data.createdAt == request.time
-        && (
-          (
-            !exists(/databases/$(database)/documents/quizAttemptStates/$(request.resource.data.attemptId))
-            && request.resource.data.submissionNumber == 1
-            && getAfter(/databases/$(database)/documents/quizAttemptStates/$(request.resource.data.attemptId)).data.status == 'submitted'
-            && getAfter(/databases/$(database)/documents/quizAttemptStates/$(request.resource.data.attemptId)).data.submissionCount == 1
-          )
-          || (
-            exists(/databases/$(database)/documents/quizAttemptStates/$(request.resource.data.attemptId))
-            && (
-              get(/databases/$(database)/documents/quizAttemptStates/$(request.resource.data.attemptId)).data.status == 'reopened'
-              || get(/databases/$(database)/documents/quizAttemptStates/$(request.resource.data.attemptId)).data.quizMode == 'practice_quiz'
-            )
-            && getAfter(/databases/$(database)/documents/quizAttemptStates/$(request.resource.data.attemptId)).data.status == 'submitted'
-            && getAfter(/databases/$(database)/documents/quizAttemptStates/$(request.resource.data.attemptId)).data.submissionCount
-              == get(/databases/$(database)/documents/quizAttemptStates/$(request.resource.data.attemptId)).data.submissionCount + 1
-            && request.resource.data.submissionNumber
-              == getAfter(/databases/$(database)/documents/quizAttemptStates/$(request.resource.data.attemptId)).data.submissionCount
-          )
-        );
-    }
-
-    function isValidQuizLiveAttemptCreate(liveAttemptId) {
-      return request.resource.data.keys().hasOnly([
-          'attemptId',
-          'classCode',
-          'studentId',
-          'subject',
-          'level',
-          'bankId',
-          'sessionNumber',
-          'quizMode',
-          'submissionNumber',
-          'questionCount',
-          'questionIds',
-          'answers',
-          'status',
-          'createdAt',
-          'updatedAt'
-        ])
-        && request.resource.data.keys().hasAll([
-          'attemptId',
-          'classCode',
-          'studentId',
-          'subject',
-          'level',
-          'bankId',
-          'sessionNumber',
-          'quizMode',
-          'submissionNumber',
-          'questionCount',
-          'questionIds',
-          'answers',
-          'status',
-          'createdAt',
-          'updatedAt'
-        ])
-        && request.resource.data.attemptId is string
-        && request.resource.data.classCode is string
-        && request.resource.data.studentId is string
-        && request.resource.data.subject is string
-        && request.resource.data.level is string
-        && request.resource.data.bankId is string
-        && request.resource.data.quizMode == 'official_quiz'
-        && request.resource.data.submissionNumber is int
-        && request.resource.data.submissionNumber > 0
-        && request.resource.data.questionCount is int
-        && request.resource.data.questionCount > 0
-        && request.resource.data.questionCount <= 10
-        && isQuizSessionNumber(request.resource.data.sessionNumber)
-        && liveAttemptId == request.resource.data.attemptId + '__live__' + request.resource.data.submissionNumber
-        && matchesQuizAttemptId(
-          request.resource.data.attemptId,
-          request.resource.data.classCode,
-          request.resource.data.studentId,
-          request.resource.data.sessionNumber,
-          request.resource.data.quizMode
-        )
-        && isOpenClass(request.resource.data.classCode)
-        && isActiveStudentInClass(request.resource.data.studentId, request.resource.data.classCode)
-        && request.resource.data.sessionNumber == classDoc(request.resource.data.classCode).data.curriculumCurrentSession
-        && quizPublicConfigExists(classDoc(request.resource.data.classCode).data.curriculumProgramId, request.resource.data.sessionNumber)
-        && isQuizQuestionIdList(request.resource.data.questionIds, request.resource.data.questionCount)
-        && isQuizPartialAnswerMap(request.resource.data.answers, request.resource.data.questionCount)
-        && request.resource.data.status == 'draft'
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.updatedAt == request.time
-        && canWriteQuizLiveAttempt(request.resource.data);
-    }
-
-    function isValidQuizLiveAttemptUpdate(liveAttemptId) {
-      return resource.data.status == 'draft'
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
-          'answers',
-          'status',
-          'updatedAt'
-        ])
-        && request.resource.data.attemptId == resource.data.attemptId
-        && request.resource.data.classCode == resource.data.classCode
-        && request.resource.data.studentId == resource.data.studentId
-        && request.resource.data.subject == resource.data.subject
-        && request.resource.data.level == resource.data.level
-        && request.resource.data.bankId == resource.data.bankId
-        && request.resource.data.sessionNumber == resource.data.sessionNumber
-        && request.resource.data.quizMode == resource.data.quizMode
-        && request.resource.data.submissionNumber == resource.data.submissionNumber
-        && request.resource.data.questionCount == resource.data.questionCount
-        && request.resource.data.questionIds == resource.data.questionIds
-        && (
-          request.resource.data.status == resource.data.status
-          || (
-            resource.data.status == 'draft'
-            && request.resource.data.status == 'submitted'
-            && getAfter(/databases/$(database)/documents/quizAttemptStates/$(resource.data.attemptId)).data.status == 'submitted'
-            && getAfter(/databases/$(database)/documents/quizAttemptStates/$(resource.data.attemptId)).data.submissionCount == resource.data.submissionNumber
-          )
-        )
-        && request.resource.data.createdAt == resource.data.createdAt
-        && isQuizPartialAnswerMap(request.resource.data.answers, request.resource.data.questionCount)
-        && request.resource.data.updatedAt == request.time
-        && liveAttemptId == resource.data.attemptId + '__live__' + resource.data.submissionNumber
-        && (
-          request.resource.data.status == 'submitted'
-          || canWriteQuizLiveAttempt(resource.data)
-        );
-    }
+    // --- Collections ---
 
     match /admins/{adminId} {
       allow read: if isSignedIn() && adminId == normalizedEmail();
@@ -729,72 +429,136 @@ service cloud.firestore {
     match /curriculumPrograms/{programId} {
       allow read: if isAdmin() || resource.data.active == true;
       allow write: if isAdmin();
+
+      match /lessons/{lessonId} {
+        allow read: if isAdmin() || isActiveProgram(programId);
+        allow write: if isAdmin();
+      }
     }
 
-    match /curriculumPrograms/{programId}/quizConfigs/{quizId} {
-      allow read, write: if isAdmin();
+    function isStudentFeedbackIndexId(indexId) {
+      return indexId is string
+        && indexId.size() > 0
+        && indexId.matches('^.+__.+$');
     }
 
-    match /curriculumPrograms/{programId}/quizPublicConfigs/{quizId} {
-      allow read: if isAdmin() || isActiveProgram(programId);
-      allow write: if isAdmin();
+    function isReadableStudentFeedbackIndex(indexId, data) {
+      return data != null
+        && data.classCode is string
+        && data.studentId is string
+        && indexId == data.classCode + '__' + data.studentId
+        && isOpenClass(data.classCode)
+        && isActiveStudentInClass(data.studentId, data.classCode);
     }
 
-    match /quizQuestionBanks/{bankId} {
-      allow read, write: if isAdmin();
+    function isValidStudentFeedbackIndexWrite(indexId) {
+      return isStudentFeedbackIndexId(indexId)
+        && request.resource.data.classCode is string
+        && request.resource.data.studentId is string
+        && indexId == request.resource.data.classCode + '__' + request.resource.data.studentId
+        && isOpenClass(request.resource.data.classCode)
+        && isActiveStudentInClass(request.resource.data.studentId, request.resource.data.classCode)
+        && request.resource.data.lessonIds is list;
     }
 
-    match /quizPublicQuestionBanks/{bankId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    match /quizLiveAttempts/{liveAttemptId} {
-      allow read: if isAdmin();
-      allow create: if isAdmin() || isValidQuizLiveAttemptCreate(liveAttemptId);
-      allow update: if isAdmin() || isValidQuizLiveAttemptUpdate(liveAttemptId);
+    match /studentFeedbackIndex/{indexId} {
+      allow get: if isAdmin()
+        || isReadableStudentFeedbackIndex(indexId, resource.data);
+      allow list: if isAdmin();
+      allow create, update: if isAdmin() || isValidStudentFeedbackIndexWrite(indexId);
       allow delete: if isAdmin();
     }
 
     match /students/{studentId} {
       allow read: if isAdmin() || resource.data.active == true;
       allow create: if isAdmin();
-      allow update: if isAdmin() || isValidPublicStudentSnapshotUpdate(studentId);
+      allow update: if isAdmin()
+        || isValidPublicStudentSnapshotUpdate(studentId)
+        || isValidPublicProjectNameSubmit(studentId);
       allow delete: if isAdmin();
     }
 
     match /reports/{reportId} {
       allow read: if isAdmin();
       allow create: if isAdmin() || isValidPublicReportCreate();
-      allow update: if false;
-      allow delete: if isAdmin();
+      allow update, delete: if isAdmin();
     }
 
     match /knowledgeReports/{reportId} {
       allow read: if isAdmin();
-      allow create: if isAdmin() || isValidPublicKnowledgeReportCreate();
-      allow update: if false;
-      allow delete: if isAdmin();
+      allow create: if isAdmin() || isValidPublicKnowledgeReportCreate(reportId);
+      allow update, delete: if isAdmin();
     }
 
+    match /knowledgeReportReceipts/{receiptId} {
+      allow get: if isAdmin()
+        || (isKnowledgeReceiptIdShape(receiptId) && isReadablePublicKnowledgeReportReceipt(receiptId, resource.data));
+      allow list: if isAdmin();
+      allow create: if isAdmin() || isValidPublicKnowledgeReportReceiptCreate(receiptId);
+      allow update, delete: if isAdmin();
+    }
+
+    match /curriculumPrograms/{programId}/quizConfigs/{quizId} {
+      allow read, write: if isAdmin();
+    }
+    match /curriculumPrograms/{programId}/quizPublicConfigs/{quizId} {
+      allow read, write: if isAdmin();
+    }
+    match /quizQuestionBanks/{bankId} {
+      allow read, write: if isAdmin();
+    }
+    match /quizPublicQuestionBanks/{bankId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /quizLiveAttempts/{liveAttemptId} {
+      allow read, write: if isAdmin();
+    }
     match /quizAttempts/{attemptId} {
       allow read: if isAdmin();
-      allow create: if isAdmin() || isValidQuizAttemptCreate(attemptId);
-      allow update: if isAdmin() || isValidQuizAttemptUpdate(attemptId);
-      allow delete: if isAdmin();
+      allow create: if isAdmin() || isValidPublicQuizAttemptCreate(attemptId);
+      allow update, delete: if isAdmin();
     }
-
+    match /quizAttemptReceipts/{receiptId} {
+      allow get: if isAdmin()
+        || (isKnowledgeReceiptIdShape(receiptId) && isReadableQuizAttemptReceipt(receiptId, resource.data));
+      allow list: if isAdmin();
+      allow create: if isAdmin() || isValidPublicQuizAttemptReceiptCreate(receiptId);
+      allow update, delete: if isAdmin();
+    }
     match /quizAttemptStates/{attemptId} {
+      allow read, write: if isAdmin();
+    }
+    match /quizAttemptSubmissions/{attemptSubmissionId} {
+      allow read, write: if isAdmin();
+    }
+    match /studentQuizSubmissions/{submissionId} {
       allow read: if isAdmin();
-      allow create: if isAdmin() || isValidQuizAttemptStateCreate(attemptId);
-      allow update: if isAdmin() || isValidQuizAttemptStateUpdate(attemptId);
+      allow create: if isAdmin() || isValidPublicQuizSubmissionCreate();
+      allow update, delete: if isAdmin();
+    }
+    match /studentQuizLatest/{latestId} {
+      allow get: if isAdmin()
+        || (isKnowledgeReceiptIdShape(latestId) && isReadableQuizLatest(latestId, resource.data));
+      allow list: if isAdmin();
+      allow create, update: if isAdmin() || isValidPublicQuizLatestWrite(latestId);
       allow delete: if isAdmin();
     }
-
-    match /quizAttemptSubmissions/{attemptSubmissionId} {
+    match /practiceQuizPublicBanks/{bankId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /practiceQuizAnswerBanks/{bankId} {
       allow read: if isAdmin();
-      allow create: if isAdmin() || isValidQuizAttemptSubmissionCreate(attemptSubmissionId);
-      allow update: if false;
+      allow write: if isAdmin();
+    }
+    match /practiceQuizSubmissions/{submissionId} {
+      allow get: if isAdmin()
+        || (isKnowledgeReceiptIdShape(submissionId) && isPracticeSubmissionId(submissionId, resource.data)
+          && isOpenClass(resource.data.classCode)
+          && isActiveStudentInClass(resource.data.studentId, resource.data.classCode));
+      allow list: if isAdmin();
+      allow create, update: if isAdmin() || isValidPublicPracticeSubmissionWrite(submissionId);
       allow delete: if isAdmin();
     }
   }

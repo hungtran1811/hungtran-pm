@@ -1,26 +1,19 @@
 import { doc, getDoc } from 'firebase/firestore';
-import { getFirebaseServices } from '../config/firebase.js';
+import { db } from '../config/firebase.js';
 
-function normalizeEmail(email) {
-  return String(email ?? '').trim().toLowerCase();
-}
-
-export async function getAdminProfileByEmail(email) {
-  const normalizedEmail = normalizeEmail(email);
-
-  if (!normalizedEmail) {
-    return null;
-  }
-
-  const { db } = getFirebaseServices();
-  const adminSnap = await getDoc(doc(db, 'admins', normalizedEmail));
-
-  if (!adminSnap.exists()) {
-    return null;
-  }
-
+// Mirrors firestore.rules: admin identity is the lowercased email document id
+// in the `admins` collection, and must have active === true.
+export async function fetchAdminProfile(email) {
+  if (!email) return null;
+  const normalized = email.trim().toLowerCase();
+  const snapshot = await getDoc(doc(db, 'admins', normalized));
+  if (!snapshot.exists()) return null;
+  const data = snapshot.data() || {};
+  const active = data.active === true || data.active === 'true';
   return {
-    id: adminSnap.id,
-    ...adminSnap.data(),
+    email: normalized,
+    active,
+    role: data.role ?? 'admin',
+    displayName: data.displayName ?? '',
   };
 }

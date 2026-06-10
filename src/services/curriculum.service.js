@@ -1,650 +1,264 @@
 import {
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
   onSnapshot,
+  orderBy,
+  query,
   serverTimestamp,
+  setDoc,
   updateDoc,
+  writeBatch,
 } from 'firebase/firestore';
-import { getFirebaseServices } from '../config/firebase.js';
-import { toClassModel } from '../models/class.model.js';
-import {
-  toCurriculumProgramModel,
-  toCurriculumProgramModelFromData,
-} from '../models/curriculum-program.model.js';
-import { toAppError } from '../utils/firebase-error.js';
-import {
-  clampCurriculumSession,
-  getEffectiveCurriculumPhase,
-  groupCurriculumProgramsBySubject,
-  normalizeCurriculumExerciseVisibleSessions,
-  sortCurriculumPrograms,
-  suggestCurriculumProgramIdForClass,
-} from '../utils/curriculum.js';
-import {
-  clampKnowledgeSession,
-  buildCurriculumVisibleLessons,
-  createCurriculumItemId,
-  getActiveCurriculumChecklist,
-  getActiveCurriculumLessons,
-  isCurriculumReviewLinkValid,
-  normalizeExamChecklistItemRecord,
-  normalizeLessonRecord,
-  normalizeProjectChecklistRecords,
-  normalizeSessionActivityRecord,
-  sortCurriculumChecklist,
-  sortCurriculumLessons,
-} from '../utils/curriculum-program.js';
+import { db } from '../config/firebase.js';
+import { normalizeLesson, toCurriculumProgramModel } from '../models/index.js';
 
-function buildCurriculumAssignment(classItem, programs) {
-  const suggestedProgramId = suggestCurriculumProgramIdForClass(programs, classItem);
-  const preferredProgramId = classItem?.curriculumProgramId || suggestedProgramId;
-  const resolvedProgramId = programs.some((item) => item.id === preferredProgramId)
-    ? preferredProgramId
-    : suggestedProgramId;
-  const program = programs.find((item) => item.id === resolvedProgramId) || null;
+const programsRef = collection(db, 'curriculumPrograms');
 
-  if (!program) {
-    return {
-      programId: '',
-      currentSession: 1,
-      curriculumPhase: 'learning',
-      exerciseVisibleSessions: [],
-    };
-  }
+export const PROGRAM_ID_ALIASES = {
+  'python-app-basic': 'python-basic',
+  'python-app-advanced': 'python-advanced',
+};
 
+export function resolveProgramId(programId) {
+  if (!programId) return programId;
+  return PROGRAM_ID_ALIASES[programId] ?? programId;
+}
+
+function lessonsCollection(programId) {
+  const resolved = resolveProgramId(programId);
+  return collection(db, 'curriculumPrograms', resolved, 'lessons');
+}
+
+function programDocRef(programId) {
+  return doc(db, 'curriculumPrograms', resolveProgramId(programId));
+}
+
+function normalizeMeta(meta = {}) {
   return {
-    programId: program.id,
-    currentSession: clampCurriculumSession(program, classItem?.curriculumCurrentSession || 1),
-    curriculumPhase: getEffectiveCurriculumPhase(classItem, program),
-    exerciseVisibleSessions: normalizeCurriculumExerciseVisibleSessions(
-      classItem?.curriculumExerciseVisibleSessions,
-      program,
-    ),
+    name: meta.name?.trim() ?? '',
+    subject: meta.subject?.trim() ?? '',
+    level: meta.level?.trim() ?? '',
+    description: meta.description?.trim() ?? '',
+    active: Boolean(meta.active),
+    totalSessionCount: Number(meta.totalSessionCount) || 14,
+    knowledgePhaseEndSession: Number(meta.knowledgePhaseEndSession) || 1,
+    finalMode: meta.finalMode === 'exam' ? 'exam' : 'project',
   };
 }
 
-function applyClassExerciseVisibility(lessons = [], assignment = null) {
-  const visibleSessions = new Set(normalizeCurriculumExerciseVisibleSessions(assignment?.exerciseVisibleSessions));
+function imageToStore(img) {
+  if (!img || !img.secureUrl) return null;
+  return {
+    id: img.id || '',
+    secureUrl: img.secureUrl,
+    publicId: img.publicId || '',
+    width: Number(img.width || 0),
+    height: Number(img.height || 0),
+    alt: img.alt || '',
+    order: Number(img.order || 1),
+  };
+}
 
-  return lessons.map((lesson) => ({
+function serializeLesson(lesson) {
+  const raw = lesson._raw && typeof lesson._raw === 'object' ? lesson._raw : {};
+  const banner = imageToStore(lesson.bannerImage);
+  const cover = imageToStore(lesson.coverImage);
+  const images = cover
+    ? [{ ...cover, order: 1 }]
+    : (Array.isArray(lesson.images) ? lesson.images.map(imageToStore).filter(Boolean) : []);
+
+  const next = {
+    ...raw,
+    id: lesson.id,
+    sessionNumber: Number(lesson.sessionNumber) || 1,
+    title: lesson.title ?? '',
+    lectureMarkdown: lesson.content ?? '',
+    contentMarkdown: lesson.content ?? '',
+    exerciseMarkdown: lesson.exercise ?? '',
+    exerciseVisible: Boolean(lesson.exerciseVisible),
+    archived: Boolean(lesson.archived),
+    bannerImage: banner,
+    coverImage: cover,
+    images,
+  };
+  delete next._raw;
+  delete next.bannerImageUrl;
+  delete next.coverImageUrl;
+  delete next.content;
+  delete next.exercise;
+  return next;
+}
+
+function toSlimLessonIndex(lesson) {
+  const banner = imageToStore(lesson.bannerImage);
+  const cover = imageToStore(lesson.coverImage);
+  return {
+    id: lesson.id,
+    sessionNumber: Number(lesson.sessionNumber) || 1,
+    title: lesson.title ?? '',
+    archived: Boolean(lesson.archived),
+    exerciseVisible: Boolean(lesson.exerciseVisible),
+    bannerImage: banner,
+    coverImage: cover,
+    images: cover ? [{ ...cover, order: 1 }] : [],
+  };
+}
+
+function slimLessonsFromIndex(lessonIndex = []) {
+  return lessonIndex
+    .map((row, index) =>
+      normalizeLesson(
+        {
+          ...row,
+          lectureMarkdown: '',
+          contentMarkdown: '',
+          exerciseMarkdown: '',
+        },
+        index,
+      ),
+    )
+    .sort((a, b) => a.sessionNumber - b.sessionNumber);
+}
+
+async function loadLessonsFromSubcollection(programId) {
+  const snapshot = await getDocs(
+    query(lessonsCollection(programId), orderBy('sessionNumber', 'asc')),
+  );
+  return snapshot.docs
+    .map((lessonDoc, index) =>
+      normalizeLesson({ ...lessonDoc.data(), id: lessonDoc.id }, index),
+    )
+    .sort((a, b) => a.sessionNumber - b.sessionNumber);
+}
+
+async function resolveLessonsForProgram(data, programId, { full = true } = {}) {
+  if (data.lessonsStorage === 'subcollection') {
+    if (full) return loadLessonsFromSubcollection(programId);
+    return slimLessonsFromIndex(data.lessonIndex || []);
+  }
+
+  const embedded = Array.isArray(data.lessons) ? data.lessons : [];
+  const normalized = embedded
+    .map((lesson, index) => normalizeLesson(lesson, index))
+    .sort((a, b) => a.sessionNumber - b.sessionNumber);
+
+  if (full) return normalized;
+  return normalized.map((lesson) => ({
     ...lesson,
-    exerciseVisible: visibleSessions.has(Number(lesson.sessionNumber || 0)),
+    content: '',
+    exercise: '',
   }));
 }
 
-function buildCurriculumView(classItem, program) {
-  if (!program) {
-    return {
-      classInfo: classItem,
-      assignment: null,
-      program: null,
-      lessons: [],
-      visibleLessons: [],
-      checklistItems: [],
-    };
+async function readProgramSnapshot(programId) {
+  const resolved = resolveProgramId(programId);
+  let snapshot = await getDoc(doc(db, 'curriculumPrograms', resolved));
+  if (!snapshot.exists() && resolved !== programId) {
+    snapshot = await getDoc(doc(db, 'curriculumPrograms', programId));
   }
-
-  const assignment = buildCurriculumAssignment(classItem, [program]);
-  const lessons = applyClassExerciseVisibility(getActiveCurriculumLessons(program), assignment);
-  const checklistItems = getActiveCurriculumChecklist(program);
-  const visibleLessons = buildCurriculumVisibleLessons(program, lessons, assignment);
-
-  return {
-    classInfo: classItem,
-    assignment,
-    program: {
-      ...program,
-      lessons,
-      sessionActivities: program.sessionActivities || [],
-      finalChecklist: checklistItems,
-    },
-    lessons,
-    visibleLessons,
-    checklistItems,
-  };
+  return snapshot.exists() ? snapshot : null;
 }
 
-function validateLessonPayload(program, lesson, lessons, currentLessonId = '') {
-  if (!lesson.title) {
-    throw new Error('Tiêu đề buổi học không được để trống.');
-  }
-
-  const hasMarkdownContent = Boolean(
-    String(lesson.lectureMarkdown || lesson.contentMarkdown || '').trim() ||
-      String(lesson.exerciseMarkdown || '').trim(),
-  );
-  const hasLegacyStructuredContent = Boolean(
-    lesson.summary ||
-      lesson.practiceTask ||
-      lesson.selfStudyPrompt ||
-      (Array.isArray(lesson.keyPoints) && lesson.keyPoints.length > 0),
-  );
-
-  if (!hasMarkdownContent && !hasLegacyStructuredContent) {
-    throw new Error('Hãy nhập nội dung bài giảng cho buổi học này.');
-  }
-  const invalidReviewLink = (lesson.reviewLinks || []).find(
-    (item) => !item.label || !item.url || !isCurriculumReviewLinkValid(item),
-  );
-
-  if (invalidReviewLink) {
-    throw new Error('Mỗi tài liệu đính kèm cần có tên hiển thị và đường link hợp lệ.');
-  }
-
-  const sameSessionLesson = lessons.find(
-    (item) =>
-      item.id !== currentLessonId &&
-      !item.archived &&
-      item.sessionNumber === lesson.sessionNumber,
-  );
-
-  if (sameSessionLesson) {
-    throw new Error(`Buổi ${lesson.sessionNumber} đã có một bài học khác. Hãy chọn số buổi khác hoặc lưu kho bài cũ trước.`);
-  }
-
-  const lessonSessionLimit = Math.max(
-    1,
-    Number(program.totalSessionCount || program.knowledgePhaseEndSession || 1),
-  );
-
-  if (lesson.sessionNumber > lessonSessionLimit) {
-    throw new Error(
-      `Chương trình này chỉ cho phép tạo bài học trong phạm vi toàn khóa từ buổi 1 đến buổi ${lessonSessionLimit}.`,
-    );
-  }
+export async function createProgram(programId, meta) {
+  const id = programId.trim();
+  await setDoc(doc(db, 'curriculumPrograms', id), {
+    ...normalizeMeta(meta),
+    lessons: [],
+    lessonIndex: [],
+    lessonsStorage: 'embedded',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return id;
 }
 
-function validateExamChecklistItem(item) {
-  if (!item.title) {
-    throw new Error('Tiêu đề mục ôn tập cuối khóa không được để trống.');
-  }
-
-  if (!item.description) {
-    throw new Error('Hãy nhập mô tả cho mục ôn tập cuối khóa.');
-  }
+export async function updateProgramMeta(programId, meta) {
+  await updateDoc(programDocRef(programId), {
+    ...normalizeMeta(meta),
+    updatedAt: serverTimestamp(),
+  });
 }
 
-async function getCurriculumProgramSnapshot(programId, fallbackMessage) {
-  const { db } = getFirebaseServices();
-  const programRef = doc(db, 'curriculumPrograms', programId);
-
-  try {
-    const snapshot = await getDoc(programRef);
-
-    if (!snapshot.exists()) {
-      throw new Error('Không tìm thấy chương trình học cần cập nhật.');
-    }
-
-    return {
-      ref: programRef,
-      program: toCurriculumProgramModelFromData(snapshot.id, snapshot.data()),
-    };
-  } catch (error) {
-    throw toAppError(error, fallbackMessage);
-  }
+export async function listCurriculumPrograms() {
+  const snapshot = await getDocs(query(programsRef, orderBy('name', 'asc')));
+  return snapshot.docs.map((snap) => toCurriculumProgramModel(snap, []));
 }
 
-async function updateCurriculumProgram(programId, buildPatch, fallbackMessage) {
-  const { ref, program } = await getCurriculumProgramSnapshot(programId, fallbackMessage);
-
-  try {
-    const patch = await buildPatch(program);
-
-    await updateDoc(ref, {
-      ...patch,
-      updatedAt: serverTimestamp(),
-    });
-  } catch (error) {
-    throw toAppError(error, fallbackMessage);
-  }
+/** full=false: chỉ metadata + lessonIndex (học sinh — không tải markdown). */
+export async function getCurriculumProgram(programId, { full = true } = {}) {
+  const snapshot = await readProgramSnapshot(programId);
+  if (!snapshot) return null;
+  const lessons = await resolveLessonsForProgram(snapshot.data(), snapshot.id, { full });
+  return toCurriculumProgramModel(snapshot, lessons);
 }
 
-export function subscribeCurriculumPrograms(onData, onError) {
-  const { db } = getFirebaseServices();
-  const programsRef = collection(db, 'curriculumPrograms');
+export async function getProgramLesson(programId, lessonId) {
+  if (!programId || !lessonId) return null;
+  const resolved = resolveProgramId(programId);
+  const lessonSnap = await getDoc(doc(db, 'curriculumPrograms', resolved, 'lessons', lessonId));
+  if (lessonSnap.exists()) {
+    return normalizeLesson({ ...lessonSnap.data(), id: lessonSnap.id }, 0);
+  }
+  const program = await getCurriculumProgram(programId, { full: true });
+  return program?.lessons?.find((lesson) => lesson.id === lessonId) ?? null;
+}
 
+export function subscribeCurriculumProgram(programId, onData, onError) {
+  if (!programId) return () => {};
+  const resolved = resolveProgramId(programId);
+  const ref = doc(db, 'curriculumPrograms', resolved);
   return onSnapshot(
-    programsRef,
-    (snapshot) => {
-      const programs = snapshot.docs
-        .map(toCurriculumProgramModel)
-        .filter((program) => program.active);
-
-      onData(sortCurriculumPrograms(programs));
+    ref,
+    async (snapshot) => {
+      try {
+        if (!snapshot.exists()) {
+          if (resolved !== programId) {
+            const legacy = await getDoc(doc(db, 'curriculumPrograms', programId));
+            onData(legacy.exists() ? toCurriculumProgramModel(legacy) : null);
+            return;
+          }
+          onData(null);
+          return;
+        }
+        const lessons = await resolveLessonsForProgram(snapshot.data(), snapshot.id, { full: true });
+        onData(toCurriculumProgramModel(snapshot, lessons));
+      } catch (error) {
+        onError?.(error);
+      }
     },
     onError,
   );
 }
 
-export async function listCurriculumPrograms() {
-  const { db } = getFirebaseServices();
+export async function saveProgramLessons(programId, lessons) {
+  const resolved = resolveProgramId(programId);
+  const progRef = doc(db, 'curriculumPrograms', resolved);
+  const existing = await getDocs(lessonsCollection(resolved));
+  const nextIds = new Set(lessons.map((lesson) => lesson.id));
 
-  try {
-    const snapshot = await getDocs(collection(db, 'curriculumPrograms'));
-    const programs = snapshot.docs
-      .map(toCurriculumProgramModel)
-      .filter((program) => program.active);
-
-    return sortCurriculumPrograms(programs);
-  } catch (error) {
-    throw toAppError(error, 'Không tải được danh sách chương trình học.');
-  }
-}
-
-export async function getCurriculumProgram(programId) {
-  const { db } = getFirebaseServices();
-
-  try {
-    const snapshot = await getDoc(doc(db, 'curriculumPrograms', programId));
-
-    if (!snapshot.exists()) {
-      return null;
+  const batch = writeBatch(db);
+  lessons.forEach((lesson) => {
+    batch.set(
+      doc(db, 'curriculumPrograms', resolved, 'lessons', lesson.id),
+      serializeLesson(lesson),
+      { merge: true },
+    );
+  });
+  existing.docs.forEach((lessonDoc) => {
+    if (!nextIds.has(lessonDoc.id)) {
+      batch.delete(lessonDoc.ref);
     }
-
-    const program = toCurriculumProgramModel(snapshot);
-    return program.active ? program : null;
-  } catch (error) {
-    throw toAppError(error, 'Không tải được chương trình học.');
-  }
-}
-
-export async function saveClassCurriculumAssignment(classCode, payload) {
-  const { db } = getFirebaseServices();
-  const classRef = doc(db, 'classes', classCode);
-
-  try {
-    const [classSnapshot, programSnapshot] = await Promise.all([
-      getDoc(classRef),
-      getDoc(doc(db, 'curriculumPrograms', payload.curriculumProgramId)),
-    ]);
-
-    if (!classSnapshot.exists()) {
-      throw new Error('Không tìm thấy lớp cần cập nhật.');
-    }
-
-    if (!programSnapshot.exists()) {
-      throw new Error('Không tìm thấy chương trình học được chọn.');
-    }
-
-    const program = toCurriculumProgramModelFromData(programSnapshot.id, programSnapshot.data());
-
-      await updateDoc(classRef, {
-        curriculumProgramId: program.id,
-        curriculumCurrentSession: clampCurriculumSession(program, payload.curriculumCurrentSession),
-        curriculumPhase: payload.curriculumPhase === 'final' ? 'final' : 'learning',
-        curriculumExerciseVisibleSessions: normalizeCurriculumExerciseVisibleSessions(
-          payload.curriculumExerciseVisibleSessions,
-          program,
-        ),
-        updatedAt: serverTimestamp(),
-      });
-  } catch (error) {
-    throw toAppError(error, 'Không thể lưu cấu hình bài giảng cho lớp này.');
-  }
-}
-
-export async function saveCurriculumLesson(programId, values) {
-  await updateCurriculumProgram(
-    programId,
-    (program) => {
-      const currentLesson = (program.lessons || []).find((item) => item.id === values.id) || null;
-      const lesson = normalizeLessonRecord(
-        {
-          ...currentLesson,
-          ...values,
-          sessionNumber: clampKnowledgeSession(program, values.sessionNumber),
-          archived: currentLesson?.archived ?? false,
-        },
-        `${programId}-lesson`,
-      );
-
-      validateLessonPayload(program, lesson, program.lessons || [], currentLesson?.id || '');
-
-      const nextLessons = currentLesson
-        ? (program.lessons || []).map((item) => (item.id === currentLesson.id ? lesson : item))
-        : [...(program.lessons || []), lesson];
-
-      return {
-        lessons: sortCurriculumLessons(nextLessons),
-      };
-    },
-    'Không thể lưu buổi học cho chương trình này.',
-  );
-}
-
-export async function saveCurriculumSessionActivity(programId, values) {
-  await updateCurriculumProgram(
-    programId,
-    (program) => {
-      const sessionLimit = Math.max(
-        1,
-        Number(program.totalSessionCount || program.knowledgePhaseEndSession || 1),
-      );
-      const activity = normalizeSessionActivityRecord(values, values.sessionNumber);
-
-      if (activity.sessionNumber > sessionLimit) {
-        throw new Error(`Chương trình này chỉ có ${sessionLimit} buổi.`);
-      }
-
-      const activitiesBySession = new Map(
-        (program.sessionActivities || []).map((item) => [Number(item.sessionNumber || 0), item]),
-      );
-      activitiesBySession.set(activity.sessionNumber, activity);
-
-      return {
-        sessionActivities: Array.from(activitiesBySession.values())
-          .filter((item) => Number(item.sessionNumber || 0) >= 1 && Number(item.sessionNumber || 0) <= sessionLimit)
-          .sort((left, right) => Number(left.sessionNumber || 0) - Number(right.sessionNumber || 0)),
-      };
-    },
-    'Không thể lưu loại buổi cho chương trình này.',
-  );
-}
-
-export async function setCurriculumLessonArchived(programId, lessonId, archived) {
-  await updateCurriculumProgram(
-    programId,
-    (program) => {
-      const targetLesson = (program.lessons || []).find((item) => item.id === lessonId);
-
-      if (!targetLesson) {
-        throw new Error('Không tìm thấy buổi học cần cập nhật.');
-      }
-
-      const nextTargetLesson = { ...targetLesson, archived: Boolean(archived) };
-
-      if (!archived) {
-        const sessionLimit = Math.max(
-          1,
-          Number(program.totalSessionCount || program.knowledgePhaseEndSession || 1),
-        );
-        const usedSessions = new Set(
-          (program.lessons || [])
-            .filter((item) => !item.archived && item.id !== lessonId)
-            .map((item) => Number(item.sessionNumber || 0))
-            .filter(Boolean),
-        );
-
-        if (usedSessions.has(Number(nextTargetLesson.sessionNumber || 0))) {
-          const availableSession = Array.from({ length: sessionLimit }, (_item, index) => index + 1)
-            .find((sessionNumber) => !usedSessions.has(sessionNumber));
-
-          if (!availableSession) {
-            throw new Error('Chưa có buổi trống để khôi phục bài học này. Hãy lưu kho một buổi khác trước.');
-          }
-
-          nextTargetLesson.sessionNumber = availableSession;
-        }
-
-        validateLessonPayload(program, nextTargetLesson, program.lessons || [], targetLesson.id);
-      }
-
-      const nextLessons = (program.lessons || []).map((item) =>
-        item.id === lessonId ? nextTargetLesson : item,
-      );
-
-      return {
-        lessons: sortCurriculumLessons(nextLessons),
-      };
-    },
-    archived ? 'Không thể lưu kho buổi học này.' : 'Không thể khôi phục buổi học này.',
-  );
-}
-
-export async function archiveEmptyCurriculumSession(programId, sessionNumber) {
-  await updateCurriculumProgram(
-    programId,
-    (program) => {
-      const normalizedSessionNumber = clampKnowledgeSession(program, sessionNumber);
-      const existingLesson = (program.lessons || []).find(
-        (item) => !item.archived && Number(item.sessionNumber || 0) === normalizedSessionNumber,
-      );
-
-      if (existingLesson) {
-        return {
-          lessons: sortCurriculumLessons(
-            (program.lessons || []).map((item) =>
-              item.id === existingLesson.id ? { ...item, archived: true } : item,
-            ),
-          ),
-        };
-      }
-
-      const currentSessionCount = Math.max(
-        1,
-        Number(program.totalSessionCount || program.knowledgePhaseEndSession || 1),
-      );
-
-      if (normalizedSessionNumber >= currentSessionCount) {
-        const nextSessionCount = Math.max(1, currentSessionCount - 1);
-
-        return {
-          totalSessionCount: nextSessionCount,
-          sessionActivities: (program.sessionActivities || [])
-            .filter((item) => Number(item.sessionNumber || 0) <= nextSessionCount)
-            .sort((left, right) => Number(left.sessionNumber || 0) - Number(right.sessionNumber || 0)),
-        };
-      }
-
-      const placeholderLesson = normalizeLessonRecord(
-        {
-          id: createCurriculumItemId(`${programId}-archived-session-${normalizedSessionNumber}`),
-          sessionNumber: normalizedSessionNumber,
-          title: `Buổi ${normalizedSessionNumber}`,
-          contentMarkdown: '',
-          lectureMarkdown: '',
-          exerciseMarkdown: '',
-          reviewLinks: [],
-          teacherNote: '',
-          bannerImage: null,
-          images: [],
-          coverImage: null,
-          archived: true,
-        },
-        `${programId}-archived-session`,
-      );
-
-      return {
-        lessons: sortCurriculumLessons([...(program.lessons || []), placeholderLesson]),
-      };
-    },
-    'Không thể lưu kho buổi trống này.',
-  );
-}
-
-export async function deleteArchivedCurriculumLesson(programId, lessonId) {
-  await updateCurriculumProgram(
-    programId,
-    (program) => {
-      const targetLesson = (program.lessons || []).find((item) => item.id === lessonId);
-
-      if (!targetLesson) {
-        throw new Error('Không tìm thấy buổi học cần xóa.');
-      }
-
-      if (!targetLesson.archived) {
-        throw new Error('Chỉ có thể xóa vĩnh viễn các buổi học đã nằm trong kho lưu trữ.');
-      }
-
-      const nextLessons = (program.lessons || []).filter((item) => item.id !== lessonId);
-      const currentSessionCount = Math.max(
-        1,
-        Number(program.totalSessionCount || program.knowledgePhaseEndSession || 1),
-      );
-      const deletedSessionNumber = Number(targetLesson.sessionNumber || 0);
-      const patch = {
-        lessons: sortCurriculumLessons(nextLessons),
-      };
-
-      const stillHasLessonAtCurrentSession = nextLessons.some(
-        (item) => Number(item.sessionNumber || 0) === currentSessionCount,
-      );
-
-      if (deletedSessionNumber === currentSessionCount && !stillHasLessonAtCurrentSession) {
-        const nextSessionCount = Math.max(1, currentSessionCount - 1);
-
-        patch.totalSessionCount = nextSessionCount;
-        patch.sessionActivities = (program.sessionActivities || [])
-          .filter((item) => Number(item.sessionNumber || 0) <= nextSessionCount)
-          .sort((left, right) => Number(left.sessionNumber || 0) - Number(right.sessionNumber || 0));
-      }
-
-      return {
-        ...patch,
-      };
-    },
-    'Không thể xóa vĩnh viễn buổi học này.',
-  );
-}
-
-export async function setCurriculumProgramSessionCount(programId, totalSessionCount) {
-  await updateCurriculumProgram(
-    programId,
-    (program) => {
-      const currentCount = Math.max(
-        1,
-        Number(program.totalSessionCount || program.knowledgePhaseEndSession || 1),
-      );
-      const nextCount = Math.max(1, Number(totalSessionCount || currentCount));
-
-      if (nextCount <= currentCount) {
-        throw new Error('Số buổi mới cần lớn hơn số buổi hiện tại.');
-      }
-
-      return {
-        totalSessionCount: nextCount,
-      };
-    },
-    'Không thể thêm buổi mới cho chương trình này.',
-  );
-}
-
-export async function saveCurriculumProjectStages(programId, values) {
-  await updateCurriculumProgram(
-    programId,
-    (program) => {
-      if (program.finalMode !== 'project') {
-        throw new Error('Chương trình này không dùng quy trình làm sản phẩm cuối khóa.');
-      }
-
-      const nextChecklist = normalizeProjectChecklistRecords(programId, values).map((item) => {
-        if (!item.description || !item.studentGuide || !item.exampleOutput) {
-          throw new Error('Mỗi giai đoạn cần có mô tả, cách tự đối chiếu và ví dụ đầu ra.');
-        }
-
-        return item;
-      });
-
-      return {
-        finalChecklist: nextChecklist,
-      };
-    },
-    'Không thể lưu quy trình cuối khóa cho chương trình này.',
-  );
-}
-
-export async function saveCurriculumExamChecklistItem(programId, values) {
-  await updateCurriculumProgram(
-    programId,
-    (program) => {
-      if (program.finalMode !== 'exam') {
-        throw new Error('Chương trình này không dùng checklist ôn kiểm tra.');
-      }
-
-      const currentItem = (program.finalChecklist || []).find((item) => item.id === values.id) || null;
-      const nextItem = normalizeExamChecklistItemRecord(
-        {
-          ...currentItem,
-          ...values,
-          archived: currentItem?.archived ?? false,
-        },
-        `${programId}-exam`,
-      );
-
-      validateExamChecklistItem(nextItem);
-
-      const nextChecklist = currentItem
-        ? (program.finalChecklist || []).map((item) => (item.id === currentItem.id ? nextItem : item))
-        : [...(program.finalChecklist || []), nextItem];
-
-      return {
-        finalChecklist: sortCurriculumChecklist(nextChecklist),
-      };
-    },
-    'Không thể lưu checklist cuối khóa cho chương trình này.',
-  );
-}
-
-export async function setCurriculumExamChecklistItemArchived(programId, itemId, archived) {
-  await updateCurriculumProgram(
-    programId,
-    (program) => {
-      if (program.finalMode !== 'exam') {
-        throw new Error('Chương trình này không dùng checklist ôn kiểm tra.');
-      }
-
-      const targetItem = (program.finalChecklist || []).find((item) => item.id === itemId);
-
-      if (!targetItem) {
-        throw new Error('Không tìm thấy mục cuối khóa cần cập nhật.');
-      }
-
-      const nextChecklist = (program.finalChecklist || []).map((item) =>
-        item.id === itemId ? { ...item, archived: Boolean(archived) } : item,
-      );
-
-      return {
-        finalChecklist: sortCurriculumChecklist(nextChecklist),
-      };
-    },
-    archived ? 'Không thể lưu kho mục cuối khóa này.' : 'Không thể khôi phục mục cuối khóa này.',
-  );
-}
-
-export async function getClassCurriculumView(classCode, { publicAccess = true } = {}) {
-  const { db } = getFirebaseServices();
-
-  try {
-    const classSnapshot = await getDoc(doc(db, 'classes', classCode));
-
-    if (!classSnapshot.exists()) {
-      throw new Error('Không tìm thấy lớp học.');
-    }
-
-    const classItem = toClassModel(classSnapshot);
-
-    if (publicAccess && (classItem.status !== 'active' || classItem.hidden)) {
-      throw new Error('Lớp học hiện không mở để xem bài giảng.');
-    }
-
-    if (!classItem.curriculumProgramId) {
-      return {
-        classInfo: classItem,
-        assignment: null,
-        program: null,
-        lessons: [],
-        visibleLessons: [],
-        checklistItems: [],
-      };
-    }
-
-    const program = await getCurriculumProgram(classItem.curriculumProgramId);
-    return buildCurriculumView(classItem, program);
-  } catch (error) {
-    throw toAppError(error, 'Không tải được bài giảng của lớp này.');
-  }
-}
-
-export async function getStudentLibraryView(classCode) {
-  return getClassCurriculumView(classCode, { publicAccess: true });
-}
-
-export function getSuggestedCurriculumAssignment(classItem, programs) {
-  return buildCurriculumAssignment(classItem, programs);
-}
-
-export function getCurriculumProgramGroups(programs) {
-  return groupCurriculumProgramsBySubject(programs);
+  });
+
+  batch.update(progRef, {
+    lessonIndex: lessons.map(toSlimLessonIndex),
+    lessonsStorage: 'subcollection',
+    lessons: deleteField(),
+    updatedAt: serverTimestamp(),
+  });
+
+  await batch.commit();
 }

@@ -1,7 +1,6 @@
 import {
   collection,
   doc,
-  getDoc,
   getDocs,
   limit,
   onSnapshot,
@@ -11,134 +10,85 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
-import { DEFAULT_STAGE } from '../constants/stages.js';
-import { getFirebaseServices } from '../config/firebase.js';
-import { toReportModel } from '../models/report.model.js';
-import { toAppError } from '../utils/firebase-error.js';
-import { startOfToday } from '../utils/date.js';
+import { db } from '../config/firebase.js';
+import { toReportModel } from '../models/index.js';
+import { dateKey } from '../lib/firestore.js';
 
-function sortReportsBySubmittedAt(items) {
-  return [...items].sort((left, right) => {
-    const leftTime = left.submittedAt ? left.submittedAt.getTime() : 0;
-    const rightTime = right.submittedAt ? right.submittedAt.getTime() : 0;
-    return rightTime - leftTime;
-  });
-}
+const reportsRef = collection(db, 'reports');
 
-function calculateProgressStalledCount(sortedReports) {
-  let stalledCount = 0;
-
-  for (let index = 0; index < sortedReports.length - 1; index += 1) {
-    if (sortedReports[index].progressPercent <= sortedReports[index + 1].progressPercent) {
-      stalledCount += 1;
-      continue;
-    }
-
-    break;
-  }
-
-  return stalledCount;
-}
-
-export function subscribeReports(onData, onError, limitSize = 300) {
-  const { db } = getFirebaseServices();
-  const reportsQuery = query(collection(db, 'reports'), orderBy('submittedAt', 'desc'), limit(limitSize));
-
-  return onSnapshot(
-    reportsQuery,
-    (snapshot) => {
-      onData(snapshot.docs.map(toReportModel));
-    },
-    onError,
+export async function listReportsByClass(classCode, max = 200) {
+  const snapshot = await getDocs(
+    query(reportsRef, where('classId', '==', classCode), orderBy('submittedAt', 'desc'), limit(max)),
   );
+  return snapshot.docs.map(toReportModel);
 }
 
-export function subscribeTodayReports(onData, onError) {
-  const { db } = getFirebaseServices();
-  const reportsQuery = query(
-    collection(db, 'reports'),
-    where('submittedAt', '>=', startOfToday()),
+export function subscribeReportsByClass(classCode, onData, onError, max = 200) {
+  const q = query(
+    reportsRef,
+    where('classId', '==', classCode),
     orderBy('submittedAt', 'desc'),
+    limit(max),
   );
-
   return onSnapshot(
-    reportsQuery,
-    (snapshot) => {
-      onData(snapshot.docs.map(toReportModel));
-    },
+    q,
+    (snapshot) => onData(snapshot.docs.map(toReportModel)),
     onError,
   );
 }
 
-export async function getStudentReportHistory(studentId, limitSize = 20) {
-  const { db } = getFirebaseServices();
-  const historyQuery = query(collection(db, 'reports'), where('studentId', '==', studentId));
-
-  try {
-    const snapshot = await getDocs(historyQuery);
-    return sortReportsBySubmittedAt(snapshot.docs.map(toReportModel)).slice(0, limitSize);
-  } catch (error) {
-    throw toAppError(error, 'Không tải được lịch sử báo cáo của học sinh này.');
-  }
+export async function listReportsByStudent(studentId, max = 50) {
+  const snapshot = await getDocs(
+    query(reportsRef, where('studentId', '==', studentId), orderBy('submittedAt', 'desc'), limit(max)),
+  );
+  return snapshot.docs.map(toReportModel);
 }
 
-export async function deleteReport(reportId) {
-  const { db } = getFirebaseServices();
-  const reportRef = doc(db, 'reports', reportId);
+// Submits a final-product progress report. Mirrors firestore.rules: the report
+// document and the student snapshot update MUST happen in one atomic batch so
+// `getAfter` cross-checks pass (latestReportId -> the report being created).
+export async function submitProgressReport({ student, classDoc, form }) {
+  const batch = writeBatch(db);
+  const reportRef = doc(collection(db, 'reports'));
+  const studentRef = doc(db, 'students', student.id);
 
-  try {
-    const reportSnapshot = await getDoc(reportRef);
+  const progressPercent = Number(form.progressPercent);
+  const difficulties = form.difficulties?.trim() ?? '';
 
-    if (!reportSnapshot.exists()) {
-      throw new Error('Không tìm thấy báo cáo cần xóa.');
-    }
+  batch.set(reportRef, {
+    classId: classDoc.classCode,
+    classCode: classDoc.classCode,
+    studentId: student.id,
+    studentName: student.fullName,
+    projectName: student.projectName,
+    progressPercent,
+    stage: form.stage,
+    status: form.status,
+    doneToday: form.doneToday.trim(),
+    nextGoal: form.nextGoal.trim(),
+    difficulties,
+    submittedAt: serverTimestamp(),
+    submittedDateKey: dateKey(),
+    source: 'student-form',
+    createdAt: serverTimestamp(),
+  });
 
-    const report = toReportModel(reportSnapshot);
-    const studentRef = doc(db, 'students', report.studentId);
-    const studentSnapshot = await getDoc(studentRef);
-    const batch = writeBatch(db);
+  const stalled =
+    progressPercent <= Number(student.currentProgressPercent ?? 0)
+      ? Number(student.progressStalledCount ?? 0) + 1
+      : 0;
 
-    batch.delete(reportRef);
+  batch.update(studentRef, {
+    currentProgressPercent: progressPercent,
+    currentStage: form.stage,
+    currentStatus: form.status,
+    currentDifficulties: difficulties,
+    lastReportedAt: serverTimestamp(),
+    latestReportId: reportRef.id,
+    progressStalledCount: stalled,
+    updatedAt: serverTimestamp(),
+  });
 
-    if (studentSnapshot.exists()) {
-      const studentData = studentSnapshot.data();
-
-      if ((studentData.latestReportId ?? '') === reportId) {
-        const historySnapshot = await getDocs(query(collection(db, 'reports'), where('studentId', '==', report.studentId)));
-        const remainingReports = sortReportsBySubmittedAt(
-          historySnapshot.docs.filter((item) => item.id !== reportId).map(toReportModel),
-        );
-        const latestRemainingReport = remainingReports[0] ?? null;
-
-        if (latestRemainingReport) {
-          batch.update(studentRef, {
-            currentProgressPercent: latestRemainingReport.progressPercent,
-            currentStage: latestRemainingReport.stage,
-            currentStatus: latestRemainingReport.status,
-            currentDifficulties: latestRemainingReport.difficulties,
-            lastReportedAt: latestRemainingReport.submittedAt,
-            latestReportId: latestRemainingReport.id,
-            progressStalledCount: calculateProgressStalledCount(remainingReports),
-            updatedAt: serverTimestamp(),
-          });
-        } else {
-          batch.update(studentRef, {
-            currentProgressPercent: 0,
-            currentStage: DEFAULT_STAGE,
-            currentStatus: 'Chưa bắt đầu',
-            currentDifficulties: '',
-            lastReportedAt: null,
-            latestReportId: '',
-            progressStalledCount: 0,
-            updatedAt: serverTimestamp(),
-          });
-        }
-      }
-    }
-
-    await batch.commit();
-    return report;
-  } catch (error) {
-    throw toAppError(error, 'Không thể xóa báo cáo lúc này.');
-  }
+  await batch.commit();
+  return reportRef.id;
 }

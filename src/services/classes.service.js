@@ -1,8 +1,10 @@
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
+  limit,
   onSnapshot,
   orderBy,
   query,
@@ -10,139 +12,131 @@ import {
   setDoc,
   updateDoc,
   where,
-  writeBatch,
 } from 'firebase/firestore';
-import { COMPLETED_STAGE } from '../constants/stages.js';
-import { getFirebaseServices } from '../config/firebase.js';
-import { toClassModel } from '../models/class.model.js';
-import { toAppError } from '../utils/firebase-error.js';
+import { db } from '../config/firebase.js';
+import { toClassModel } from '../models/index.js';
 
-const CLASS_COMPLETION_BATCH_SIZE = 450;
-const COMPLETED_CLASS_STAGE = COMPLETED_STAGE || 'Bảo trì & cải tiến';
-
-function sortClasses(items) {
-  return [...items].sort((left, right) => left.className.localeCompare(right.className, 'vi'));
+export function isArchivedClassStatus(status) {
+  return status === 'completed' || status === 'archived';
 }
 
-export function subscribeClasses(onData, onError) {
-  const { db } = getFirebaseServices();
-  const classesQuery = query(collection(db, 'classes'), orderBy('className'));
+/** Lớp đang vận hành hoặc đã hoàn thành (dùng cho thống kê). */
+export function isOperationalClassStatus(status) {
+  return status === 'active' || status === 'completed';
+}
 
+export function filterClassesForAnalytics(classes, showArchived = false) {
+  return classes.filter((c) => {
+    if (isOperationalClassStatus(c.status)) return true;
+    if (showArchived && c.status === 'archived') return true;
+    return false;
+  });
+}
+
+const CLASS_STATUS_SORT_ORDER = { active: 0, completed: 1, archived: 2 };
+
+/** Ưu tiên lớp đang hoạt động, sau đó đã hoàn thành, cuối cùng lưu trữ. */
+export function sortClassesByOperationalPriority(classes) {
+  return [...classes].sort((a, b) => {
+    const orderA = CLASS_STATUS_SORT_ORDER[a.status] ?? 9;
+    const orderB = CLASS_STATUS_SORT_ORDER[b.status] ?? 9;
+    if (orderA !== orderB) return orderA - orderB;
+    return (a.classCode || '').localeCompare(b.classCode || '', 'vi');
+  });
+}
+
+const classesRef = collection(db, 'classes');
+
+export async function listClasses(max = 200) {
+  const snapshot = await getDocs(query(classesRef, orderBy('createdAt', 'desc'), limit(max)));
+  return snapshot.docs.map(toClassModel);
+}
+
+export function subscribeClasses(onData, onError, max = 200) {
+  const q = query(classesRef, orderBy('createdAt', 'desc'), limit(max));
   return onSnapshot(
-    classesQuery,
-    (snapshot) => {
-      onData(sortClasses(snapshot.docs.map(toClassModel)));
-    },
+    q,
+    (snapshot) => onData(snapshot.docs.map(toClassModel)),
     onError,
   );
 }
 
-export async function getClassesOnce() {
-  const { db } = getFirebaseServices();
-  const snapshot = await getDocs(collection(db, 'classes'));
-  return sortClasses(snapshot.docs.map(toClassModel));
+export function subscribeClass(classCode, onData, onError) {
+  if (!classCode) return () => {};
+  return onSnapshot(
+    doc(db, 'classes', classCode),
+    (snapshot) => onData(snapshot.exists() ? toClassModel(snapshot) : null),
+    onError,
+  );
 }
 
-export async function createClass(values) {
-  const { db } = getFirebaseServices();
-  const classCode = String(values.classCode ?? '').trim().toUpperCase();
-  const classRef = doc(db, 'classes', classCode);
-  const existingSnap = await getDoc(classRef);
+export async function listPublicClasses() {
+  const snapshot = await getDocs(
+    query(classesRef, where('status', '==', 'active'), where('hidden', '==', false)),
+  );
+  return snapshot.docs.map(toClassModel);
+}
 
-  if (existingSnap.exists()) {
-    throw new Error(`Mã lớp ${classCode} đã tồn tại.`);
+export async function getClass(classCode) {
+  const snapshot = await getDoc(doc(db, 'classes', classCode));
+  return snapshot.exists() ? toClassModel(snapshot) : null;
+}
+
+export async function createClass(classCode, payload) {
+  const ref = doc(db, 'classes', classCode.trim());
+  const existing = await getDoc(ref);
+  if (existing.exists()) {
+    throw new Error('Mã lớp đã tồn tại. Vui lòng chọn mã khác.');
   }
-
-  const payload = {
-    classCode,
-    className: String(values.className ?? '').trim(),
-    status: values.status ?? 'active',
-    hidden: Boolean(values.hidden),
-    startDate: values.startDate || '',
-    endDate: values.endDate || '',
-    studentCount: Number(values.studentCount ?? 0),
-    curriculumProgramId: String(values.curriculumProgramId ?? '').trim(),
-    curriculumCurrentSession: Number(values.curriculumCurrentSession ?? 1),
-    curriculumPhase: values.curriculumPhase === 'final' ? 'final' : 'learning',
-    activeQuizMode: 'official_quiz',
+  await setDoc(ref, {
+    classCode: classCode.trim(),
+    className: payload.className?.trim() ?? '',
+    status: payload.status ?? 'active',
+    hidden: Boolean(payload.hidden ?? false),
+    startDate: payload.startDate ?? '',
+    endDate: payload.endDate ?? '',
+    curriculumProgramId: payload.curriculumProgramId ?? '',
+    curriculumPhase: payload.curriculumPhase ?? 'learning',
+    curriculumCurrentSession: Number(payload.curriculumCurrentSession ?? 0),
+    curriculumExerciseVisibleSessions: payload.curriculumExerciseVisibleSessions ?? [],
+    finalMode: payload.finalMode === 'exam' ? 'exam' : 'project',
+    studentCount: 0,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  };
-
-  try {
-    await setDoc(classRef, payload);
-    return classCode;
-  } catch (error) {
-    throw toAppError(error, 'Không thể tạo lớp mới lúc này.');
-  }
+  });
 }
 
-export async function updateClass(classId, values) {
-  const { db } = getFirebaseServices();
-
-  try {
-    await updateDoc(doc(db, 'classes', classId), {
-      className: String(values.className ?? '').trim(),
-      status: values.status ?? 'active',
-      hidden: Boolean(values.hidden),
-      startDate: values.startDate || '',
-      endDate: values.endDate || '',
-      updatedAt: serverTimestamp(),
-    });
-  } catch (error) {
-    throw toAppError(error, 'Không thể cập nhật lớp lúc này.');
-  }
+export async function updateClass(classCode, payload) {
+  const ref = doc(db, 'classes', classCode);
+  await updateDoc(ref, {
+    className: payload.className?.trim() ?? '',
+    status: payload.status ?? 'active',
+    hidden: Boolean(payload.hidden ?? false),
+    startDate: payload.startDate ?? '',
+    endDate: payload.endDate ?? '',
+    curriculumProgramId: payload.curriculumProgramId ?? '',
+    curriculumPhase: payload.curriculumPhase ?? 'learning',
+    curriculumCurrentSession: Number(payload.curriculumCurrentSession ?? 0),
+    curriculumExerciseVisibleSessions: payload.curriculumExerciseVisibleSessions ?? [],
+    finalMode: payload.finalMode === 'exam' ? 'exam' : 'project',
+    updatedAt: serverTimestamp(),
+  });
 }
 
-export async function completeClass(classId) {
-  const { db } = getFirebaseServices();
-  const classRef = doc(db, 'classes', classId);
+export async function setClassCurrentSession(classCode, sessionNumber) {
+  await updateDoc(doc(db, 'classes', classCode), {
+    curriculumCurrentSession: Number(sessionNumber),
+    updatedAt: serverTimestamp(),
+  });
+}
 
-  try {
-    const [classSnapshot, studentsSnapshot] = await Promise.all([
-      getDoc(classRef),
-      getDocs(query(collection(db, 'students'), where('classId', '==', classId))),
-    ]);
+export async function setClassStatus(classCode, status) {
+  await updateDoc(doc(db, 'classes', classCode), {
+    status,
+    updatedAt: serverTimestamp(),
+  });
+}
 
-    if (!classSnapshot.exists()) {
-      throw new Error('Không tìm thấy lớp cần cập nhật.');
-    }
-
-    const activeStudents = studentsSnapshot.docs;
-    const totalBatches = Math.max(1, Math.ceil(activeStudents.length / CLASS_COMPLETION_BATCH_SIZE));
-
-    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex += 1) {
-      const batch = writeBatch(db);
-
-      if (batchIndex === 0) {
-        batch.update(classRef, {
-          status: 'completed',
-          hidden: true,
-          updatedAt: serverTimestamp(),
-        });
-      }
-
-      const batchStudents = activeStudents.slice(
-        batchIndex * CLASS_COMPLETION_BATCH_SIZE,
-        (batchIndex + 1) * CLASS_COMPLETION_BATCH_SIZE,
-      );
-
-      batchStudents.forEach((studentDoc) => {
-        batch.update(studentDoc.ref, {
-          currentProgressPercent: 100,
-          currentStage: COMPLETED_CLASS_STAGE,
-          currentStatus: 'Hoàn thành',
-          updatedAt: serverTimestamp(),
-        });
-      });
-
-      await batch.commit();
-    }
-
-    return {
-      updatedStudentCount: activeStudents.length,
-    };
-  } catch (error) {
-    throw toAppError(error, 'Không thể hoàn thành lớp lúc này.');
-  }
+export async function deleteClass(classCode) {
+  await deleteDoc(doc(db, 'classes', classCode));
 }

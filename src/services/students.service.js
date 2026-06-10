@@ -1,126 +1,245 @@
 import {
+  addDoc,
   collection,
+  deleteDoc,
   doc,
-  getCountFromServer,
+  getDoc,
   getDocs,
+  increment,
+  limit,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
-  setDoc,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore';
-import { DEFAULT_STAGE } from '../constants/stages.js';
-import { getFirebaseServices } from '../config/firebase.js';
-import { toStudentModel } from '../models/student.model.js';
-import { toAppError } from '../utils/firebase-error.js';
+import { db } from '../config/firebase.js';
+import { toStudentModel } from '../models/index.js';
+import { normalizeKey } from '../lib/firestore.js';
+import { DEFAULT_STAGE, DEFAULT_STATUS } from '../constants/index.js';
 
-function slugifyVietnamese(value) {
-  return String(value ?? '')
-    .normalize('NFD')
-    .replaceAll(/[\u0300-\u036f]/g, '')
-    .replaceAll(/đ/g, 'd')
-    .replaceAll(/Đ/g, 'D')
-    .trim()
-    .toLowerCase();
+const studentsRef = collection(db, 'students');
+
+export async function listStudentsByClass(classCode) {
+  const snapshot = await getDocs(query(studentsRef, where('classId', '==', classCode)));
+  return snapshot.docs.map(toStudentModel).sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi'));
 }
 
-function sortStudents(items) {
-  return [...items].sort((left, right) => left.fullName.localeCompare(right.fullName, 'vi'));
+export async function listActiveStudentsByClass(classCode) {
+  const snapshot = await getDocs(
+    query(studentsRef, where('classId', '==', classCode), where('active', '==', true)),
+  );
+  return snapshot.docs.map(toStudentModel).sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi'));
 }
 
-async function syncClassStudentCount(classId) {
-  if (!classId) {
-    return;
+export async function listAllStudents(max = 500) {
+  const snapshot = await getDocs(query(studentsRef, orderBy('fullNameKey', 'asc'), limit(max)));
+  return snapshot.docs.map(toStudentModel);
+}
+
+const CLASS_IN_MAX = 10;
+
+/** Scoped reads for admin dashboards — avoids scanning the whole students collection. */
+export async function listStudentsByClassCodes(classCodes, { activeOnly = false } = {}) {
+  const unique = [...new Set(classCodes.filter(Boolean))];
+  if (!unique.length) return [];
+
+  const chunks = [];
+  for (let i = 0; i < unique.length; i += CLASS_IN_MAX) {
+    chunks.push(unique.slice(i, i + CLASS_IN_MAX));
   }
 
-  const { db } = getFirebaseServices();
-  const studentsQuery = query(collection(db, 'students'), where('classId', '==', classId), where('active', '==', true));
-  const countSnapshot = await getCountFromServer(studentsQuery);
+  const rows = await Promise.all(
+    chunks.map(async (codes) => {
+      const snapshot = await getDocs(query(studentsRef, where('classId', 'in', codes)));
+      return snapshot.docs.map(toStudentModel);
+    }),
+  );
 
-  try {
-    await updateDoc(doc(db, 'classes', classId), {
-      studentCount: countSnapshot.data().count,
-      updatedAt: serverTimestamp(),
-    });
-  } catch (error) {
-    throw toAppError(error, 'Không thể đồng bộ sĩ số lớp lúc này.');
-  }
+  let merged = rows.flat();
+  if (activeOnly) merged = merged.filter((s) => s.active);
+  return merged.sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi'));
 }
 
-export function subscribeStudents(onData, onError) {
-  const { db } = getFirebaseServices();
-  const studentsQuery = query(collection(db, 'students'), orderBy('fullNameKey'));
+function sortStudents(docs) {
+  return docs.map(toStudentModel).sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi'));
+}
 
+export function subscribeAllStudents(onData, onError, max = 500) {
+  const q = query(studentsRef, orderBy('fullNameKey', 'asc'), limit(max));
   return onSnapshot(
-    studentsQuery,
-    (snapshot) => {
-      onData(sortStudents(snapshot.docs.map(toStudentModel)));
-    },
+    q,
+    (snapshot) => onData(snapshot.docs.map(toStudentModel)),
     onError,
   );
 }
 
-export async function getStudentsOnce() {
-  const { db } = getFirebaseServices();
-  const studentsQuery = query(collection(db, 'students'), orderBy('fullNameKey'));
-  const snapshot = await getDocs(studentsQuery);
-  return sortStudents(snapshot.docs.map(toStudentModel));
+export function subscribeStudentsByClass(classCode, onData, onError) {
+  if (!classCode) return () => {};
+  const q = query(studentsRef, where('classId', '==', classCode));
+  return onSnapshot(
+    q,
+    (snapshot) => onData(sortStudents(snapshot.docs)),
+    onError,
+  );
 }
 
-export async function createStudent(values) {
-  const { db } = getFirebaseServices();
-  const studentRef = doc(collection(db, 'students'));
-  const classId = String(values.classId ?? '').trim().toUpperCase();
+export function subscribeActiveStudentsByClass(classCode, onData, onError) {
+  if (!classCode) return () => {};
+  const q = query(studentsRef, where('classId', '==', classCode), where('active', '==', true));
+  return onSnapshot(
+    q,
+    (snapshot) => onData(sortStudents(snapshot.docs)),
+    onError,
+  );
+}
 
-  try {
-    await setDoc(studentRef, {
-      fullName: String(values.fullName ?? '').trim(),
-      fullNameKey: slugifyVietnamese(values.fullName),
-      classId,
-      classCode: classId,
-      projectName: String(values.projectName ?? '').trim(),
-      active: Boolean(values.active ?? true),
-      currentProgressPercent: Number(values.currentProgressPercent ?? 0),
-      currentStage: values.currentStage ?? DEFAULT_STAGE,
-      currentStatus: values.currentStatus ?? 'Chưa bắt đầu',
-      currentDifficulties: values.currentDifficulties ?? '',
-      lastReportedAt: values.lastReportedAt ?? null,
-      latestReportId: values.latestReportId ?? '',
-      progressStalledCount: Number(values.progressStalledCount ?? 0),
-      createdAt: serverTimestamp(),
+export function subscribeStudent(studentId, onData, onError) {
+  if (!studentId) return () => {};
+  return onSnapshot(
+    doc(db, 'students', studentId),
+    (snapshot) => onData(snapshot.exists() ? toStudentModel(snapshot) : null),
+    onError,
+  );
+}
+
+export async function markAllStudentsCompletedForClass(classCode) {
+  const snapshot = await getDocs(
+    query(studentsRef, where('classId', '==', classCode), where('active', '==', true)),
+  );
+  if (!snapshot.docs.length) return 0;
+  const batch = writeBatch(db);
+  snapshot.docs.forEach((docSnap) => {
+    batch.update(docSnap.ref, {
+      currentStatus: 'Hoàn thành',
+      currentProgressPercent: 100,
       updatedAt: serverTimestamp(),
     });
+  });
+  await batch.commit();
+  return snapshot.docs.length;
+}
 
-    await syncClassStudentCount(classId);
-    return studentRef.id;
-  } catch (error) {
-    throw toAppError(error, 'Không thể tạo học sinh mới lúc này.');
+export async function getStudent(studentId) {
+  const snapshot = await getDoc(doc(db, 'students', studentId));
+  return snapshot.exists() ? toStudentModel(snapshot) : null;
+}
+
+export async function createStudent(payload) {
+  const classCode = payload.classCode.trim();
+  const ref = await addDoc(studentsRef, {
+    fullName: payload.fullName.trim(),
+    fullNameKey: normalizeKey(payload.fullName),
+    classId: classCode,
+    classCode,
+    active: Boolean(payload.active ?? true),
+    projectName: '',
+    projectNameSubmission: '',
+    projectNameStatus: '',
+    projectNameReviewNote: '',
+    projectNameSubmittedAt: null,
+    currentStatus: payload.currentStatus ?? DEFAULT_STATUS,
+    currentStage: payload.currentStage ?? DEFAULT_STAGE,
+    currentProgressPercent: Number(payload.currentProgressPercent ?? 0),
+    currentDifficulties: payload.currentDifficulties ?? '',
+    latestReportId: '',
+    lastReportedAt: null,
+    progressStalledCount: 0,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  await updateClassCount(classCode, 1);
+  return ref.id;
+}
+
+export async function updateStudent(studentId, payload) {
+  await updateDoc(doc(db, 'students', studentId), {
+    fullName: payload.fullName.trim(),
+    fullNameKey: normalizeKey(payload.fullName),
+    active: Boolean(payload.active ?? true),
+    currentStatus: payload.currentStatus ?? DEFAULT_STATUS,
+    currentStage: payload.currentStage ?? DEFAULT_STAGE,
+    currentProgressPercent: Number(payload.currentProgressPercent ?? 0),
+    currentDifficulties: payload.currentDifficulties ?? '',
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function submitProjectName(studentId, projectName) {
+  const trimmed = projectName.trim();
+  if (trimmed.length < 3) {
+    throw new Error('Tên dự án cần ít nhất 3 ký tự.');
+  }
+  if (trimmed.length > 80) {
+    throw new Error('Tên dự án tối đa 80 ký tự.');
+  }
+  const student = await getStudent(studentId);
+  if (!student?.active) {
+    throw new Error('Học sinh không hợp lệ.');
+  }
+  const status = student.projectNameStatus || '';
+  if (status === 'pending') {
+    throw new Error('Tên dự án đang chờ giáo viên duyệt.');
+  }
+  if (status === 'approved') {
+    throw new Error('Tên dự án đã được duyệt.');
+  }
+  if (!status && student.projectName?.trim()) {
+    throw new Error('Tên dự án đang chờ giáo viên duyệt.');
+  }
+  await updateDoc(doc(db, 'students', studentId), {
+    projectNameSubmission: trimmed,
+    projectNameStatus: 'pending',
+    projectNameReviewNote: '',
+    projectNameSubmittedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function reviewProjectName(studentId, { approved, reviewNote = '' }) {
+  const student = await getStudent(studentId);
+  const isPending = student?.projectNameStatus === 'pending';
+  const isLegacy = !student?.projectNameStatus && Boolean(student?.projectName?.trim());
+  if (!student || (!isPending && !isLegacy)) {
+    throw new Error('Không có tên dự án đang chờ duyệt.');
+  }
+  const candidate = (student.projectNameSubmission || student.projectName || '').trim();
+  const note = reviewNote.trim();
+  if (approved) {
+    await updateDoc(doc(db, 'students', studentId), {
+      projectName: candidate,
+      projectNameStatus: 'approved',
+      projectNameSubmission: '',
+      projectNameReviewNote: note,
+      updatedAt: serverTimestamp(),
+    });
+    return;
+  }
+  await updateDoc(doc(db, 'students', studentId), {
+    projectName: '',
+    projectNameStatus: 'rejected',
+    projectNameSubmission: candidate,
+    projectNameReviewNote: note || 'Giáo viên yêu cầu đặt lại tên dự án.',
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function deleteStudent(studentId, classCode) {
+  await deleteDoc(doc(db, 'students', studentId));
+  if (classCode) {
+    await updateClassCount(classCode, -1);
   }
 }
 
-export async function updateStudent(studentId, values, previousClassId = '') {
-  const { db } = getFirebaseServices();
-  const classId = String(values.classId ?? '').trim().toUpperCase();
-
+async function updateClassCount(classCode, delta) {
   try {
-    await updateDoc(doc(db, 'students', studentId), {
-      fullName: String(values.fullName ?? '').trim(),
-      fullNameKey: slugifyVietnamese(values.fullName),
-      classId,
-      classCode: classId,
-      projectName: String(values.projectName ?? '').trim(),
-      active: Boolean(values.active ?? true),
+    await updateDoc(doc(db, 'classes', classCode), {
+      studentCount: increment(delta),
       updatedAt: serverTimestamp(),
     });
-
-    await syncClassStudentCount(classId);
-
-    if (previousClassId && previousClassId !== classId) {
-      await syncClassStudentCount(previousClassId);
-    }
-  } catch (error) {
-    throw toAppError(error, 'Không thể cập nhật học sinh lúc này.');
+  } catch {
+    // class count is a convenience field; ignore if the class doc is missing.
   }
 }

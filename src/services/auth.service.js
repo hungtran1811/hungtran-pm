@@ -1,48 +1,50 @@
-import { getRedirectResult, onAuthStateChanged, signInWithPopup, signInWithRedirect, signOut } from 'firebase/auth';
-import { getFirebaseServices } from '../config/firebase.js';
-import { toAppError } from '../utils/firebase-error.js';
+import {
+  GoogleAuthProvider,
+  getRedirectResult,
+  onAuthStateChanged,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+} from 'firebase/auth';
+import { auth } from '../config/firebase.js';
 
-export async function signInWithGoogle() {
-  const { auth, googleProvider } = getFirebaseServices();
+const googleProvider = new GoogleAuthProvider();
 
-  try {
-    return await signInWithPopup(auth, googleProvider);
-  } catch (error) {
-    throw toAppError(error, 'Không thể đăng nhập bằng Google lúc này.');
-  }
+// Errors that mean the popup flow is unavailable (e.g. Cursor's embedded
+// browser). We surface guidance instead of redirecting, which dead-ends there.
+export const POPUP_UNAVAILABLE_CODES = new Set([
+  'auth/popup-blocked',
+  'auth/cancelled-popup-request',
+  'auth/popup-closed-by-user',
+  'auth/operation-not-supported-in-this-environment',
+]);
+
+export function isPopupUnavailable(error) {
+  return POPUP_UNAVAILABLE_CODES.has(error?.code);
 }
 
-export async function signInWithGoogleRedirect() {
-  const { auth, googleProvider } = getFirebaseServices();
-
-  try {
-    await signInWithRedirect(auth, googleProvider);
-  } catch (error) {
-    throw toAppError(error, 'Không thể chuyển sang đăng nhập bằng Google lúc này.');
-  }
-}
-
-export async function resolveGoogleRedirectResult() {
-  const { auth } = getFirebaseServices();
-
-  try {
-    return await getRedirectResult(auth);
-  } catch (error) {
-    throw toAppError(error, 'Không thể hoàn tất đăng nhập chuyển hướng bằng Google.');
-  }
-}
-
-export async function signOutUser() {
-  const { auth } = getFirebaseServices();
-
-  try {
-    return await signOut(auth);
-  } catch (error) {
-    throw toAppError(error, 'Không thể đăng xuất lúc này.');
-  }
-}
-
-export function observeAuthState(callback) {
-  const { auth } = getFirebaseServices();
+export function watchAuth(callback) {
   return onAuthStateChanged(auth, callback);
+}
+
+export function loginWithEmail(email, password) {
+  return signInWithEmailAndPassword(auth, email.trim(), password);
+}
+
+export function loginWithGoogle() {
+  return signInWithPopup(auth, googleProvider);
+}
+
+export function resetPassword(email) {
+  return sendPasswordResetEmail(auth, email.trim());
+}
+
+// Kept for safety: resolves any sign-in that completed via redirect previously.
+export function getGoogleRedirectResult() {
+  return getRedirectResult(auth);
+}
+
+export function logout() {
+  return signOut(auth);
 }

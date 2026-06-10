@@ -1,8 +1,19 @@
-node_modules/
-dist/
+node_modules
+dist
+.firebase
+.vite
+
+# Env & secrets — không commit
 .env
-functions/node_modules/
-.firebase/
-firebase-debug.log
-data/
-docs/
+.env.*
+!.env.example
+
+# Logs & OS
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# Logo nháp / bản HQ (production dùng logo.svg, logo-wordmark.svg, logo-icon.svg)
+public/logo_*_hq.svg
+public/logo_selected_reference*.svg
