@@ -42,7 +42,7 @@ const EMPTY_FORM = {
 export function StudentsPage() {
   const toast = useToast();
   const [classes, setClasses] = useState([]);
-  const [selectedClass, setSelectedClass] = useState(ALL_CLASSES_VALUE);
+  const [selectedClass, setSelectedClass] = useState('');
   const [students, setStudents] = useState([]);
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [loadingStudents, setLoadingStudents] = useState(false);
@@ -63,7 +63,7 @@ export function StudentsPage() {
 
   const toggleArchived = (checked) => {
     setShowArchived(checked);
-    setSelectedClass(ALL_CLASSES_VALUE);
+    setSelectedClass('');
   };
 
   useEffect(() => {
@@ -74,7 +74,7 @@ export function StudentsPage() {
         setSelectedClass((prev) => {
           if (prev === ALL_CLASSES_VALUE) return prev;
           if (prev && list.some((c) => c.classCode === prev)) return prev;
-          return ALL_CLASSES_VALUE;
+          return '';
         });
       },
       (error) => {
@@ -172,7 +172,7 @@ export function StudentsPage() {
         <EmptyState icon={<School className="h-7 w-7" />} title="Chưa có lớp học" />
       ) : (
         <>
-          {pendingProjectCount > 0 && (
+          {selectedClass && pendingProjectCount > 0 && (
             <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
               <strong>{pendingProjectCount}</strong> học sinh đang chờ duyệt tên dự án.
             </div>
@@ -187,19 +187,27 @@ export function StudentsPage() {
               showArchived={showArchived}
               onShowArchivedChange={toggleArchived}
               allowAll
+              autoSelectFirst={false}
               allLabel={`Tất cả lớp${showArchived ? ' lưu trữ' : ' đang hoạt động'}`}
               showStudentCount
             />
             <div className="flex-1 lg:max-w-sm">
               <Input
-                placeholder="Tìm trong tất cả học sinh lớp..."
+                placeholder={
+                  !selectedClass
+                    ? 'Chọn lớp để tìm học sinh...'
+                    : isAllClasses
+                      ? 'Tìm trong tất cả học sinh lớp...'
+                      : 'Tìm học sinh trong lớp...'
+                }
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+                disabled={!selectedClass}
               />
             </div>
           </div>
 
-          {loadingStudents ? (
+          {!selectedClass ? null : loadingStudents ? (
             <SkeletonRows count={5} />
           ) : filtered.length === 0 ? (
             <EmptyState

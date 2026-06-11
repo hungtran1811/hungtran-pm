@@ -8,7 +8,7 @@ import { EmptyState } from '../../ui/components/EmptyState.jsx';
 import { ConfirmDialog } from '../../ui/components/ConfirmDialog.jsx';
 import { SkeletonRows } from '../../ui/components/Skeleton.jsx';
 import { ClassFilterBar } from '../../ui/components/ClassFilterBar.jsx';
-import { Select, Input } from '../../ui/components/Field.jsx';
+import { Input } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { StudentHistoryModal } from '../../ui/components/StudentHistoryModal.jsx';
 import { ALL_CLASSES_VALUE, buildClassesByCode, resolveScopedClasses } from '../../lib/classFilterScope.js';
@@ -31,8 +31,6 @@ import {
   filterBySessionScope,
   filterBySessionScopeMulti,
   maxCurrentSession,
-  sessionNumbersUpToCurrent,
-  sessionNumbersUpToCurrentMulti,
 } from '../../lib/sessionScope.js';
 
 const LEVEL_TONES = { 1: 'red', 2: 'red', 3: 'amber', 4: 'green', 5: 'green' };
@@ -43,8 +41,8 @@ export function FeedbackPanel() {
   const [classes, setClasses] = useState([]);
   const [students, setStudents] = useState([]);
   const [reports, setReports] = useState([]);
-  const [selectedClass, setSelectedClass] = useState(ALL_CLASSES_VALUE);
-  const [sessionFilter, setSessionFilter] = useState(ALL_SESSIONS_VALUE);
+  const [selectedClass, setSelectedClass] = useState('');
+  const sessionFilter = ALL_SESSIONS_VALUE;
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -66,7 +64,7 @@ export function FeedbackPanel() {
 
   const toggleArchived = (checked) => {
     setShowArchived(checked);
-    setSelectedClass(ALL_CLASSES_VALUE);
+    setSelectedClass('');
   };
 
   useEffect(() => {
@@ -79,7 +77,7 @@ export function FeedbackPanel() {
           if (fromUrl && list.some((c) => c.classCode === fromUrl)) return fromUrl;
           if (prev === ALL_CLASSES_VALUE) return prev;
           if (prev && list.some((c) => c.classCode === prev)) return prev;
-          return ALL_CLASSES_VALUE;
+          return '';
         });
       })
       .catch((error) => {
@@ -88,11 +86,6 @@ export function FeedbackPanel() {
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    const fromUrl = searchParams.get('session');
-    setSessionFilter(fromUrl || ALL_SESSIONS_VALUE);
-  }, [selectedClass, searchParams]);
 
   const loadSnapshot = useCallback(
     async ({ force = false, initial = false } = {}) => {
@@ -130,14 +123,6 @@ export function FeedbackPanel() {
   const currentSession = isAllClasses
     ? maxCurrentSession(scopedClasses)
     : Number(selectedClassDoc?.curriculumCurrentSession) || 0;
-  const sessionOptions = useMemo(
-    () =>
-      isAllClasses
-        ? sessionNumbersUpToCurrentMulti(scopedClasses)
-        : sessionNumbersUpToCurrent(selectedClassDoc),
-    [isAllClasses, scopedClasses, selectedClassDoc],
-  );
-
   const scopedReports = useMemo(() => {
     if (isAllClasses) {
       return filterBySessionScopeMulti(reports, classesByCode, sessionFilter);
@@ -224,25 +209,20 @@ export function FeedbackPanel() {
               showArchived={showArchived}
               onShowArchivedChange={toggleArchived}
               allowAll
+              autoSelectFirst={false}
               allLabel={`Tất cả lớp${showArchived ? ' lưu trữ' : ' đang hoạt động'}`}
               showStudentCount
             />
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <Select value={sessionFilter} onChange={(e) => setSessionFilter(e.target.value)}>
-              <option value={ALL_SESSIONS_VALUE}>
-                Tất cả buổi{currentSession > 0 ? ` (đến buổi ${currentSession})` : ''}
-              </option>
-              {sessionOptions.map((s) => (
-                <option key={s} value={String(s)}>
-                  Buổi {s}
-                  {currentSession === s ? ' (hiện tại)' : ''}
-                </option>
-              ))}
-            </Select>
-            <Input placeholder="Tìm học sinh..." value={search} onChange={(e) => setSearch(e.target.value)} />
-            </div>
+            <Input
+              placeholder={selectedClass ? 'Tìm học sinh...' : 'Chọn lớp để tìm học sinh...'}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              disabled={!selectedClass}
+            />
           </div>
 
+          {!selectedClass ? null : (
+            <>
           <AdminSnapshotControls
             lastLoadedAt={lastLoadedAt}
             refreshing={refreshing}
@@ -303,6 +283,8 @@ export function FeedbackPanel() {
                 />
               ))}
             </div>
+          )}
+            </>
           )}
         </>
       )}

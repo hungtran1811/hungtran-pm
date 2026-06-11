@@ -6,10 +6,10 @@ import { Badge } from '../../ui/components/Badge.jsx';
 import { EmptyState } from '../../ui/components/EmptyState.jsx';
 import { SkeletonRows } from '../../ui/components/Skeleton.jsx';
 import { ClassFilterBar } from '../../ui/components/ClassFilterBar.jsx';
-import { Select, Input } from '../../ui/components/Field.jsx';
+import { Input } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { StudentHistoryModal } from '../../ui/components/StudentHistoryModal.jsx';
-import { STATUSES, STATUS_TONES } from '../../constants/index.js';
+import { STATUS_TONES } from '../../constants/index.js';
 import { ALL_CLASSES_VALUE, resolveScopedClasses } from '../../lib/classFilterScope.js';
 import { invalidateAdminDataCache } from '../../lib/adminDataCache.js';
 import { loadAdminClasses, loadReportsPanelSnapshot } from '../../lib/adminPanelData.js';
@@ -24,14 +24,13 @@ import {
 export function ReportsPanel() {
   const toast = useToast();
   const [classes, setClasses] = useState([]);
-  const [selectedClass, setSelectedClass] = useState(ALL_CLASSES_VALUE);
+  const [selectedClass, setSelectedClass] = useState('');
   const [reports, setReports] = useState([]);
   const [students, setStudents] = useState([]);
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastLoadedAt, setLastLoadedAt] = useState(null);
-  const [statusFilter, setStatusFilter] = useState('');
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [historyTarget, setHistoryTarget] = useState(null);
@@ -45,7 +44,7 @@ export function ReportsPanel() {
 
   const toggleArchived = (checked) => {
     setShowArchived(checked);
-    setSelectedClass(ALL_CLASSES_VALUE);
+    setSelectedClass('');
   };
 
   useEffect(() => {
@@ -56,7 +55,7 @@ export function ReportsPanel() {
         setSelectedClass((prev) => {
           if (prev === ALL_CLASSES_VALUE) return prev;
           if (prev && list.some((c) => c.classCode === prev)) return prev;
-          return ALL_CLASSES_VALUE;
+          return '';
         });
       })
       .catch((error) => {
@@ -112,11 +111,6 @@ export function ReportsPanel() {
       student,
       report: latestByStudent.get(student.id) || null,
     }));
-    if (statusFilter === '__none__') {
-      list = list.filter((item) => !item.report);
-    } else if (statusFilter) {
-      list = list.filter((item) => item.report?.status === statusFilter);
-    }
     const q = search.trim().toLowerCase();
     if (q) list = list.filter((item) => item.student.fullName.toLowerCase().includes(q));
     return list.sort((a, b) => {
@@ -125,7 +119,7 @@ export function ReportsPanel() {
       }
       return a.student.fullName.localeCompare(b.student.fullName, 'vi');
     });
-  }, [students, latestByStudent, statusFilter, search, isAllClasses]);
+  }, [students, latestByStudent, search, isAllClasses]);
 
   const reportsForCopy = useMemo(
     () => visible.map((item) => item.report).filter(Boolean),
@@ -165,23 +159,20 @@ export function ReportsPanel() {
               showArchived={showArchived}
               onShowArchivedChange={toggleArchived}
               allowAll
+              autoSelectFirst={false}
               allLabel={`Tất cả lớp${showArchived ? ' lưu trữ' : ' đang hoạt động'}`}
               showStudentCount
             />
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="">Tất cả học sinh</option>
-              <option value="__none__">Chưa báo cáo</option>
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </Select>
-            <Input placeholder="Tìm học sinh..." value={search} onChange={(e) => setSearch(e.target.value)} />
-            </div>
+            <Input
+              placeholder={selectedClass ? 'Tìm học sinh...' : 'Chọn lớp để tìm học sinh...'}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              disabled={!selectedClass}
+            />
           </div>
 
+          {!selectedClass ? null : (
+            <>
           <AdminSnapshotControls
             lastLoadedAt={lastLoadedAt}
             refreshing={refreshing}
@@ -234,6 +225,8 @@ export function ReportsPanel() {
                 ),
               )}
             </div>
+          )}
+            </>
           )}
         </>
       )}

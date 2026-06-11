@@ -7,7 +7,7 @@ import { ConfirmDialog } from '../../ui/components/ConfirmDialog.jsx';
 import { EmptyState } from '../../ui/components/EmptyState.jsx';
 import { SkeletonRows } from '../../ui/components/Skeleton.jsx';
 import { ClassFilterBar } from '../../ui/components/ClassFilterBar.jsx';
-import { Select, Input } from '../../ui/components/Field.jsx';
+import { Input } from '../../ui/components/Field.jsx';
 import { QuizAttemptHistoryModal } from '../../ui/components/QuizAttemptHistoryModal.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { ALL_CLASSES_VALUE, buildClassesByCode, resolveScopedClasses } from '../../lib/classFilterScope.js';
@@ -26,9 +26,6 @@ import {
   ALL_SESSIONS_VALUE,
   filterBySessionScope,
   filterBySessionScopeMulti,
-  maxCurrentSession,
-  sessionNumbersUpToCurrent,
-  sessionNumbersUpToCurrentMulti,
 } from '../../lib/sessionScope.js';
 
 function formatDuration(seconds) {
@@ -127,7 +124,6 @@ export function QuizPanel({ activeOnly = false }) {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastLoadedAt, setLastLoadedAt] = useState(null);
-  const [sessionFilter, setSessionFilter] = useState(ALL_SESSIONS_VALUE);
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [historyTarget, setHistoryTarget] = useState(null);
@@ -147,10 +143,6 @@ export function QuizPanel({ activeOnly = false }) {
   const classesByCode = useMemo(() => buildClassesByCode(scopedClasses), [scopedClasses]);
   const isAllClasses = selectedClass === ALL_CLASSES_VALUE;
   const selectedClassDoc = isAllClasses ? null : scopedClasses[0] || null;
-  const currentSession = isAllClasses
-    ? maxCurrentSession(scopedClasses)
-    : Number(selectedClassDoc?.curriculumCurrentSession) || 0;
-
   useEffect(() => {
     loadAdminClasses()
       .then((list) => {
@@ -201,26 +193,14 @@ export function QuizPanel({ activeOnly = false }) {
     loadSnapshot({ force: true });
   };
 
-  useEffect(() => {
-    setSessionFilter(ALL_SESSIONS_VALUE);
-  }, [selectedClass]);
-
-  const sessionOptions = useMemo(
-    () =>
-      isAllClasses
-        ? sessionNumbersUpToCurrentMulti(scopedClasses)
-        : sessionNumbersUpToCurrent(selectedClassDoc),
-    [isAllClasses, scopedClasses, selectedClassDoc],
-  );
-
   const filtered = useMemo(() => {
     let list = isAllClasses
-      ? filterBySessionScopeMulti(submissions, classesByCode, sessionFilter)
-      : filterBySessionScope(submissions, selectedClassDoc, sessionFilter);
+      ? filterBySessionScopeMulti(submissions, classesByCode, ALL_SESSIONS_VALUE)
+      : filterBySessionScope(submissions, selectedClassDoc, ALL_SESSIONS_VALUE);
     const q = search.trim().toLowerCase();
     if (q) list = list.filter((s) => s.studentName.toLowerCase().includes(q));
     return list;
-  }, [submissions, sessionFilter, search, selectedClassDoc, isAllClasses, classesByCode]);
+  }, [submissions, search, selectedClassDoc, isAllClasses, classesByCode]);
 
   const grouped = useMemo(() => {
     const map = new Map();
@@ -338,20 +318,11 @@ export function QuizPanel({ activeOnly = false }) {
               }
               showStudentCount
             />
-            <div className="grid gap-3 sm:grid-cols-2">
-            <Select value={sessionFilter} onChange={(e) => setSessionFilter(e.target.value)}>
-              <option value={ALL_SESSIONS_VALUE}>
-                Tất cả buổi{currentSession > 0 ? ` (đến buổi ${currentSession})` : ''}
-              </option>
-              {sessionOptions.map((s) => (
-                <option key={s} value={String(s)}>
-                  Buổi {s}
-                  {currentSession === s ? ' (hiện tại)' : ''}
-                </option>
-              ))}
-            </Select>
-            <Input placeholder="Tìm học sinh..." value={search} onChange={(e) => setSearch(e.target.value)} />
-            </div>
+            <Input
+              placeholder="Tìm học sinh..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
 
           <AdminSnapshotControls

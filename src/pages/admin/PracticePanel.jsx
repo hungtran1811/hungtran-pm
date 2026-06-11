@@ -177,18 +177,20 @@ export function PracticePanel({ activeOnly = false }) {
           }
           showStudentCount
         />
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Select value={sessionFilter} onChange={(e) => setSessionFilter(e.target.value)}>
-            <option value={ALL_SESSIONS_VALUE}>
-              Tất cả buổi{currentSession > 0 ? ` (đến buổi ${currentSession})` : ''}
-            </option>
-            {sessionOptions.map((s) => (
-              <option key={s} value={String(s)}>
-                Buổi {s}
-                {currentSession === s ? ' (hiện tại)' : ''}
+        <div className={`grid gap-3 ${!isAllClasses && selectedClass ? 'sm:grid-cols-2' : ''}`}>
+          {!isAllClasses && selectedClass && (
+            <Select value={sessionFilter} onChange={(e) => setSessionFilter(e.target.value)}>
+              <option value={ALL_SESSIONS_VALUE}>
+                Tất cả buổi{currentSession > 0 ? ` (đến buổi ${currentSession})` : ''}
               </option>
-            ))}
-          </Select>
+              {sessionOptions.map((s) => (
+                <option key={s} value={String(s)}>
+                  Buổi {s}
+                  {currentSession === s ? ' (hiện tại)' : ''}
+                </option>
+              ))}
+            </Select>
+          )}
           <Input placeholder="Tìm học sinh..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
       </div>

@@ -12,7 +12,9 @@
     "migrate:lessons": "node scripts/migrate-lessons-subcollection.js",
     "migrate:lessons:dry": "node scripts/migrate-lessons-subcollection.js --dry-run",
     "migrate:feedback-index": "node scripts/migrate-student-feedback-index.js",
-    "migrate:feedback-index:dry": "node scripts/migrate-student-feedback-index.js --dry-run"
+    "migrate:feedback-index:dry": "node scripts/migrate-student-feedback-index.js --dry-run",
+    "audit:curriculum": "node scripts/audit-curriculum-collections.js",
+    "inspect:lessons": "node scripts/inspect-program-lessons.js"
   },
   "dependencies": {
     "@codemirror/lang-python": "^6.2.1",

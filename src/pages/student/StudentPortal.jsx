@@ -20,7 +20,9 @@ import { ProgressReportView } from './ProgressReportView.jsx';
 import { StudentOverview } from './StudentOverview.jsx';
 import { ProjectNamePendingBanner, ProjectNameSetup } from './ProjectNameSetup.jsx';
 import {
+  classUsesProjectNames,
   isProjectNameApproved,
+  isProjectNameAwaitingReview,
   needsProjectNameSetup,
   projectNameDisplay,
   resolveFinalMode,
@@ -173,7 +175,14 @@ export function StudentPortalPage() {
 
   const isFinalPhase = classDoc.curriculumPhase === 'final';
   const finalMode = resolveFinalMode(classDoc, program);
+  const usesProjectNames = classUsesProjectNames(classDoc, program);
+  const awaitingProjectReview = isProjectNameAwaitingReview(selectedStudent);
   const showProjectSetup = needsProjectNameSetup(selectedStudent, classDoc, program);
+  const showProjectNameSection = usesProjectNames && (
+    awaitingProjectReview
+    || selectedStudent.projectNameStatus === 'rejected'
+    || (isFinalPhase && showProjectSetup)
+  );
   const displayProject = projectNameDisplay(selectedStudent);
 
   return (
@@ -193,10 +202,12 @@ export function StudentPortalPage() {
         )}
       </div>
 
-      {showProjectSetup ? (
-        <ProjectNameSetup student={selectedStudent} />
-      ) : (
-        <ProjectNamePendingBanner student={selectedStudent} />
+      {showProjectNameSection && (
+        showProjectSetup && !awaitingProjectReview ? (
+          <ProjectNameSetup student={selectedStudent} />
+        ) : (
+          <ProjectNamePendingBanner student={selectedStudent} />
+        )
       )}
 
       <StudentOverview

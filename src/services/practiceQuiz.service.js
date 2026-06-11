@@ -14,7 +14,12 @@ import {
 import { db } from '../config/firebase.js';
 import { toPracticeQuizSubmissionModel } from '../models/index.js';
 import { buildQuizId, buildQuizAttemptId } from './quiz.service.js';
-import { resolveProgramId } from './curriculum.service.js';
+import {
+  quizBankIdCandidates,
+  quizBankStoragePrefix,
+  resolveProgramId,
+} from './curriculum.service.js';
+import { getFirstExistingDoc } from '../lib/firestoreCandidates.js';
 
 export function buildPracticeSubmissionId(classCode, studentId, lessonId) {
   return buildQuizAttemptId(classCode, studentId, lessonId);
@@ -54,10 +59,11 @@ function normalizePracticeQuestions(questions = []) {
 
 export async function getPublicPracticeQuiz(programId, lessonId) {
   if (!programId || !lessonId) return null;
-  const snapshot = await getDoc(
-    doc(db, 'practiceQuizPublicBanks', buildQuizId(programId, lessonId)),
+  const snapshot = await getFirstExistingDoc(
+    'practiceQuizPublicBanks',
+    quizBankIdCandidates(programId, lessonId),
   );
-  if (!snapshot.exists()) return null;
+  if (!snapshot) return null;
   const data = snapshot.data();
   return {
     quizId: snapshot.id,
@@ -77,10 +83,11 @@ export async function getPublicPracticeQuiz(programId, lessonId) {
 
 export async function getPracticeAnswerKey(programId, lessonId) {
   if (!programId || !lessonId) return null;
-  const snapshot = await getDoc(
-    doc(db, 'practiceQuizAnswerBanks', buildQuizId(programId, lessonId)),
+  const snapshot = await getFirstExistingDoc(
+    'practiceQuizAnswerBanks',
+    quizBankIdCandidates(programId, lessonId),
   );
-  if (!snapshot.exists()) return null;
+  if (!snapshot) return null;
   const data = snapshot.data();
   return { answers: data.answers && typeof data.answers === 'object' ? data.answers : {} };
 }
@@ -106,8 +113,8 @@ export async function loadPracticeQuizForEditor(programId, lessonId, sessionNumb
 }
 
 export async function savePracticeQuizBank(programId, lesson) {
-  const resolved = resolveProgramId(programId);
-  const quizId = buildQuizId(resolved, lesson.id);
+  const storagePrefix = quizBankStoragePrefix(programId);
+  const quizId = `${storagePrefix}__${lesson.id}`;
   const quiz = lesson.practiceQuiz ?? emptyPracticeQuiz();
   const questions = normalizePracticeQuestions(quiz.questions);
   const enabled = Boolean(quiz.enabled) && questions.length > 0;
@@ -118,7 +125,7 @@ export async function savePracticeQuizBank(programId, lesson) {
   if (!enabled) {
     await setDoc(publicRef, {
       quizId,
-      programId: resolved,
+      programId: storagePrefix,
       lessonId: lesson.id,
       sessionNumber: Number(lesson.sessionNumber) || 1,
       title: quiz.title?.trim() || `Ôn tập buổi ${lesson.sessionNumber}`,
@@ -137,7 +144,7 @@ export async function savePracticeQuizBank(programId, lesson) {
 
   await setDoc(publicRef, {
     quizId,
-    programId: resolved,
+    programId: storagePrefix,
     lessonId: lesson.id,
     sessionNumber: Number(lesson.sessionNumber) || 1,
     title: quiz.title?.trim() || `Ôn tập buổi ${lesson.sessionNumber}`,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   BarChart,
@@ -19,6 +19,7 @@ import {
   Layers,
   Activity,
   RefreshCw,
+  Download,
 } from 'lucide-react';
 import { Button } from '../../ui/components/Button.jsx';
 import { AppShell } from '../../ui/components/AppShell.jsx';
@@ -64,10 +65,12 @@ export function AnalyticsPage() {
   const [students, setStudents] = useState([]);
   const [feedbacksByClass, setFeedbacksByClass] = useState({});
   const [reportsByClass, setReportsByClass] = useState({});
-  const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastLoadedAt, setLastLoadedAt] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [filtersDirty, setFiltersDirty] = useState(false);
 
   const analyticsClasses = useMemo(
     () => filterClassesForAnalytics(classes, showArchived),
@@ -81,8 +84,9 @@ export function AnalyticsPage() {
 
   const scopeClasses = tab === 'active' ? activeClasses : analyticsClasses;
 
-  const loadAnalytics = async ({ force = false, initial = false } = {}) => {
-    if (initial) setLoading(true);
+  const loadAnalytics = async ({ force = false } = {}) => {
+    const isFirstLoad = !hasLoaded;
+    if (isFirstLoad) setLoading(true);
     else setRefreshing(true);
     try {
       const base = await fetchAdminBaseData({ force });
@@ -95,7 +99,9 @@ export function AnalyticsPage() {
       const { feedbacksByClass: fb, reportsByClass: rp } = await loadAnalyticsByClass(codes);
       setFeedbacksByClass(fb);
       setReportsByClass(rp);
+      setHasLoaded(true);
       setLastLoadedAt(Date.now());
+      setFiltersDirty(false);
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -104,10 +110,9 @@ export function AnalyticsPage() {
     }
   };
 
-  useEffect(() => {
-    loadAnalytics({ initial: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showArchived]);
+  const handleLoad = () => {
+    loadAnalytics({ force: !hasLoaded });
+  };
 
   const handleRefresh = () => {
     invalidateAdminDataCache();
@@ -160,54 +165,89 @@ export function AnalyticsPage() {
   const weeklyTrend = useMemo(() => aggregateWeeklyProgress(scopedReports), [scopedReports]);
   const heatmap = useMemo(() => sessionUnderstandingHeatmap(scopedFeedbacks), [scopedFeedbacks]);
 
+  const toolbar = (
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap gap-2">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+              tab === t.id
+                ? 'bg-brand-600 text-white shadow-sm'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {tab === 'all' && (
+        <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+          <input
+            type="checkbox"
+            checked={showArchived}
+            onChange={(e) => {
+              setShowArchived(e.target.checked);
+              if (hasLoaded) setFiltersDirty(true);
+            }}
+            className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+          />
+          Lớp lưu trữ
+        </label>
+      )}
+      {hasLoaded && (
+        <Button
+          variant="subtle"
+          size="sm"
+          onClick={handleRefresh}
+          loading={refreshing}
+          className="ml-auto"
+        >
+          <RefreshCw className="h-4 w-4" />
+          Làm mới
+        </Button>
+      )}
+    </div>
+  );
+
   return (
     <AppShell title="Thống kê">
-      {loading ? (
+      {!hasLoaded && !loading ? (
+        <div className="space-y-5">
+          {toolbar}
+          <EmptyState
+            icon={<BarChart3 className="h-7 w-7" />}
+            title="Chưa tải dữ liệu thống kê"
+            description="Bấm nút bên dưới để xem thống kê."
+            action={(
+              <Button size="lg" onClick={handleLoad}>
+                <Download className="h-5 w-5" />
+                Tải thống kê
+              </Button>
+            )}
+          />
+        </div>
+      ) : loading ? (
         <div className="space-y-6">
+          {toolbar}
           <SkeletonCardGrid count={4} />
           <SkeletonRows count={4} />
         </div>
       ) : (
         <div className="space-y-6">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex flex-wrap gap-2">
-              {TABS.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setTab(t.id)}
-                  className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-                    tab === t.id
-                      ? 'bg-brand-600 text-white shadow-sm'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
+          {toolbar}
+
+          {filtersDirty && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+              <span>Đã đổi bộ lọc — bấm «Làm mới» để tải lại dữ liệu.</span>
+              <Button size="sm" onClick={handleRefresh} loading={refreshing}>
+                <RefreshCw className="h-4 w-4" />
+                Làm mới
+              </Button>
             </div>
-            {tab === 'all' && (
-              <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                <input
-                  type="checkbox"
-                  checked={showArchived}
-                  onChange={(e) => setShowArchived(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                />
-                Lớp lưu trữ
-              </label>
-            )}
-            <Button
-              variant="subtle"
-              size="sm"
-              onClick={handleRefresh}
-              loading={refreshing}
-              className="ml-auto"
-            >
-              <RefreshCw className="h-4 w-4" />
-              Làm mới
-            </Button>
-          </div>
+          )}
 
           {lastLoadedAt && <SnapshotBadge loadedAt={lastLoadedAt} />}
 

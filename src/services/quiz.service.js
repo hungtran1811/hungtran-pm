@@ -19,7 +19,12 @@ import {
   formatReferenceCodeBlock,
   parseReferenceCodeBlock,
 } from '../utils/codeCompare.js';
-import { resolveProgramId } from './curriculum.service.js';
+import {
+  quizBankIdCandidates,
+  quizBankStoragePrefix,
+  resolveProgramId,
+} from './curriculum.service.js';
+import { getFirstExistingDoc } from '../lib/firestoreCandidates.js';
 
 function normalizeCodeReferencesMap(raw) {
   if (!raw || typeof raw !== 'object') return {};
@@ -32,8 +37,7 @@ function normalizeCodeReferencesMap(raw) {
 }
 
 export function buildQuizId(programId, lessonId) {
-  const resolved = resolveProgramId(programId);
-  return `${resolved}__${lessonId}`;
+  return `${quizBankStoragePrefix(programId)}__${lessonId}`;
 }
 
 export function buildQuizAttemptId(classCode, studentId, lessonId) {
@@ -126,8 +130,11 @@ function normalizeQuizQuestions(questions = []) {
 
 export async function getPublicQuiz(programId, lessonId) {
   if (!programId || !lessonId) return null;
-  const snapshot = await getDoc(doc(db, 'quizPublicQuestionBanks', buildQuizId(programId, lessonId)));
-  if (!snapshot.exists()) return null;
+  const snapshot = await getFirstExistingDoc(
+    'quizPublicQuestionBanks',
+    quizBankIdCandidates(programId, lessonId),
+  );
+  if (!snapshot) return null;
   const data = snapshot.data();
   const questions = (Array.isArray(data.questions) ? data.questions : []).map((q) => {
     if (q.type === 'code') {
@@ -161,8 +168,11 @@ export async function getPublicQuiz(programId, lessonId) {
 
 export async function getQuizAnswerKey(programId, lessonId) {
   if (!programId || !lessonId) return null;
-  const snapshot = await getDoc(doc(db, 'quizQuestionBanks', buildQuizId(programId, lessonId)));
-  if (!snapshot.exists()) return null;
+  const snapshot = await getFirstExistingDoc(
+    'quizQuestionBanks',
+    quizBankIdCandidates(programId, lessonId),
+  );
+  if (!snapshot) return null;
   const data = snapshot.data();
   return {
     answers: data.answers && typeof data.answers === 'object' ? data.answers : {},
@@ -208,8 +218,8 @@ export async function loadQuizForEditor(programId, lessonId, sessionNumber) {
 }
 
 export async function saveQuizBank(programId, lesson) {
-  const resolved = resolveProgramId(programId);
-  const quizId = buildQuizId(resolved, lesson.id);
+  const storagePrefix = quizBankStoragePrefix(programId);
+  const quizId = `${storagePrefix}__${lesson.id}`;
   const quiz = lesson.quiz ?? emptyQuiz();
   const questions = normalizeQuizQuestions(quiz.questions);
   const enabled = Boolean(quiz.enabled) && questions.length > 0;
@@ -225,7 +235,7 @@ export async function saveQuizBank(programId, lesson) {
   if (!enabled) {
     await setDoc(publicRef, {
       quizId,
-      programId: resolved,
+      programId: storagePrefix,
       lessonId: lesson.id,
       sessionNumber: Number(lesson.sessionNumber) || 1,
       title: quiz.title?.trim() || `Quiz buổi ${lesson.sessionNumber}`,
@@ -261,7 +271,7 @@ export async function saveQuizBank(programId, lesson) {
 
   await setDoc(publicRef, {
     quizId,
-    programId: resolved,
+    programId: storagePrefix,
     lessonId: lesson.id,
     sessionNumber: Number(lesson.sessionNumber) || 1,
     title: quiz.title?.trim() || `Quiz buổi ${lesson.sessionNumber}`,

@@ -1,5 +1,25 @@
 /** @typedef {'project' | 'exam'} FinalMode */
 
+const PROJECT_NAME_PLACEHOLDERS = new Set([
+  'không có',
+  'khong co',
+  'chưa có',
+  'chua co',
+  '—',
+  '-',
+  'n/a',
+  'na',
+  'none',
+]);
+
+/** Tên dự án thật — loại placeholder cũ (vd. "Không có") và chuỗi rỗng. */
+export function meaningfulProjectName(name) {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return '';
+  if (PROJECT_NAME_PLACEHOLDERS.has(trimmed.toLowerCase())) return '';
+  return trimmed;
+}
+
 /**
  * @param {{ finalMode?: string } | null | undefined} classDoc
  * @param {{ finalMode?: string } | null | undefined} [program]
@@ -24,13 +44,12 @@ export function isProjectNameApproved(student) {
 /** Admin điền tay hoặc học sinh gửi — chưa có trạng thái approved. */
 export function isLegacyUnapprovedProject(student) {
   if (!student || student.projectNameStatus) return false;
-  return Boolean(student.projectName?.trim());
+  return Boolean(meaningfulProjectName(student.projectName));
 }
 
 export function canReviewProjectName(student) {
   if (!student) return false;
-  if (student.projectNameStatus === 'pending') return true;
-  return isLegacyUnapprovedProject(student);
+  return isProjectNameAwaitingReview(student);
 }
 
 export function canReviewStudentProjectName(student, classDoc) {
@@ -39,8 +58,12 @@ export function canReviewStudentProjectName(student, classDoc) {
 
 export function projectNameAwaitingReview(student) {
   if (!student) return '';
-  if (student.projectNameStatus === 'pending') return student.projectNameSubmission?.trim() || '';
-  if (isLegacyUnapprovedProject(student)) return student.projectName?.trim() || '';
+  if (student.projectNameStatus === 'pending') {
+    return meaningfulProjectName(student.projectNameSubmission);
+  }
+  if (isLegacyUnapprovedProject(student)) {
+    return meaningfulProjectName(student.projectName);
+  }
   return '';
 }
 
@@ -68,13 +91,16 @@ export function needsProjectNameSetup(student, classDoc, program) {
 
 export function isProjectNameAwaitingReview(student) {
   if (!student || isProjectNameApproved(student)) return false;
-  return student.projectNameStatus === 'pending' || isLegacyUnapprovedProject(student);
+  return Boolean(projectNameAwaitingReview(student));
 }
 
 export function projectNameDisplay(student) {
   if (!student) return '';
-  if (isProjectNameApproved(student)) return student.projectName?.trim() || '';
-  return projectNameAwaitingReview(student) || student.projectNameSubmission?.trim() || '';
+  if (isProjectNameApproved(student)) return meaningfulProjectName(student.projectName);
+  return (
+    projectNameAwaitingReview(student)
+    || meaningfulProjectName(student.projectNameSubmission)
+  );
 }
 
 /** Nhãn hiển thị cho học sinh lớp kiểm tra (không làm sản phẩm). */

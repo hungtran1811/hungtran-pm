@@ -12,6 +12,7 @@ import {
   ChevronRight,
   GraduationCap,
   CalendarDays,
+  Gamepad2,
 } from 'lucide-react';
 import { AppShell } from '../../ui/components/AppShell.jsx';
 import { StatCard } from '../../ui/components/StatCard.jsx';
@@ -269,6 +270,11 @@ export function DashboardPage() {
                 to="/admin/analytics"
                 icon={<BarChart3 className="h-5 w-5" />}
                 title="Thống kê"
+              />
+              <QuickAction
+                to="/admin/games"
+                icon={<Gamepad2 className="h-5 w-5" />}
+                title="Mini game — quay tên"
               />
               <SessionQuickSet
                 classes={classes}

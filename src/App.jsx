@@ -9,6 +9,7 @@ import { ReportsHubPage } from './pages/admin/ReportsHub.jsx';
 import { LessonsPage } from './pages/admin/Lessons.jsx';
 import { AnalyticsPage } from './pages/admin/AnalyticsPage.jsx';
 import { ScoresHubPage } from './pages/admin/ScoresHub.jsx';
+import { MiniGamesPage } from './pages/admin/MiniGames.jsx';
 import { HomePage } from './pages/Home.jsx';
 import { StudentPortalPage } from './pages/student/StudentPortal.jsx';
 import { NotFoundPage } from './pages/NotFound.jsx';
@@ -96,6 +97,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <LessonsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/games"
+        element={
+          <ProtectedRoute>
+            <MiniGamesPage />
           </ProtectedRoute>
         }
       />

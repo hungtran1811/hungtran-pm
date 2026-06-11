@@ -8,6 +8,7 @@ import {
   BookOpen,
   BarChart3,
   ClipboardList,
+  Gamepad2,
   Menu,
   X,
   LogOut,
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
   { to: '/admin/scores', label: 'Điểm số', icon: ClipboardList },
   { to: '/admin/analytics', label: 'Thống kê', icon: BarChart3 },
   { to: '/admin/lessons', label: 'Bài giảng', icon: BookOpen },
+  { to: '/admin/games', label: 'Mini game', icon: Gamepad2 },
 ];
 
 function NavItems({ onNavigate }) {

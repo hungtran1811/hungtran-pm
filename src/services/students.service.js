@@ -18,6 +18,7 @@ import {
 import { db } from '../config/firebase.js';
 import { toStudentModel } from '../models/index.js';
 import { normalizeKey } from '../lib/firestore.js';
+import { isLegacyUnapprovedProject, meaningfulProjectName } from '../lib/classFinalMode.js';
 import { DEFAULT_STAGE, DEFAULT_STATUS } from '../constants/index.js';
 
 const studentsRef = collection(db, 'students');
@@ -186,7 +187,7 @@ export async function submitProjectName(studentId, projectName) {
   if (status === 'approved') {
     throw new Error('Tên dự án đã được duyệt.');
   }
-  if (!status && student.projectName?.trim()) {
+  if (!status && meaningfulProjectName(student.projectName)) {
     throw new Error('Tên dự án đang chờ giáo viên duyệt.');
   }
   await updateDoc(doc(db, 'students', studentId), {
@@ -201,11 +202,14 @@ export async function submitProjectName(studentId, projectName) {
 export async function reviewProjectName(studentId, { approved, reviewNote = '' }) {
   const student = await getStudent(studentId);
   const isPending = student?.projectNameStatus === 'pending';
-  const isLegacy = !student?.projectNameStatus && Boolean(student?.projectName?.trim());
+  const isLegacy = isLegacyUnapprovedProject(student);
   if (!student || (!isPending && !isLegacy)) {
     throw new Error('Không có tên dự án đang chờ duyệt.');
   }
-  const candidate = (student.projectNameSubmission || student.projectName || '').trim();
+  const candidate = meaningfulProjectName(student.projectNameSubmission || student.projectName);
+  if (!candidate) {
+    throw new Error('Không có tên dự án đang chờ duyệt.');
+  }
   const note = reviewNote.trim();
   if (approved) {
     await updateDoc(doc(db, 'students', studentId), {
