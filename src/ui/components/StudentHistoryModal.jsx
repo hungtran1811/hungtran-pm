@@ -104,7 +104,7 @@ export function StudentHistoryModal({ student, onClose, feedbackOnly = false }) 
 
 function TimelineReport({ report }) {
   return (
-    <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+    <div className="card-prose min-w-0 overflow-hidden rounded-xl border border-slate-200 p-4 dark:border-slate-700">
       <div className="flex flex-wrap items-center gap-2">
         <Badge tone="brand">Báo cáo tiến độ</Badge>
         <Badge tone={STATUS_TONES[report.status] || 'slate'}>{report.status}</Badge>
@@ -117,17 +117,17 @@ function TimelineReport({ report }) {
       </div>
       <p className="mt-2 text-xs font-medium text-slate-500">{report.stage}</p>
       {report.doneToday && (
-        <p className="mt-1.5 text-sm text-slate-700 dark:text-slate-200">
+        <p className="card-prose mt-1.5 text-sm text-slate-700 dark:text-slate-200">
           <span className="font-medium">Đã làm:</span> {report.doneToday}
         </p>
       )}
       {report.nextGoal && (
-        <p className="mt-1 text-sm text-slate-700 dark:text-slate-200">
+        <p className="card-prose mt-1 text-sm text-slate-700 dark:text-slate-200">
           <span className="font-medium">Mục tiêu tiếp:</span> {report.nextGoal}
         </p>
       )}
       {report.difficulties && (
-        <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+        <p className="card-prose mt-1 text-sm text-amber-700 dark:text-amber-300">
           <span className="font-medium">Khó khăn:</span> {report.difficulties}
         </p>
       )}
@@ -137,7 +137,7 @@ function TimelineReport({ report }) {
 
 function TimelineFeedback({ feedback }) {
   return (
-    <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+    <div className="card-prose min-w-0 overflow-hidden rounded-xl border border-slate-200 p-4 dark:border-slate-700">
       <div className="flex flex-wrap items-center gap-2">
         <Badge tone="amber">Phản hồi buổi {feedback.sessionNumber}</Badge>
         <span className="text-xs text-slate-400">
@@ -148,17 +148,17 @@ function TimelineFeedback({ feedback }) {
         </span>
       </div>
       {feedback.understoodTopics && (
-        <p className="mt-2 text-sm text-slate-700 dark:text-slate-200">
+        <p className="card-prose mt-2 text-sm text-slate-700 dark:text-slate-200">
           <span className="font-medium">Đã hiểu:</span> {feedback.understoodTopics}
         </p>
       )}
       {feedback.unclearTopics && (
-        <p className="mt-1 text-sm text-slate-700 dark:text-slate-200">
+        <p className="card-prose mt-1 text-sm text-slate-700 dark:text-slate-200">
           <span className="font-medium">Chưa rõ:</span> {feedback.unclearTopics}
         </p>
       )}
       {feedback.supportRequest && (
-        <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+        <p className="card-prose mt-1 text-sm text-amber-700 dark:text-amber-300">
           <span className="font-medium">Cần hỗ trợ:</span> {feedback.supportRequest}
         </p>
       )}

@@ -11,8 +11,7 @@ import { Input } from '../../ui/components/Field.jsx';
 import { QuizAttemptHistoryModal } from '../../ui/components/QuizAttemptHistoryModal.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { ALL_CLASSES_VALUE, buildClassesByCode, resolveScopedClasses } from '../../lib/classFilterScope.js';
-import { invalidateAdminDataCache } from '../../lib/adminDataCache.js';
-import { loadAdminClasses, loadQuizPanelSnapshot } from '../../lib/adminPanelData.js';
+import { invalidateAdminSnapshots, loadAdminClasses, loadQuizPanelSnapshot } from '../../lib/adminPanelData.js';
 import { AdminSnapshotControls } from '../../ui/components/AdminSnapshotControls.jsx';
 import {
   countPendingCodeGrades,
@@ -189,7 +188,7 @@ export function QuizPanel({ activeOnly = false }) {
   }, [loadSnapshot]);
 
   const handleRefresh = () => {
-    invalidateAdminDataCache();
+    invalidateAdminSnapshots();
     loadSnapshot({ force: true });
   };
 

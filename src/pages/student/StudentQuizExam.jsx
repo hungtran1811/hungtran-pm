@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { Button } from '../../ui/components/Button.jsx';
 import { CodeQuestionPanel } from '../../ui/components/CodeQuestionPanel.jsx';
+import { EmptyState } from '../../ui/components/EmptyState.jsx';
+import { Spinner } from '../../ui/components/Spinner.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { getErrorMessage } from '../../lib/firestore.js';
 import {
@@ -92,6 +94,7 @@ export function StudentQuizExam({ lesson, classDoc, student, onPhaseChange }) {
   const [startedAtMs, setStartedAtMs] = useState(null);
   const [remainingSeconds, setRemainingSeconds] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [loadError, setLoadError] = useState(null);
   const autoSubmittedRef = useRef(false);
 
   useEffect(() => {
@@ -100,6 +103,7 @@ export function StudentQuizExam({ lesson, classDoc, student, onPhaseChange }) {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [publicQuiz, status] = await Promise.all([
         getPublicQuiz(programId, lesson.id),
@@ -116,13 +120,16 @@ export function StudentQuizExam({ lesson, classDoc, student, onPhaseChange }) {
       } else {
         setPhase('intro');
       }
-    } catch {
+    } catch (error) {
       setQuiz(null);
-      setPhase('hidden');
+      const message = getErrorMessage(error);
+      setLoadError(message);
+      setPhase('error');
+      toast.error(message);
     } finally {
       setLoading(false);
     }
-  }, [programId, lesson.id, classDoc.classCode, student.id]);
+  }, [programId, lesson.id, classDoc.classCode, student.id, toast]);
 
   useEffect(() => {
     load();
@@ -313,7 +320,33 @@ export function StudentQuizExam({ lesson, classDoc, student, onPhaseChange }) {
     });
   };
 
-  if (loading || phase === 'loading' || phase === 'hidden') return null;
+  if (loading || phase === 'loading') {
+    return (
+      <div className="mt-5 flex justify-center py-10">
+        <Spinner />
+      </div>
+    );
+  }
+
+  if (phase === 'error') {
+    return (
+      <div className="mt-5">
+        <EmptyState
+          icon={<AlertCircle className="h-7 w-7 text-red-500" />}
+          title="Không tải được bài kiểm tra"
+          description={loadError || 'Vui lòng thử lại sau.'}
+          action={
+            <Button size="sm" variant="secondary" onClick={load}>
+              <RotateCcw className="h-4 w-4" />
+              Thử lại
+            </Button>
+          }
+        />
+      </div>
+    );
+  }
+
+  if (phase === 'hidden') return null;
 
   const title = quiz.title || `Kiểm tra buổi ${lesson.sessionNumber}`;
   const timerUrgent = remainingSeconds !== null && remainingSeconds <= 300;

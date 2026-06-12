@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { TrendingUp, Copy, History } from 'lucide-react';
-import { AppShell } from '../../ui/components/AppShell.jsx';
+import { useSearchParams } from 'react-router-dom';
+import { TrendingUp, Copy } from 'lucide-react';
 import { Button } from '../../ui/components/Button.jsx';
 import { Badge } from '../../ui/components/Badge.jsx';
 import { EmptyState } from '../../ui/components/EmptyState.jsx';
@@ -9,31 +9,51 @@ import { ClassFilterBar } from '../../ui/components/ClassFilterBar.jsx';
 import { Input } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { StudentHistoryModal } from '../../ui/components/StudentHistoryModal.jsx';
+import {
+  PanelSummaryGrid,
+  PanelSummaryStat,
+  ProgressMiniBar,
+  SubmissionCardActions,
+  SubmissionCardShell,
+  SubmissionField,
+} from '../../ui/components/SubmissionDisplay.jsx';
 import { STATUS_TONES } from '../../constants/index.js';
 import { ALL_CLASSES_VALUE, resolveScopedClasses } from '../../lib/classFilterScope.js';
-import { invalidateAdminDataCache } from '../../lib/adminDataCache.js';
-import { loadAdminClasses, loadReportsPanelSnapshot } from '../../lib/adminPanelData.js';
+import { invalidateAdminSnapshots, loadAdminClasses, loadReportsPanelSnapshot } from '../../lib/adminPanelData.js';
 import { AdminSnapshotControls } from '../../ui/components/AdminSnapshotControls.jsx';
 import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
+import { reportFromStudentSnapshot } from '../../services/reports.service.js';
 import {
   buildClassExport,
   copyToClipboard,
   formatProgressReport,
 } from '../../utils/exportText.js';
 
-export function ReportsPanel() {
+export function ReportsPanel({
+  selectedClass: selectedClassProp,
+  onSelectedClassChange,
+  showArchived: showArchivedProp,
+  onShowArchivedChange,
+}) {
   const toast = useToast();
+  const [searchParams] = useSearchParams();
   const [classes, setClasses] = useState([]);
-  const [selectedClass, setSelectedClass] = useState('');
-  const [reports, setReports] = useState([]);
+  const [internalClass, setInternalClass] = useState('');
+  const [internalArchived, setInternalArchived] = useState(false);
+  const [latestByStudent, setLatestByStudent] = useState(() => new Map());
   const [students, setStudents] = useState([]);
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastLoadedAt, setLastLoadedAt] = useState(null);
   const [search, setSearch] = useState('');
-  const [showArchived, setShowArchived] = useState(false);
   const [historyTarget, setHistoryTarget] = useState(null);
+
+  const isControlled = selectedClassProp !== undefined;
+  const selectedClass = isControlled ? selectedClassProp : internalClass;
+  const setSelectedClass = onSelectedClassChange ?? setInternalClass;
+  const showArchived = showArchivedProp ?? internalArchived;
+  const setShowArchived = onShowArchivedChange ?? setInternalArchived;
 
   const scopedClasses = useMemo(
     () => resolveScopedClasses(classes, selectedClass, showArchived),
@@ -44,7 +64,7 @@ export function ReportsPanel() {
 
   const toggleArchived = (checked) => {
     setShowArchived(checked);
-    setSelectedClass('');
+    if (!isControlled) setSelectedClass('');
   };
 
   useEffect(() => {
@@ -52,7 +72,12 @@ export function ReportsPanel() {
       .then((list) => {
         setClasses(list);
         setLoadingClasses(false);
+        if (isControlled) return;
         setSelectedClass((prev) => {
+          const fromUrl = searchParams.get('class');
+          if (fromUrl && (fromUrl === ALL_CLASSES_VALUE || list.some((c) => c.classCode === fromUrl))) {
+            return fromUrl;
+          }
           if (prev === ALL_CLASSES_VALUE) return prev;
           if (prev && list.some((c) => c.classCode === prev)) return prev;
           return '';
@@ -63,12 +88,12 @@ export function ReportsPanel() {
         setLoadingClasses(false);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isControlled]);
 
   const loadSnapshot = useCallback(
     async ({ force = false, initial = false } = {}) => {
       if (!classCodes.length) {
-        setReports([]);
+        setLatestByStudent(new Map());
         setStudents([]);
         return;
       }
@@ -77,7 +102,7 @@ export function ReportsPanel() {
       try {
         const data = await loadReportsPanelSnapshot(classCodes, { force });
         setStudents(data.students);
-        setReports(data.reports);
+        setLatestByStudent(data.latestByStudent);
         setLastLoadedAt(Date.now());
       } catch (error) {
         toast.error(getErrorMessage(error));
@@ -94,22 +119,19 @@ export function ReportsPanel() {
   }, [loadSnapshot]);
 
   const handleRefresh = () => {
-    invalidateAdminDataCache();
+    invalidateAdminSnapshots();
     loadSnapshot({ force: true });
   };
 
-  const latestByStudent = useMemo(() => {
-    const map = new Map();
-    reports.forEach((report) => {
-      if (!map.has(report.studentId)) map.set(report.studentId, report);
-    });
-    return map;
-  }, [reports]);
+  const resolveReport = useCallback(
+    (student) => latestByStudent.get(student.id) ?? reportFromStudentSnapshot(student),
+    [latestByStudent],
+  );
 
   const visible = useMemo(() => {
     let list = students.map((student) => ({
       student,
-      report: latestByStudent.get(student.id) || null,
+      report: resolveReport(student),
     }));
     const q = search.trim().toLowerCase();
     if (q) list = list.filter((item) => item.student.fullName.toLowerCase().includes(q));
@@ -119,10 +141,22 @@ export function ReportsPanel() {
       }
       return a.student.fullName.localeCompare(b.student.fullName, 'vi');
     });
-  }, [students, latestByStudent, search, isAllClasses]);
+  }, [students, resolveReport, search, isAllClasses]);
 
   const reportsForCopy = useMemo(
-    () => visible.map((item) => item.report).filter(Boolean),
+    () => visible.map((item) => item.report).filter((r) => r && !r.snapshotOnly),
+    [visible],
+  );
+
+  const avgProgress = useMemo(() => {
+    const withProgress = visible.map((item) => item.report).filter(Boolean);
+    if (!withProgress.length) return null;
+    const sum = withProgress.reduce((acc, r) => acc + Number(r.progressPercent || 0), 0);
+    return Math.round(sum / withProgress.length);
+  }, [visible]);
+
+  const missingCount = useMemo(
+    () => visible.filter((item) => !item.student.lastReportedAt).length,
     [visible],
   );
 
@@ -173,59 +207,69 @@ export function ReportsPanel() {
 
           {!selectedClass ? null : (
             <>
-          <AdminSnapshotControls
-            lastLoadedAt={lastLoadedAt}
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            className="mb-3"
-          />
+              <AdminSnapshotControls
+                lastLoadedAt={lastLoadedAt}
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                className="mb-3"
+              />
 
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <p className="text-sm text-slate-500">
-              {visible.length} học sinh · {reportsForCopy.length} đã báo cáo
-            </p>
-            <Button size="sm" variant="secondary" onClick={copyAll} disabled={!reportsForCopy.length}>
-              <Copy className="h-4 w-4" />
-              Copy tất cả
-            </Button>
-          </div>
-
-          {loading ? (
-            <SkeletonRows count={5} />
-          ) : visible.length === 0 ? (
-            <EmptyState title="Chưa có học sinh" />
-          ) : (
-            <div className="space-y-3">
-              {visible.map(({ student, report }) =>
-                report ? (
-                  <ReportCard
-                    key={student.id}
-                    report={report}
-                    showClass={isAllClasses}
-                    onViewHistory={() =>
-                      setHistoryTarget({
-                        id: student.id,
-                        fullName: student.fullName,
-                        currentProgressPercent: report.progressPercent,
-                      })
-                    }
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <PanelSummaryGrid className="mb-0 flex-1 sm:grid-cols-2 lg:grid-cols-3">
+                  <PanelSummaryStat label="Học sinh" value={visible.length} />
+                  <PanelSummaryStat
+                    label="Đã báo cáo"
+                    value={visible.length - missingCount}
+                    tone="brand"
+                    hint={missingCount > 0 ? `${missingCount} chưa gửi` : undefined}
                   />
-                ) : (
-                  <div key={student.id} className="card p-5">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <h3 className="font-semibold text-slate-800 dark:text-slate-100">{student.fullName}</h3>
-                        <p className="text-xs text-slate-400">
-                          {isAllClasses ? `${student.classCode} · ` : ''}Chưa gửi báo cáo tiến độ
-                        </p>
-                      </div>
-                      <Badge tone="slate">Chưa báo cáo</Badge>
-                    </div>
-                  </div>
-                ),
+                  {avgProgress != null && (
+                    <PanelSummaryStat label="Tiến độ trung bình" value={`${avgProgress}%`} tone="green" />
+                  )}
+                </PanelSummaryGrid>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={copyAll}
+                  disabled={!reportsForCopy.length}
+                  className="shrink-0"
+                >
+                  <Copy className="h-4 w-4" />
+                  Copy tất cả
+                </Button>
+              </div>
+
+              {loading ? (
+                <SkeletonRows count={5} />
+              ) : visible.length === 0 ? (
+                <EmptyState title="Chưa có học sinh" />
+              ) : (
+                <div className="min-w-0 space-y-3">
+                  {visible.map(({ student, report }) =>
+                    report ? (
+                      <ReportCard
+                        key={student.id}
+                        report={report}
+                        showClass={isAllClasses}
+                        onViewHistory={() =>
+                          setHistoryTarget({
+                            id: student.id,
+                            fullName: student.fullName,
+                            currentProgressPercent: report.progressPercent,
+                          })
+                        }
+                      />
+                    ) : (
+                      <SubmissionCardShell
+                        key={student.id}
+                        title={student.fullName}
+                        meta={`${isAllClasses ? `${student.classCode} · ` : ''}Chưa gửi báo cáo tiến độ`}
+                        badges={<Badge tone="slate">Chưa báo cáo</Badge>}
+                      />
+                    ),
+                  )}
+                </div>
               )}
-            </div>
-          )}
             </>
           )}
         </>
@@ -238,19 +282,17 @@ export function ReportsPanel() {
   );
 }
 
-export function ReportsPage() {
-  return (
-    <AppShell title="Báo cáo tiến độ">
-      <ReportsPanel />
-    </AppShell>
-  );
-}
-
 function ReportCard({ report, showClass, onViewHistory }) {
   const toast = useToast();
 
+  const stop = (e) => e.stopPropagation();
+
   const copyContent = async (e) => {
-    e.stopPropagation();
+    stop(e);
+    if (report.snapshotOnly) {
+      toast.error('Chỉ có snapshot tiến độ — mở lịch sử để xem nội dung đầy đủ.');
+      return;
+    }
     try {
       await copyToClipboard(formatProgressReport(report));
       toast.success('Đã sao chép nội dung báo cáo.');
@@ -260,58 +302,50 @@ function ReportCard({ report, showClass, onViewHistory }) {
   };
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onViewHistory}
-      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onViewHistory()}
-      className="card cursor-pointer p-5 transition hover:border-brand-400 hover:shadow-md"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="font-semibold text-slate-800 dark:text-slate-100">{report.studentName}</h3>
-          <p className="text-xs text-slate-400">
-            {showClass ? `${report.classCode} · ` : ''}
-            {report.projectName} · {formatDateTime(report.submittedAt)}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+    <SubmissionCardShell
+      title={report.studentName}
+      meta={`${showClass ? `${report.classCode} · ` : ''}${report.projectName} · ${formatDateTime(report.submittedAt)}${report.snapshotOnly ? ' · snapshot' : ''}`}
+      badges={
+        <>
           <Badge tone={STATUS_TONES[report.status] || 'slate'}>{report.status}</Badge>
-          <Badge tone="brand">{report.progressPercent}%</Badge>
+          <Badge tone="slate">{report.stage}</Badge>
+        </>
+      }
+      right={<Badge tone="brand">{report.progressPercent}%</Badge>}
+      onClick={onViewHistory}
+      actions={
+        <SubmissionCardActions
+          onHistory={(e) => {
+            stop(e);
+            onViewHistory();
+          }}
+          onCopy={copyContent}
+        />
+      }
+    >
+      <ProgressMiniBar percent={report.progressPercent} className="mb-4" />
+      {report.snapshotOnly ? (
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Tiến độ và trạng thái mới nhất từ hồ sơ học sinh. Bấm <strong>Lịch sử</strong> để xem nội dung báo cáo đầy đủ.
+          {report.difficulties && (
+            <span className="mt-2 block text-amber-700 dark:text-amber-300">
+              Khó khăn ghi nhận: {report.difficulties}
+            </span>
+          )}
+        </p>
+      ) : (
+        <div className="grid gap-3 lg:grid-cols-2">
+          <SubmissionField label="Đã làm">{report.doneToday}</SubmissionField>
+          <SubmissionField label="Mục tiêu tiếp theo">{report.nextGoal}</SubmissionField>
+          {report.difficulties && (
+            <div className="lg:col-span-2">
+              <SubmissionField label="Khó khăn" variant="warning">
+                {report.difficulties}
+              </SubmissionField>
+            </div>
+          )}
         </div>
-      </div>
-
-      <div className="mt-3 flex items-center gap-2 text-sm">
-        <Badge tone="slate">{report.stage}</Badge>
-      </div>
-
-      <div className="mt-3 space-y-2 text-sm">
-        <p>
-          <span className="font-medium text-slate-500">Đã làm: </span>
-          <span className="text-slate-700 dark:text-slate-200">{report.doneToday}</span>
-        </p>
-        <p>
-          <span className="font-medium text-slate-500">Mục tiêu tiếp theo: </span>
-          <span className="text-slate-700 dark:text-slate-200">{report.nextGoal}</span>
-        </p>
-        {report.difficulties && (
-          <p>
-            <span className="font-medium text-slate-500">Khó khăn: </span>
-            <span className="text-slate-700 dark:text-slate-200">{report.difficulties}</span>
-          </p>
-        )}
-      </div>
-
-      <div className="mt-3 flex gap-2">
-        <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); onViewHistory(); }}>
-          <History className="h-4 w-4" />
-          Xem lịch sử
-        </Button>
-        <Button size="sm" variant="ghost" onClick={copyContent}>
-          <Copy className="h-4 w-4" />
-          Copy
-        </Button>
-      </div>
-    </div>
+      )}
+    </SubmissionCardShell>
   );
 }

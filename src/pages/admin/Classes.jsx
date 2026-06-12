@@ -29,6 +29,9 @@ import {
 } from '../../services/classes.service.js';
 import { markAllStudentsCompletedForClass } from '../../services/students.service.js';
 import { listCurriculumPrograms } from '../../services/curriculum.service.js';
+import { loadFeedbackByClassCodes } from '../../lib/adminPanelData.js';
+import { averageUnderstanding } from '../../lib/classAnalytics.js';
+import { UnderstandingDots, understandingTone } from '../../ui/components/SubmissionDisplay.jsx';
 import { getErrorMessage } from '../../lib/firestore.js';
 import { filterClassesBySubject, subjectsWithClasses } from '../../lib/subjectGroups.js';
 
@@ -59,6 +62,7 @@ export function ClassesPage() {
   const [tab, setTab] = useState('active');
   const [subjectFilter, setSubjectFilter] = useState('all');
   const [classSearch, setClassSearch] = useState('');
+  const [feedbacksByClass, setFeedbacksByClass] = useState({});
 
   const reloadPrograms = async () => {
     try {
@@ -155,6 +159,34 @@ export function ClassesPage() {
     return list;
   }, [tabClasses, subjectFilter, programsById, classSearch]);
 
+  const visibleClassCodes = useMemo(
+    () => visibleClasses.map((c) => c.classCode).join('|'),
+    [visibleClasses],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    const codes = visibleClassCodes ? visibleClassCodes.split('|').filter(Boolean) : [];
+    if (!codes.length) {
+      setFeedbacksByClass({});
+      return undefined;
+    }
+    loadFeedbackByClassCodes(codes)
+      .then((map) => {
+        if (cancelled) return;
+        setFeedbacksByClass(map);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setFeedbacksByClass({});
+          toast.error(getErrorMessage(error));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visibleClassCodes]);
+
   return (
     <AppShell
       title="Lớp học"
@@ -225,6 +257,11 @@ export function ClassesPage() {
               key={cls.id}
               cls={cls}
               programs={programs}
+              avgUnderstanding={averageUnderstanding(feedbacksByClass[cls.classCode] || [])}
+              sessionAvgUnderstanding={averageUnderstanding(
+                feedbacksByClass[cls.classCode] || [],
+                cls.curriculumCurrentSession,
+              )}
               onEdit={() => openEdit(cls)}
               onDelete={() => setDeleteTarget(cls)}
               onArchive={() => handleStatusChange(cls, 'completed')}
@@ -272,7 +309,16 @@ function TabButton({ active, onClick, children }) {
   );
 }
 
-function ClassCard({ cls, programs, onEdit, onDelete, onArchive, onRestore }) {
+function ClassCard({
+  cls,
+  programs,
+  avgUnderstanding,
+  sessionAvgUnderstanding,
+  onEdit,
+  onDelete,
+  onArchive,
+  onRestore,
+}) {
   const archived = cls.status !== 'active';
   const toast = useToast();
   const program = programs.find((p) => p.id === cls.curriculumProgramId);
@@ -317,6 +363,39 @@ function ClassCard({ cls, programs, onEdit, onDelete, onArchive, onRestore }) {
           <dt className="text-slate-400">Học sinh</dt>
           <dd className="font-medium text-slate-700 dark:text-slate-200">{cls.studentCount}</dd>
         </div>
+        <div className="flex items-center justify-between gap-2">
+          <dt className="text-slate-400">Hiểu bài TB</dt>
+          <dd className="flex flex-col items-end gap-1">
+            {avgUnderstanding != null ? (
+              <>
+                <span
+                  className={`text-sm font-semibold tabular-nums ${
+                    understandingTone(Math.round(avgUnderstanding)) === 'green'
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : understandingTone(Math.round(avgUnderstanding)) === 'amber'
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : understandingTone(Math.round(avgUnderstanding)) === 'red'
+                          ? 'text-red-600 dark:text-red-400'
+                          : 'text-slate-700 dark:text-slate-200'
+                  }`}
+                >
+                  {avgUnderstanding}/5
+                </span>
+                <UnderstandingDots level={Math.round(avgUnderstanding)} />
+              </>
+            ) : (
+              <span className="font-medium text-slate-400">—</span>
+            )}
+          </dd>
+        </div>
+        {Number(cls.curriculumCurrentSession) > 0 && sessionAvgUnderstanding != null && (
+          <div className="flex justify-between">
+            <dt className="text-slate-400">Buổi {cls.curriculumCurrentSession}</dt>
+            <dd className="font-medium text-slate-700 dark:text-slate-200">
+              {sessionAvgUnderstanding}/5
+            </dd>
+          </div>
+        )}
         <div className="flex justify-between">
           <dt className="text-slate-400">Cuối khóa</dt>
           <dd className="font-medium text-slate-700 dark:text-slate-200">

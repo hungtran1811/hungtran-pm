@@ -1,19 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { MessageSquare, Copy, History, RotateCcw } from 'lucide-react';
-import { AppShell } from '../../ui/components/AppShell.jsx';
+import { MessageSquare, Copy } from 'lucide-react';
 import { Button } from '../../ui/components/Button.jsx';
-import { Badge } from '../../ui/components/Badge.jsx';
 import { EmptyState } from '../../ui/components/EmptyState.jsx';
 import { ConfirmDialog } from '../../ui/components/ConfirmDialog.jsx';
 import { SkeletonRows } from '../../ui/components/Skeleton.jsx';
 import { ClassFilterBar } from '../../ui/components/ClassFilterBar.jsx';
-import { Input } from '../../ui/components/Field.jsx';
+import { Input, Select } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { StudentHistoryModal } from '../../ui/components/StudentHistoryModal.jsx';
+import {
+  PanelSummaryGrid,
+  PanelSummaryStat,
+  SubmissionCardActions,
+  SubmissionCardShell,
+  SubmissionField,
+  UnderstandingBadge,
+} from '../../ui/components/SubmissionDisplay.jsx';
 import { ALL_CLASSES_VALUE, buildClassesByCode, resolveScopedClasses } from '../../lib/classFilterScope.js';
-import { invalidateAdminDataCache } from '../../lib/adminDataCache.js';
-import { loadAdminClasses, loadFeedbackPanelSnapshot } from '../../lib/adminPanelData.js';
+import { invalidateAdminSnapshots, loadAdminClasses, loadFeedbackPanelSnapshot } from '../../lib/adminPanelData.js';
 import { AdminSnapshotControls } from '../../ui/components/AdminSnapshotControls.jsx';
 import { resetKnowledgeFeedback } from '../../services/knowledgeReports.service.js';
 import {
@@ -31,27 +36,49 @@ import {
   filterBySessionScope,
   filterBySessionScopeMulti,
   maxCurrentSession,
+  sessionNumbersUpToCurrent,
+  sessionNumbersUpToCurrentMulti,
 } from '../../lib/sessionScope.js';
 
-const LEVEL_TONES = { 1: 'red', 2: 'red', 3: 'amber', 4: 'green', 5: 'green' };
+function summaryToneForAvg(avg) {
+  if (avg == null) return 'slate';
+  if (avg >= 4) return 'green';
+  if (avg >= 3) return 'amber';
+  return 'red';
+}
 
-export function FeedbackPanel() {
+export function FeedbackPanel({
+  selectedClass: selectedClassProp,
+  onSelectedClassChange,
+  showArchived: showArchivedProp,
+  onShowArchivedChange,
+  sessionFilter: sessionFilterProp,
+  onSessionFilterChange,
+}) {
   const toast = useToast();
   const [searchParams] = useSearchParams();
   const [classes, setClasses] = useState([]);
   const [students, setStudents] = useState([]);
   const [reports, setReports] = useState([]);
-  const [selectedClass, setSelectedClass] = useState('');
-  const sessionFilter = ALL_SESSIONS_VALUE;
+  const [internalClass, setInternalClass] = useState('');
+  const [internalArchived, setInternalArchived] = useState(false);
+  const [internalSessionFilter, setInternalSessionFilter] = useState(ALL_SESSIONS_VALUE);
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastLoadedAt, setLastLoadedAt] = useState(null);
   const [search, setSearch] = useState('');
-  const [showArchived, setShowArchived] = useState(false);
   const [historyTarget, setHistoryTarget] = useState(null);
   const [resetTarget, setResetTarget] = useState(null);
   const [resetting, setResetting] = useState(false);
+
+  const isControlled = selectedClassProp !== undefined;
+  const selectedClass = isControlled ? selectedClassProp : internalClass;
+  const setSelectedClass = onSelectedClassChange ?? setInternalClass;
+  const showArchived = showArchivedProp ?? internalArchived;
+  const setShowArchived = onShowArchivedChange ?? setInternalArchived;
+  const sessionFilter = sessionFilterProp ?? internalSessionFilter;
+  const setSessionFilter = onSessionFilterChange ?? setInternalSessionFilter;
 
   const scopedClasses = useMemo(
     () => resolveScopedClasses(classes, selectedClass, showArchived),
@@ -64,7 +91,7 @@ export function FeedbackPanel() {
 
   const toggleArchived = (checked) => {
     setShowArchived(checked);
-    setSelectedClass('');
+    if (!isControlled) setSelectedClass('');
   };
 
   useEffect(() => {
@@ -72,9 +99,12 @@ export function FeedbackPanel() {
       .then((list) => {
         setClasses(list);
         setLoadingClasses(false);
+        if (isControlled) return;
         setSelectedClass((prev) => {
           const fromUrl = searchParams.get('class');
-          if (fromUrl && list.some((c) => c.classCode === fromUrl)) return fromUrl;
+          if (fromUrl && (fromUrl === ALL_CLASSES_VALUE || list.some((c) => c.classCode === fromUrl))) {
+            return fromUrl;
+          }
           if (prev === ALL_CLASSES_VALUE) return prev;
           if (prev && list.some((c) => c.classCode === prev)) return prev;
           return '';
@@ -85,7 +115,7 @@ export function FeedbackPanel() {
         setLoadingClasses(false);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isControlled]);
 
   const loadSnapshot = useCallback(
     async ({ force = false, initial = false } = {}) => {
@@ -115,8 +145,21 @@ export function FeedbackPanel() {
     loadSnapshot({ initial: true });
   }, [loadSnapshot]);
 
+  useEffect(() => {
+    if (sessionFilterProp !== undefined) return;
+    setSessionFilter(ALL_SESSIONS_VALUE);
+  }, [selectedClass, sessionFilterProp]);
+
+  const sessionOptions = useMemo(
+    () =>
+      isAllClasses
+        ? sessionNumbersUpToCurrentMulti(scopedClasses)
+        : sessionNumbersUpToCurrent(selectedClassDoc),
+    [isAllClasses, scopedClasses, selectedClassDoc],
+  );
+
   const handleRefresh = () => {
-    invalidateAdminDataCache();
+    invalidateAdminSnapshots();
     loadSnapshot({ force: true });
   };
 
@@ -146,12 +189,57 @@ export function FeedbackPanel() {
     return list;
   }, [scopedReports, sessionNum, search]);
 
-  const missing = useMemo(() => {
-    if (isAllClasses || !students.length) return [];
-    const targetSession = sessionNum || currentSession;
-    if (!targetSession) return [];
-    return studentsMissingFeedback(students, reports, targetSession);
-  }, [students, reports, sessionNum, currentSession, isAllClasses]);
+  const missingGroups = useMemo(() => {
+    if (!students.length) return [];
+    const sessionFilterNum = sessionNum;
+
+    if (!isAllClasses) {
+      const targetSession = sessionFilterNum || currentSession;
+      if (!targetSession) return [];
+      const list = studentsMissingFeedback(students, reports, targetSession);
+      if (!list.length) return [];
+      return [
+        {
+          classCode: selectedClassDoc?.classCode || selectedClass,
+          className: selectedClassDoc?.className || '',
+          session: targetSession,
+          students: list,
+        },
+      ];
+    }
+
+    return scopedClasses
+      .filter((cls) => cls.curriculumPhase === 'learning' && Number(cls.curriculumCurrentSession) > 0)
+      .map((cls) => {
+        const targetSession = sessionFilterNum || Number(cls.curriculumCurrentSession);
+        if (!targetSession) return null;
+        const classStudents = students.filter((s) => s.classCode === cls.classCode);
+        const classReports = reports.filter((r) => r.classCode === cls.classCode);
+        const missingStudents = studentsMissingFeedback(classStudents, classReports, targetSession);
+        if (!missingStudents.length) return null;
+        return {
+          classCode: cls.classCode,
+          className: cls.className,
+          session: targetSession,
+          students: missingStudents,
+        };
+      })
+      .filter(Boolean);
+  }, [
+    students,
+    reports,
+    sessionNum,
+    currentSession,
+    isAllClasses,
+    selectedClassDoc,
+    selectedClass,
+    scopedClasses,
+  ]);
+
+  const missingCount = useMemo(
+    () => missingGroups.reduce((sum, group) => sum + group.students.length, 0),
+    [missingGroups],
+  );
 
   const avgLevel = useMemo(() => {
     if (!visible.length) return null;
@@ -213,12 +301,27 @@ export function FeedbackPanel() {
               allLabel={`Tất cả lớp${showArchived ? ' lưu trữ' : ' đang hoạt động'}`}
               showStudentCount
             />
-            <Input
-              placeholder={selectedClass ? 'Tìm học sinh...' : 'Chọn lớp để tìm học sinh...'}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              disabled={!selectedClass}
-            />
+            <div className={`grid gap-3 ${selectedClass ? 'sm:grid-cols-2' : ''}`}>
+              {selectedClass && (
+                <Select value={sessionFilter} onChange={(e) => setSessionFilter(e.target.value)}>
+                  <option value={ALL_SESSIONS_VALUE}>
+                    Tất cả buổi{currentSession > 0 ? ` (đến buổi ${currentSession})` : ''}
+                  </option>
+                  {sessionOptions.map((s) => (
+                    <option key={s} value={String(s)}>
+                      Buổi {s}
+                      {!isAllClasses && currentSession === s ? ' (hiện tại)' : ''}
+                    </option>
+                  ))}
+                </Select>
+              )}
+              <Input
+                placeholder={selectedClass ? 'Tìm học sinh...' : 'Chọn lớp để tìm học sinh...'}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                disabled={!selectedClass}
+              />
+            </div>
           </div>
 
           {!selectedClass ? null : (
@@ -231,27 +334,59 @@ export function FeedbackPanel() {
           />
 
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-slate-500">
-              {visible.length} phản hồi
-              {missing.length > 0 && currentSession > 0
-                ? ` · ${missing.length} chưa nộp buổi ${sessionNum || currentSession}`
-                : ''}
-              {avgLevel ? ` · Mức hiểu TB: ${avgLevel}/5` : ''}
-            </p>
-            <Button size="sm" variant="secondary" onClick={copyAll} disabled={!visible.length}>
+            <PanelSummaryGrid className="mb-0 flex-1 sm:grid-cols-2 lg:grid-cols-3">
+              <PanelSummaryStat label="Phản hồi" value={visible.length} />
+              {avgLevel != null && (
+                <PanelSummaryStat
+                  label="Mức hiểu trung bình"
+                  value={`${avgLevel}/5`}
+                  tone={summaryToneForAvg(Number(avgLevel))}
+                />
+              )}
+              {missingCount > 0 && (
+                <PanelSummaryStat
+                  label={
+                    sessionNum != null
+                      ? `Chưa nộp buổi ${sessionNum}`
+                      : isAllClasses
+                        ? 'Chưa nộp (theo lớp)'
+                        : `Chưa nộp buổi ${currentSession}`
+                  }
+                  value={missingCount}
+                  hint="học sinh"
+                  tone="amber"
+                />
+              )}
+            </PanelSummaryGrid>
+            <Button size="sm" variant="secondary" onClick={copyAll} disabled={!visible.length} className="shrink-0">
               <Copy className="h-4 w-4" />
               Copy tất cả
             </Button>
           </div>
 
-          {missing.length > 0 && (sessionNum || currentSession) > 0 && (
-            <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-500/10">
-              <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
-                Chưa nộp phản hồi buổi {sessionNum || currentSession} ({missing.length} học sinh)
-              </p>
-              <p className="mt-1 text-sm text-amber-700 dark:text-amber-300">
-                {missing.map((s) => s.fullName).join(', ')}
-              </p>
+          {missingCount > 0 && (
+            <div className="mb-4 space-y-3">
+              {missingGroups.map((group) => (
+                <div
+                  key={`${group.classCode}-${group.session}`}
+                  className="rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-500/10"
+                >
+                  <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                    {isAllClasses ? `${group.classCode} · ` : ''}
+                    Chưa nộp phản hồi buổi {group.session} ({group.students.length} học sinh)
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {group.students.map((s) => (
+                      <span
+                        key={s.id}
+                        className="rounded-full bg-white/80 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-slate-900/60 dark:text-amber-200"
+                      >
+                        {s.fullName}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
@@ -266,7 +401,7 @@ export function FeedbackPanel() {
               }
             />
           ) : (
-            <div className="space-y-3">
+            <div className="min-w-0 space-y-3">
               {visible.map((report) => (
                 <FeedbackCard
                   key={report.id}
@@ -314,19 +449,13 @@ export function FeedbackPanel() {
   );
 }
 
-export function FeedbackPage() {
-  return (
-    <AppShell title="Phản hồi buổi học">
-      <FeedbackPanel />
-    </AppShell>
-  );
-}
-
 function FeedbackCard({ report, showClass, onViewHistory, onReset }) {
   const toast = useToast();
 
+  const stop = (e) => e.stopPropagation();
+
   const copyContent = async (e) => {
-    e.stopPropagation();
+    stop(e);
     try {
       await copyToClipboard(formatKnowledgeFeedback(report));
       toast.success('Đã sao chép phản hồi.');
@@ -336,72 +465,44 @@ function FeedbackCard({ report, showClass, onViewHistory, onReset }) {
   };
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
+    <SubmissionCardShell
+      title={report.studentName}
+      meta={`${showClass ? `${report.classCode} · ` : ''}Buổi ${report.sessionNumber} · ${formatDateTime(report.submittedAt)}`}
+      right={<UnderstandingBadge level={report.understandingLevel} />}
       onClick={onViewHistory}
-      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onViewHistory()}
-      className="card cursor-pointer p-5 transition hover:border-brand-400 hover:shadow-md"
-    >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="font-semibold text-slate-800 dark:text-slate-100">{report.studentName}</h3>
-          <p className="text-xs text-slate-400">
-            {showClass ? `${report.classCode} · ` : ''}
-            Buổi {report.sessionNumber} · {formatDateTime(report.submittedAt)}
-          </p>
-        </div>
-        <Badge tone={LEVEL_TONES[report.understandingLevel] || 'slate'}>
-          Mức hiểu {report.understandingLevel}/5
-        </Badge>
-      </div>
-
-      <div className="mt-3 space-y-2 text-sm">
-        <p>
-          <span className="font-medium text-slate-500">Đã hiểu: </span>
-          <span className="text-slate-700 dark:text-slate-200">{report.understoodTopics}</span>
-        </p>
-        <p>
-          <span className="font-medium text-slate-500">Chưa rõ: </span>
-          <span className="text-slate-700 dark:text-slate-200">{report.unclearTopics}</span>
-        </p>
-        {report.supportRequest && (
-          <p>
-            <span className="font-medium text-slate-500">Cần hỗ trợ: </span>
-            <span className="text-slate-700 dark:text-slate-200">{report.supportRequest}</span>
-          </p>
-        )}
-      </div>
-
-      <div className="mt-3 flex gap-2">
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={(e) => {
-            e.stopPropagation();
+      actions={
+        <SubmissionCardActions
+          onHistory={(e) => {
+            stop(e);
             onViewHistory();
           }}
-        >
-          <History className="h-4 w-4" />
-          Xem lịch sử
-        </Button>
-        <Button size="sm" variant="ghost" onClick={copyContent}>
-          <Copy className="h-4 w-4" />
-          Copy
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="text-amber-600"
-          onClick={(e) => {
-            e.stopPropagation();
-            onReset?.();
-          }}
-        >
-          <RotateCcw className="h-4 w-4" />
-          Reset
-        </Button>
+          onCopy={copyContent}
+          onReset={
+            onReset
+              ? (e) => {
+                  stop(e);
+                  onReset();
+                }
+              : undefined
+          }
+        />
+      }
+    >
+      <div className="grid gap-3 lg:grid-cols-2">
+        <SubmissionField label="Đã hiểu" variant="success">
+          {report.understoodTopics}
+        </SubmissionField>
+        <SubmissionField label="Chưa rõ" variant="warning">
+          {report.unclearTopics}
+        </SubmissionField>
+        {report.supportRequest && (
+          <div className="lg:col-span-2">
+            <SubmissionField label="Cần hỗ trợ" variant="danger">
+              {report.supportRequest}
+            </SubmissionField>
+          </div>
+        )}
       </div>
-    </div>
+    </SubmissionCardShell>
   );
 }

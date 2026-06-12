@@ -21,11 +21,13 @@ export function LessonPracticeQuiz({ lesson, classDoc, student, programId, embed
   const [result, setResult] = useState(null);
   const [attemptCount, setAttemptCount] = useState(0);
   const [retaking, setRetaking] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
+      setLoadError(null);
       setResult(null);
       setAnswers({});
       setRetaking(false);
@@ -38,8 +40,13 @@ export function LessonPracticeQuiz({ lesson, classDoc, student, programId, embed
           return;
         }
         setQuiz(publicQuiz);
-      } catch {
-        if (!cancelled) setQuiz(null);
+      } catch (error) {
+        if (!cancelled) {
+          setQuiz(null);
+          const message = getErrorMessage(error);
+          setLoadError(message);
+          toast.error(message);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -79,6 +86,18 @@ export function LessonPracticeQuiz({ lesson, classDoc, student, programId, embed
         <Spinner />
       </div>
     );
+  }
+
+  if (loadError && !quiz) {
+    const errorBody = (
+      <EmptyState
+        icon={<HelpCircle className="h-7 w-7 text-red-500" />}
+        title="Không tải được bài ôn tập"
+        description={loadError}
+      />
+    );
+    if (embedded) return errorBody;
+    return <section className="card mt-6 overflow-hidden p-5">{errorBody}</section>;
   }
 
   if (!quiz) {

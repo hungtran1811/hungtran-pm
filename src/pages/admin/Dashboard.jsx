@@ -171,16 +171,6 @@ export function DashboardPage() {
     return { activeClassCodes, archivedClassCodes };
   }, [classes]);
 
-  const studentCountByClass = useMemo(() => {
-    const map = {};
-    students
-      .filter((s) => s.active)
-      .forEach((s) => {
-        map[s.classCode] = (map[s.classCode] || 0) + 1;
-      });
-    return map;
-  }, [students]);
-
   const stats = useMemo(() => {
     const { activeClassCodes, archivedClassCodes } = classSets;
     const inActiveClass = (s) => s.active && activeClassCodes.has(s.classCode);
@@ -316,41 +306,6 @@ export function DashboardPage() {
                       </span>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Lớp học</h2>
-              <Link to="/admin/classes" className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-300">
-                Quản lý lớp
-              </Link>
-            </div>
-            {classes.length === 0 ? (
-              <EmptyState icon={<School className="h-7 w-7" />} title="Chưa có lớp học" />
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {classes
-                  .filter((c) => c.status === 'active')
-                  .slice(0, 6)
-                  .map((c) => (
-                  <Link key={c.id} to="/admin/classes" className="card p-4 transition hover:shadow-md">
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="truncate font-semibold text-slate-800 dark:text-slate-100">
-                        {c.classCode}
-                      </h3>
-                      <Badge tone={c.status === 'active' ? 'green' : 'slate'}>
-                        {c.status === 'active' ? 'Hoạt động' : c.status}
-                      </Badge>
-                    </div>
-                    <p className="mt-1 truncate text-xs text-slate-400">{c.className || 'Chưa có khóa học'}</p>
-                    <p className="mt-2 text-sm text-slate-500">
-                      {studentCountByClass[c.classCode] ?? c.studentCount ?? 0} học sinh · buổi{' '}
-                      {c.curriculumCurrentSession}
-                    </p>
-                  </Link>
                 ))}
               </div>
             )}

@@ -127,7 +127,10 @@ export function ClassFilterBar({
     }
     const valid = value === 'all' && allowAll;
     if (!valid && !subjectFiltered.some((c) => c.classCode === value)) {
-      if (!autoSelectFirst && !value) return;
+      if (!autoSelectFirst) {
+        if (value) onChange('');
+        return;
+      }
       onChange(allowAll ? 'all' : subjectFiltered[0].classCode);
     }
   }, [subjectFiltered, value, onChange, allowAll, autoSelectFirst]);

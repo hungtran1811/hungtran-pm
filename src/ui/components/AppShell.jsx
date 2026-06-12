@@ -106,7 +106,7 @@ export function AppShell({ title, actions, children }) {
           </div>
         </header>
 
-        <main className="flex-1 px-4 py-6 lg:px-8">{children}</main>
+        <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-6 lg:px-8">{children}</main>
       </div>
 
       {mobileOpen && (

@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   limit,
   onSnapshot,
@@ -15,6 +16,50 @@ import { toReportModel } from '../models/index.js';
 import { dateKey } from '../lib/firestore.js';
 
 const reportsRef = collection(db, 'reports');
+
+export async function getReport(reportId) {
+  if (!reportId) return null;
+  const snapshot = await getDoc(doc(db, 'reports', reportId));
+  return snapshot.exists() ? toReportModel(snapshot) : null;
+}
+
+/** Latest report doc per student via denormalized latestReportId on student records. */
+export async function loadLatestReportsForStudents(students) {
+  const uniqueIds = [...new Set(students.map((s) => s.latestReportId).filter(Boolean))];
+  if (!uniqueIds.length) return new Map();
+
+  const snapshots = await Promise.all(uniqueIds.map((id) => getDoc(doc(db, 'reports', id))));
+  const byStudentId = new Map();
+  snapshots.forEach((snapshot) => {
+    if (!snapshot.exists()) return;
+    const model = toReportModel(snapshot);
+    byStudentId.set(model.studentId, model);
+  });
+  return byStudentId;
+}
+
+export function reportFromStudentSnapshot(student) {
+  if (!student?.lastReportedAt) return null;
+  return {
+    id: student.latestReportId || `snapshot-${student.id}`,
+    classId: student.classCode,
+    classCode: student.classCode,
+    studentId: student.id,
+    studentName: student.fullName,
+    projectName: student.projectName || '',
+    progressPercent: Number(student.currentProgressPercent ?? 0),
+    stage: student.currentStage,
+    status: student.currentStatus,
+    doneToday: '—',
+    nextGoal: '—',
+    difficulties: student.currentDifficulties || '',
+    submittedAt: student.lastReportedAt,
+    submittedDateKey: '',
+    source: 'student-snapshot',
+    createdAt: student.lastReportedAt,
+    snapshotOnly: true,
+  };
+}
 
 export async function listReportsByClass(classCode, max = 200) {
   const snapshot = await getDocs(

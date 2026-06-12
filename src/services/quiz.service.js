@@ -246,7 +246,13 @@ export async function saveQuizBank(programId, lesson) {
       questions: [],
       updatedAt: serverTimestamp(),
     });
-    await setDoc(answerRef, { answers: {}, codeReferences: {}, updatedAt: serverTimestamp() });
+    await setDoc(answerRef, {
+      programId: storagePrefix,
+      lessonId: lesson.id,
+      answers: {},
+      codeReferences: {},
+      updatedAt: serverTimestamp(),
+    });
     return;
   }
 
@@ -282,7 +288,13 @@ export async function saveQuizBank(programId, lesson) {
     questions: publicQuestions,
     updatedAt: serverTimestamp(),
   });
-  await setDoc(answerRef, { answers, codeReferences, updatedAt: serverTimestamp() });
+  await setDoc(answerRef, {
+    programId: storagePrefix,
+    lessonId: lesson.id,
+    answers,
+    codeReferences,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function syncAllQuizBanks(programId, lessons) {
@@ -476,6 +488,8 @@ export async function submitQuizSubmission({
       studentId: student.id,
       lessonId: lesson.id,
       programId: resolvedProgramId,
+      curriculumProgramId: classDoc.curriculumProgramId,
+      sessionNumber: Number(lesson.sessionNumber),
       submissionId: submissionRef.id,
       attemptNumber,
       submittedAt: serverTimestamp(),

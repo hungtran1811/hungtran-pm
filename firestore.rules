@@ -196,13 +196,128 @@ service cloud.firestore {
       return data.programId + '__' + data.lessonId;
     }
 
+    function quizPublicBankEnabled(programId, lessonId) {
+      let bankId = programId + '__' + lessonId;
+      return exists(/databases/$(database)/documents/quizPublicQuestionBanks/$(bankId))
+        && get(/databases/$(database)/documents/quizPublicQuestionBanks/$(bankId)).data.enabled == true;
+    }
+
+    function quizPublicBankEnabledAny(programId, lessonId) {
+      return quizPublicBankEnabled(programId, lessonId)
+        || (programId == 'python-basic' && quizPublicBankEnabled('python-app-basic', lessonId))
+        || (programId == 'python-app-basic' && quizPublicBankEnabled('python-basic', lessonId))
+        || (programId == 'python-advanced' && quizPublicBankEnabled('python-app-advanced', lessonId))
+        || (programId == 'python-app-advanced' && quizPublicBankEnabled('python-advanced', lessonId));
+    }
+
+    function practicePublicBankEnabled(programId, lessonId) {
+      let bankId = programId + '__' + lessonId;
+      return exists(/databases/$(database)/documents/practiceQuizPublicBanks/$(bankId))
+        && get(/databases/$(database)/documents/practiceQuizPublicBanks/$(bankId)).data.enabled == true;
+    }
+
+    function practicePublicBankEnabledAny(programId, lessonId) {
+      return practicePublicBankEnabled(programId, lessonId)
+        || (programId == 'python-basic' && practicePublicBankEnabled('python-app-basic', lessonId))
+        || (programId == 'python-app-basic' && practicePublicBankEnabled('python-basic', lessonId))
+        || (programId == 'python-advanced' && practicePublicBankEnabled('python-app-advanced', lessonId))
+        || (programId == 'python-app-advanced' && practicePublicBankEnabled('python-advanced', lessonId));
+    }
+
+    function quizPublicBankEnabledForBankId(bankId) {
+      return exists(/databases/$(database)/documents/quizPublicQuestionBanks/$(bankId))
+        && get(/databases/$(database)/documents/quizPublicQuestionBanks/$(bankId)).data.enabled == true;
+    }
+
+    function practicePublicBankEnabledForBankId(bankId) {
+      return exists(/databases/$(database)/documents/practiceQuizPublicBanks/$(bankId))
+        && get(/databases/$(database)/documents/practiceQuizPublicBanks/$(bankId)).data.enabled == true;
+    }
+
+    function storedQuizAnswerBank(bankId) {
+      return get(/databases/$(database)/documents/quizQuestionBanks/$(bankId));
+    }
+
+    function isReadableQuizAnswerBank(bankId) {
+      return exists(/databases/$(database)/documents/quizQuestionBanks/$(bankId))
+        && (
+          quizPublicBankEnabledForBankId(bankId)
+          || (
+            storedQuizAnswerBank(bankId).data.keys().hasAll(['programId', 'lessonId'])
+            && quizPublicBankEnabledAny(
+              storedQuizAnswerBank(bankId).data.programId,
+              storedQuizAnswerBank(bankId).data.lessonId
+            )
+          )
+        );
+    }
+
+    function storedPracticeAnswerBank(bankId) {
+      return get(/databases/$(database)/documents/practiceQuizAnswerBanks/$(bankId));
+    }
+
+    function isReadablePracticeAnswerBank(bankId) {
+      return exists(/databases/$(database)/documents/practiceQuizAnswerBanks/$(bankId))
+        && (
+          practicePublicBankEnabledForBankId(bankId)
+          || (
+            storedPracticeAnswerBank(bankId).data.keys().hasAll(['programId', 'lessonId'])
+            && practicePublicBankEnabledAny(
+              storedPracticeAnswerBank(bankId).data.programId,
+              storedPracticeAnswerBank(bankId).data.lessonId
+            )
+          )
+        );
+    }
+
+    function isValidBoundedPercent(correct, total, percent) {
+      return correct is int
+        && total is int
+        && correct >= 0
+        && total >= 1
+        && correct <= total
+        && percent is int
+        && percent >= 0
+        && percent <= 100;
+    }
+
+    function isValidPublicPracticeScoreFields(data) {
+      return isValidBoundedPercent(data.mcqCorrect, data.mcqTotal, data.mcqPercent)
+        && data.responses.size() == data.mcqTotal;
+    }
+
+    function isValidPublicQuizScoreFields(data) {
+      return data.mcqTotal is int
+        && data.mcqTotal >= 0
+        && data.mcqCorrect is int
+        && data.mcqCorrect >= 0
+        && data.mcqCorrect <= data.mcqTotal
+        && data.mcqPercent is int
+        && data.mcqPercent >= 0
+        && data.mcqPercent <= 100
+        && data.codeGraded is int
+        && data.codeGraded >= 0
+        && data.codeCorrect is int
+        && data.codeCorrect >= 0
+        && data.codeCorrect <= data.codeGraded
+        && data.gradedTotal is int
+        && data.gradedTotal >= 0
+        && data.gradedCorrect is int
+        && data.gradedCorrect >= 0
+        && data.gradedCorrect <= data.gradedTotal
+        && data.gradedPercent is int
+        && data.gradedPercent >= 0
+        && data.gradedPercent <= 100
+        && data.unansweredCount is int
+        && data.unansweredCount >= 0;
+    }
+
     function isQuizEnabledForLesson(data) {
       return data.programId is string
         && data.programId.size() > 0
         && data.lessonId is string
         && data.lessonId.size() > 0
-        && exists(/databases/$(database)/documents/quizPublicQuestionBanks/$(quizBankId(data)))
-        && get(/databases/$(database)/documents/quizPublicQuestionBanks/$(quizBankId(data))).data.enabled == true;
+        && quizPublicBankEnabledAny(data.programId, data.lessonId);
     }
 
     function isOpenQuizTarget(data) {
@@ -215,8 +330,7 @@ service cloud.firestore {
         && data.programId.size() > 0
         && data.lessonId is string
         && data.lessonId.size() > 0
-        && exists(/databases/$(database)/documents/practiceQuizPublicBanks/$(quizBankId(data)))
-        && get(/databases/$(database)/documents/practiceQuizPublicBanks/$(quizBankId(data))).data.enabled == true;
+        && practicePublicBankEnabledAny(data.programId, data.lessonId);
     }
 
     function isOpenPracticeTarget(data) {
@@ -241,8 +355,7 @@ service cloud.firestore {
         && isOpenPracticeTarget(request.resource.data)
         && request.resource.data.responses is list
         && request.resource.data.responses.size() > 0
-        && request.resource.data.mcqTotal is int
-        && request.resource.data.mcqTotal >= 1
+        && isValidPublicPracticeScoreFields(request.resource.data)
         && request.resource.data.source == 'practice-quiz-v1'
         && request.resource.data.submittedAt == request.time
         && request.resource.data.updatedAt == request.time;
@@ -346,6 +459,7 @@ service cloud.firestore {
         && isOpenQuizTarget(request.resource.data)
         && request.resource.data.responses is list
         && request.resource.data.responses.size() > 0
+        && isValidPublicQuizScoreFields(request.resource.data)
         && isValidQuizAttemptNumber(request.resource.data)
         && request.resource.data.source == 'student-quiz-v2'
         && request.resource.data.submittedAt == request.time
@@ -505,7 +619,9 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
     match /quizQuestionBanks/{bankId} {
-      allow read, write: if isAdmin();
+      allow get: if isAdmin() || isReadableQuizAnswerBank(bankId);
+      allow list: if isAdmin();
+      allow write: if isAdmin();
     }
     match /quizPublicQuestionBanks/{bankId} {
       allow read: if true;
@@ -549,7 +665,8 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     match /practiceQuizAnswerBanks/{bankId} {
-      allow read: if isAdmin();
+      allow get: if isAdmin() || isReadablePracticeAnswerBank(bankId);
+      allow list: if isAdmin();
       allow write: if isAdmin();
     }
     match /practiceQuizSubmissions/{submissionId} {

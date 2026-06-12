@@ -9,8 +9,7 @@ import { ClassFilterBar } from '../../ui/components/ClassFilterBar.jsx';
 import { Select, Input } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { ALL_CLASSES_VALUE, buildClassesByCode, resolveScopedClasses } from '../../lib/classFilterScope.js';
-import { invalidateAdminDataCache } from '../../lib/adminDataCache.js';
-import { loadAdminClasses, loadPracticePanelSnapshot } from '../../lib/adminPanelData.js';
+import { invalidateAdminSnapshots, loadAdminClasses, loadPracticePanelSnapshot } from '../../lib/adminPanelData.js';
 import { AdminSnapshotControls } from '../../ui/components/AdminSnapshotControls.jsx';
 import { resetPracticeSubmission } from '../../services/practiceQuiz.service.js';
 import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
@@ -106,7 +105,7 @@ export function PracticePanel({ activeOnly = false }) {
   }, [loadSnapshot]);
 
   const handleRefresh = () => {
-    invalidateAdminDataCache();
+    invalidateAdminSnapshots();
     loadSnapshot({ force: true });
   };
 

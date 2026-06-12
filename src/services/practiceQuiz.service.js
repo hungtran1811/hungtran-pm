@@ -133,7 +133,12 @@ export async function savePracticeQuizBank(programId, lesson) {
       questions: [],
       updatedAt: serverTimestamp(),
     });
-    await setDoc(answerRef, { answers: {}, updatedAt: serverTimestamp() });
+    await setDoc(answerRef, {
+      programId: storagePrefix,
+      lessonId: lesson.id,
+      answers: {},
+      updatedAt: serverTimestamp(),
+    });
     return;
   }
 
@@ -152,7 +157,12 @@ export async function savePracticeQuizBank(programId, lesson) {
     questions: publicQuestions,
     updatedAt: serverTimestamp(),
   });
-  await setDoc(answerRef, { answers, updatedAt: serverTimestamp() });
+  await setDoc(answerRef, {
+    programId: storagePrefix,
+    lessonId: lesson.id,
+    answers,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function syncAllPracticeQuizBanks(programId, lessons) {

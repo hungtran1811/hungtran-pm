@@ -41,7 +41,11 @@
 
 @layer components {
   .card {
-    @apply rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900;
+    @apply max-w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900;
+  }
+
+  .card-prose {
+    @apply min-w-0 break-words [overflow-wrap:anywhere];
   }
 
   .input-base {

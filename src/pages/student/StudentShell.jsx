@@ -20,7 +20,7 @@ export function StudentShell({ subtitle, right, children }) {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-3xl px-4 py-6 pb-24 sm:pb-6">{children}</main>
+      <main className="mx-auto max-w-3xl overflow-x-hidden px-4 py-6 pb-24 sm:pb-6">{children}</main>
     </div>
   );
 }

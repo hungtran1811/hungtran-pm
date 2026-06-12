@@ -25,6 +25,18 @@ export function aggregateWeeklyProgress(reports) {
 }
 
 /** Per-session average understanding level (1–5). */
+export function averageUnderstanding(feedbacks, sessionNumber = null) {
+  const list =
+    sessionNumber != null
+      ? feedbacks.filter((f) => Number(f.sessionNumber) === Number(sessionNumber))
+      : feedbacks;
+  if (!list.length) return null;
+  return Number(
+    (list.reduce((sum, f) => sum + Number(f.understandingLevel || 0), 0) / list.length).toFixed(1),
+  );
+}
+
+/** Heatmap data: average understanding per session. */
 export function sessionUnderstandingHeatmap(feedbacks) {
   const bySession = new Map();
   feedbacks.forEach((f) => {
@@ -52,13 +64,7 @@ export function classComparisonRows(activeClasses, students, feedbacksByClass) {
       ? Math.round(classStudents.reduce((sum, s) => sum + Number(s.currentProgressPercent || 0), 0) / total)
       : 0;
     const feedbacks = feedbacksByClass[cls.classCode] || [];
-    const avgUnderstanding = feedbacks.length
-      ? Number(
-          (
-            feedbacks.reduce((sum, f) => sum + Number(f.understandingLevel || 0), 0) / feedbacks.length
-          ).toFixed(1),
-        )
-      : 0;
+    const avgUnderstanding = averageUnderstanding(feedbacks) ?? 0;
     return {
       classCode: cls.classCode,
       className: cls.className,
