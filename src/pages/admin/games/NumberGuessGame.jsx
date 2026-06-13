@@ -408,8 +408,8 @@ export function NumberGuessGame({ classes, programs = [] }) {
 
   return (
     <div className="space-y-4">
-      <div className="card p-3">
-        <div className="mb-3">
+      <div className="card overflow-visible p-3">
+        <div className="mb-3 min-w-0">
           <ClassFilterBar
             classes={activeClasses}
             programs={programs}

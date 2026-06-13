@@ -175,7 +175,10 @@ export function ClassFilterBar({
       )}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <div ref={rootRef} className="relative min-w-0 flex-1 sm:max-w-md">
+        <div
+          ref={rootRef}
+          className={`relative min-w-0 flex-1 ${compact ? '' : 'sm:max-w-md'}`}
+        >
           <button
             type="button"
             onClick={() => setOpen((prev) => !prev)}
