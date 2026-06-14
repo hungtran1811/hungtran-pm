@@ -466,6 +466,34 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time;
     }
 
+    function isValidQuizLatestScoreSummary(data) {
+      return data.mcqTotal is int
+        && data.mcqTotal >= 0
+        && data.mcqCorrect is int
+        && data.mcqCorrect >= 0
+        && data.mcqCorrect <= data.mcqTotal
+        && data.mcqPercent is int
+        && data.mcqPercent >= 0
+        && data.mcqPercent <= 100
+        && data.codeGraded is int
+        && data.codeGraded >= 0
+        && data.codeCorrect is int
+        && data.codeCorrect >= 0
+        && data.codeCorrect <= data.codeGraded
+        && data.gradedTotal is int
+        && data.gradedTotal >= 0
+        && data.gradedCorrect is int
+        && data.gradedCorrect >= 0
+        && data.gradedCorrect <= data.gradedTotal
+        && data.gradedPercent is int
+        && data.gradedPercent >= 0
+        && data.gradedPercent <= 100
+        && data.pendingCodeCount is int
+        && data.pendingCodeCount >= 0
+        && data.gradingStatus is string
+        && data.gradingStatus in ['pending', 'partial', 'complete'];
+    }
+
     function isValidPublicQuizLatestWrite(latestId) {
       return isQuizLatestId(latestId, request.resource.data)
         && isOpenClass(request.resource.data.classCode)
@@ -502,6 +530,68 @@ service cloud.firestore {
         && request.resource.data.projectNameReviewNote == ''
         && request.resource.data.projectNameSubmittedAt == request.time
         && request.resource.data.updatedAt == request.time;
+    }
+
+    function isValidPublicLessonProgressUpdate(studentId) {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'lastOpenedLessonId', 'lastOpenedSessionNumber', 'lastOpenedAt',
+          'openedLessonIds', 'updatedAt'
+        ])
+        && resource.data.active == true
+        && isOpenClass(resource.data.classId)
+        && request.resource.data.lastOpenedLessonId is string
+        && request.resource.data.lastOpenedLessonId.size() > 0
+        && request.resource.data.lastOpenedSessionNumber is number
+        && request.resource.data.lastOpenedSessionNumber >= 1
+        && request.resource.data.lastOpenedSessionNumber <= 50
+        && request.resource.data.lastOpenedAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.openedLessonIds is list
+        && request.resource.data.openedLessonIds.size() <= 200;
+    }
+
+    function reportClassCode(data) {
+      return data.classCode is string ? data.classCode : data.classId;
+    }
+
+    function isReadableStudentReport(data) {
+      return data != null
+        && data.studentId is string
+        && reportClassCode(data) is string
+        && isOpenClass(reportClassCode(data))
+        && isActiveStudentInClass(data.studentId, reportClassCode(data));
+    }
+
+    function isKnowledgeSummaryId(summaryId, data) {
+      return summaryId is string
+        && data.feedbackId == summaryId
+        && data.classCode is string
+        && data.studentId is string
+        && data.lessonId is string
+        && summaryId == data.classCode + '__' + data.studentId + '__' + data.lessonId;
+    }
+
+    function isReadableKnowledgeSummary(summaryId, data) {
+      return data != null
+        && isKnowledgeSummaryId(summaryId, data)
+        && isOpenClass(data.classCode)
+        && isActiveStudentInClass(data.studentId, data.classCode);
+    }
+
+    function isValidPublicKnowledgeSummaryCreate(summaryId) {
+      return isKnowledgeSummaryId(summaryId, request.resource.data)
+        && isOpenClass(request.resource.data.classCode)
+        && isActiveStudentInClass(request.resource.data.studentId, request.resource.data.classCode)
+        && isOpenKnowledgeFeedbackTarget(request.resource.data)
+        && request.resource.data.understoodTopics is string
+        && request.resource.data.understoodTopics.size() >= 5
+        && request.resource.data.unclearTopics is string
+        && request.resource.data.unclearTopics.size() >= 5
+        && request.resource.data.understandingLevel is number
+        && request.resource.data.understandingLevel >= 1
+        && request.resource.data.understandingLevel <= 5
+        && request.resource.data.supportRequest is string
+        && request.resource.data.submittedAt == request.time;
     }
 
     function isValidPublicStudentSnapshotUpdate(studentId) {
@@ -588,13 +678,22 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update: if isAdmin()
         || isValidPublicStudentSnapshotUpdate(studentId)
-        || isValidPublicProjectNameSubmit(studentId);
+        || isValidPublicProjectNameSubmit(studentId)
+        || isValidPublicLessonProgressUpdate(studentId);
       allow delete: if isAdmin();
     }
 
     match /reports/{reportId} {
-      allow read: if isAdmin();
+      allow get: if isAdmin() || isReadableStudentReport(resource.data);
+      allow list: if isAdmin() || isReadableStudentReport(resource.data);
       allow create: if isAdmin() || isValidPublicReportCreate();
+      allow update, delete: if isAdmin();
+    }
+
+    match /knowledgeReportStudentSummaries/{summaryId} {
+      allow get: if isAdmin() || isReadableKnowledgeSummary(summaryId, resource.data);
+      allow list: if isAdmin() || isReadableKnowledgeSummary(summaryId, resource.data);
+      allow create: if isAdmin() || isValidPublicKnowledgeSummaryCreate(summaryId);
       allow update, delete: if isAdmin();
     }
 
@@ -677,6 +776,114 @@ service cloud.firestore {
       allow list: if isAdmin();
       allow create, update: if isAdmin() || isValidPublicPracticeSubmissionWrite(submissionId);
       allow delete: if isAdmin();
+    }
+
+    function olympiaSessionDoc(sessionId) {
+      return get(/databases/$(database)/documents/olympiaSessions/$(sessionId));
+    }
+
+    function isReadableOlympiaSession(sessionId) {
+      return exists(/databases/$(database)/documents/olympiaSessions/$(sessionId))
+        && isOpenClass(olympiaSessionDoc(sessionId).data.classCode);
+    }
+
+    function isOlympiaJoinableStatus(status) {
+      return status == 'lobby' || status == 'playing' || status == 'reveal';
+    }
+
+    function isOlympiaSessionPlaying(sessionId) {
+      return olympiaSessionDoc(sessionId).data.status == 'playing';
+    }
+
+    function isValidOlympiaRound(round) {
+      return round == 'startup' || round == 'acceleration' || round == 'finish';
+    }
+
+    function isOlympiaResponseId(responseId, data) {
+      return responseId is string
+        && data.studentId is string
+        && isValidOlympiaRound(data.round)
+        && data.questionIndex is int
+        && data.questionIndex >= 0
+        && responseId == data.studentId + '__' + data.round + '__' + string(data.questionIndex);
+    }
+
+    function isValidOlympiaParticipantCreate(sessionId, studentId) {
+      return isReadableOlympiaSession(sessionId)
+        && isOlympiaJoinableStatus(olympiaSessionDoc(sessionId).data.status)
+        && request.resource.data.keys().hasOnly([
+          'studentName', 'joinedAt', 'totalScore', 'mountainStep', 'peakAt', 'lastActiveAt'
+        ])
+        && request.resource.data.studentName is string
+        && request.resource.data.studentName.size() > 0
+        && studentDoc(studentId).data.fullName == request.resource.data.studentName
+        && isActiveStudentInClass(studentId, olympiaSessionDoc(sessionId).data.classCode)
+        && request.resource.data.totalScore == 0
+        && request.resource.data.mountainStep == 0
+        && request.resource.data.peakAt == null;
+    }
+
+    function isValidOlympiaResponseCreate(sessionId, responseId) {
+      return isOlympiaSessionPlaying(sessionId)
+        && isOpenClass(olympiaSessionDoc(sessionId).data.classCode)
+        && isActiveStudentInClass(request.resource.data.studentId, olympiaSessionDoc(sessionId).data.classCode)
+        && studentDoc(request.resource.data.studentId).data.fullName == request.resource.data.studentName
+        && isOlympiaResponseId(responseId, request.resource.data)
+        && request.resource.data.round == olympiaSessionDoc(sessionId).data.currentRound
+        && request.resource.data.questionIndex == olympiaSessionDoc(sessionId).data.questionIndex
+        && request.resource.data.questionId is string
+        && request.resource.data.questionId.size() > 0
+        && request.resource.data.selectedOption is int
+        && request.resource.data.selectedOption >= 0
+        && request.resource.data.selectedOption <= 3
+        && request.resource.data.isCorrect == null
+        && request.resource.data.pointsEarned == 0
+        && request.resource.data.responseMs is int
+        && request.resource.data.responseMs >= 0
+        && request.resource.data.answeredAt == request.time
+        && (
+          request.resource.data.round != 'finish'
+          || (
+            request.resource.data.finishChoice is int
+            && (
+              request.resource.data.finishChoice == 10
+              || request.resource.data.finishChoice == 20
+              || request.resource.data.finishChoice == 30
+            )
+          )
+        )
+        && (
+          request.resource.data.round == 'finish'
+          || request.resource.data.finishChoice == null
+        );
+    }
+
+    function isOlympiaResponseReadable(sessionId) {
+      return olympiaSessionDoc(sessionId).data.status == 'reveal'
+        || olympiaSessionDoc(sessionId).data.status == 'finished';
+    }
+
+    match /olympiaSessions/{sessionId} {
+      allow read: if isAdmin() || isReadableOlympiaSession(sessionId);
+      allow create, update, delete: if isAdmin();
+
+      match /participants/{studentId} {
+        allow read: if isAdmin() || isReadableOlympiaSession(sessionId);
+        allow create: if isAdmin() || isValidOlympiaParticipantCreate(sessionId, studentId);
+        allow update, delete: if isAdmin();
+      }
+
+      match /responses/{responseId} {
+        allow get: if isAdmin()
+          || (isReadableOlympiaSession(sessionId) && isOlympiaResponseReadable(sessionId));
+        allow list: if isAdmin();
+        allow create: if isAdmin() || isValidOlympiaResponseCreate(sessionId, responseId);
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    match /olympiaAnswerKeys/{sessionId} {
+      allow read, write: if isAdmin();
     }
   }
 }

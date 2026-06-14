@@ -1,18 +1,38 @@
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { ProtectedRoute } from './ui/components/ProtectedRoute.jsx';
+import { FullPageLoader } from './ui/components/Spinner.jsx';
 import { LoginPage } from './pages/admin/Login.jsx';
 import { ForbiddenPage } from './pages/admin/Forbidden.jsx';
-import { DashboardPage } from './pages/admin/Dashboard.jsx';
-import { ClassesPage } from './pages/admin/Classes.jsx';
-import { StudentsPage } from './pages/admin/Students.jsx';
-import { ReportsHubPage } from './pages/admin/ReportsHub.jsx';
-import { LessonsPage } from './pages/admin/Lessons.jsx';
-import { AnalyticsPage } from './pages/admin/AnalyticsPage.jsx';
-import { ScoresHubPage } from './pages/admin/ScoresHub.jsx';
-import { MiniGamesPage } from './pages/admin/MiniGames.jsx';
 import { HomePage } from './pages/Home.jsx';
 import { StudentPortalPage } from './pages/student/StudentPortal.jsx';
 import { NotFoundPage } from './pages/NotFound.jsx';
+import { ErrorBoundary } from './ui/components/ErrorBoundary.jsx';
+
+const DashboardPage = lazy(() =>
+  import('./pages/admin/Dashboard.jsx').then((m) => ({ default: m.DashboardPage })),
+);
+const ClassesPage = lazy(() =>
+  import('./pages/admin/Classes.jsx').then((m) => ({ default: m.ClassesPage })),
+);
+const StudentsPage = lazy(() =>
+  import('./pages/admin/Students.jsx').then((m) => ({ default: m.StudentsPage })),
+);
+const ReportsHubPage = lazy(() =>
+  import('./pages/admin/ReportsHub.jsx').then((m) => ({ default: m.ReportsHubPage })),
+);
+const LessonsPage = lazy(() =>
+  import('./pages/admin/Lessons.jsx').then((m) => ({ default: m.LessonsPage })),
+);
+const AnalyticsPage = lazy(() =>
+  import('./pages/admin/AnalyticsPage.jsx').then((m) => ({ default: m.AnalyticsPage })),
+);
+const ScoresHubPage = lazy(() =>
+  import('./pages/admin/ScoresHub.jsx').then((m) => ({ default: m.ScoresHubPage })),
+);
+const MiniGamesPage = lazy(() =>
+  import('./pages/admin/MiniGames.jsx').then((m) => ({ default: m.MiniGamesPage })),
+);
 
 function LegacyFeedbackRedirect() {
   const { search } = useLocation();
@@ -30,6 +50,14 @@ function LegacyQuizRedirect() {
 
 const SCORES_TABS = new Set(['quiz', 'practice', 'scores']);
 
+function AdminSuspense({ children }) {
+  return (
+    <ProtectedRoute>
+      <Suspense fallback={<FullPageLoader label="Đang tải trang..." />}>{children}</Suspense>
+    </ProtectedRoute>
+  );
+}
+
 function AnalyticsEntry() {
   const { search } = useLocation();
   const params = new URLSearchParams(search);
@@ -44,9 +72,9 @@ function AnalyticsEntry() {
     return <Navigate to={`/admin/analytics?${params.toString()}`} replace />;
   }
   return (
-    <ProtectedRoute>
+    <AdminSuspense>
       <AnalyticsPage />
-    </ProtectedRoute>
+    </AdminSuspense>
   );
 }
 
@@ -54,7 +82,14 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
-      <Route path="/c/:classCode" element={<StudentPortalPage />} />
+      <Route
+        path="/c/:classCode"
+        element={
+          <ErrorBoundary title="Cổng học sinh gặp sự cố" homeTo="/" variant="student">
+            <StudentPortalPage />
+          </ErrorBoundary>
+        }
+      />
 
       <Route path="/admin/login" element={<LoginPage />} />
       <Route path="/admin/forbidden" element={<ForbiddenPage />} />
@@ -62,59 +97,59 @@ export default function App() {
       <Route
         path="/admin"
         element={
-          <ProtectedRoute>
+          <AdminSuspense>
             <DashboardPage />
-          </ProtectedRoute>
+          </AdminSuspense>
         }
       />
       <Route
         path="/admin/classes"
         element={
-          <ProtectedRoute>
+          <AdminSuspense>
             <ClassesPage />
-          </ProtectedRoute>
+          </AdminSuspense>
         }
       />
       <Route
         path="/admin/students"
         element={
-          <ProtectedRoute>
+          <AdminSuspense>
             <StudentsPage />
-          </ProtectedRoute>
+          </AdminSuspense>
         }
       />
       <Route
         path="/admin/reports"
         element={
-          <ProtectedRoute>
+          <AdminSuspense>
             <ReportsHubPage />
-          </ProtectedRoute>
+          </AdminSuspense>
         }
       />
       <Route path="/admin/feedback" element={<LegacyFeedbackRedirect />} />
       <Route
         path="/admin/lessons"
         element={
-          <ProtectedRoute>
+          <AdminSuspense>
             <LessonsPage />
-          </ProtectedRoute>
+          </AdminSuspense>
         }
       />
       <Route
         path="/admin/games"
         element={
-          <ProtectedRoute>
+          <AdminSuspense>
             <MiniGamesPage />
-          </ProtectedRoute>
+          </AdminSuspense>
         }
       />
       <Route path="/admin/analytics" element={<AnalyticsEntry />} />
       <Route
         path="/admin/scores"
         element={
-          <ProtectedRoute>
+          <AdminSuspense>
             <ScoresHubPage />
-          </ProtectedRoute>
+          </AdminSuspense>
         }
       />
       <Route path="/admin/quiz" element={<LegacyQuizRedirect />} />

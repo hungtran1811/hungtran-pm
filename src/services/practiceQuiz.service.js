@@ -260,7 +260,7 @@ export async function submitPracticeQuiz({ student, classDoc, lesson, programId,
     { merge: true },
   );
 
-  return { mcqCorrect, mcqTotal, mcqPercent, attemptCount };
+  return { mcqCorrect, mcqTotal, mcqPercent, attemptCount, responses };
 }
 
 const practiceSubmissionsRef = collection(db, 'practiceQuizSubmissions');

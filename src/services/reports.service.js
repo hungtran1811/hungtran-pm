@@ -82,6 +82,21 @@ export function subscribeReportsByClass(classCode, onData, onError, max = 200) {
   );
 }
 
+export function subscribeReportsByStudent(studentId, onData, onError, max = 20) {
+  if (!studentId) return () => {};
+  const q = query(
+    reportsRef,
+    where('studentId', '==', studentId),
+    orderBy('submittedAt', 'desc'),
+    limit(max),
+  );
+  return onSnapshot(
+    q,
+    (snapshot) => onData(snapshot.docs.map(toReportModel)),
+    onError,
+  );
+}
+
 export async function listReportsByStudent(studentId, max = 50) {
   const snapshot = await getDocs(
     query(reportsRef, where('studentId', '==', studentId), orderBy('submittedAt', 'desc'), limit(max)),

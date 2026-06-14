@@ -3,7 +3,7 @@ import { Hash, RotateCcw, Users } from 'lucide-react';
 import { Button } from '../../../ui/components/Button.jsx';
 import { EmptyState } from '../../../ui/components/EmptyState.jsx';
 import { Field, Input } from '../../../ui/components/Field.jsx';
-import { SkeletonRows } from '../../../ui/components/Skeleton.jsx';
+import { SelectClassPrompt, LoadingCatState } from '../../../ui/components/WaitingCatIllustration.jsx';
 import { ClassFilterBar } from '../../../ui/components/ClassFilterBar.jsx';
 import { listActiveStudentsByClass } from '../../../services/students.service.js';
 import { getErrorMessage } from '../../../lib/firestore.js';
@@ -462,11 +462,13 @@ export function NumberGuessGame({ classes, programs = [] }) {
       </div>
 
       {loadingStudents ? (
-        <SkeletonRows count={4} />
+        <LoadingCatState message="Đang tải học sinh..." />
       ) : !selectedClass ? (
         activeClasses.length === 0 ? (
           <EmptyState icon={<Users className="h-7 w-7" />} title="Chưa có lớp đang hoạt động" />
-        ) : null
+        ) : (
+          <SelectClassPrompt title="Chọn lớp để chơi đoán số" />
+        )
       ) : students.length === 0 ? (
         <EmptyState
           icon={<Users className="h-7 w-7" />}

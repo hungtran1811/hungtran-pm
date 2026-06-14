@@ -17,12 +17,14 @@ import { Markdown } from '../../ui/components/Markdown.jsx';
 import { ImageLightbox, useImageLightbox } from '../../ui/components/ImageLightbox.jsx';
 import { Spinner } from '../../ui/components/Spinner.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
-import { QUIZ_FOCUS_SESSIONS, UNDERSTANDING_LEVELS } from '../../constants/index.js';
+import { UNDERSTANDING_LEVELS } from '../../constants/index.js';
+import { loadStudentLessonActivity } from '../../lib/lessonActivity.js';
 import { getProgramLesson } from '../../services/curriculum.service.js';
 import {
   subscribeFeedbackReceipt,
   submitKnowledgeReport,
 } from '../../services/knowledgeReports.service.js';
+import { recordLessonOpened } from '../../services/students.service.js';
 import { getErrorMessage } from '../../lib/firestore.js';
 import { StudentQuizExam } from './StudentQuizExam.jsx';
 import { LessonPracticeQuiz } from './LessonPracticeQuiz.jsx';
@@ -93,9 +95,11 @@ export function LessonsView({
   student,
   submittedLessonIds = [],
   onFeedbackSubmitted,
+  onQuizFocusChange,
 }) {
   const [activeIndex, setActiveIndex] = useState(null);
   const [readIds, setReadIds] = useState(() => loadReadIds(classDoc.classCode, student.id));
+  const [lessonActivity, setLessonActivity] = useState({});
 
   const lessons = useMemo(() => {
     if (!program) return [];
@@ -115,6 +119,20 @@ export function LessonsView({
     });
     return map;
   }, [submittedLessonIds]);
+
+  useEffect(() => {
+    if (!lessons.length) {
+      setLessonActivity({});
+      return undefined;
+    }
+    let cancelled = false;
+    loadStudentLessonActivity(classDoc.classCode, student.id, lessons).then((map) => {
+      if (!cancelled) setLessonActivity(map);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [lessons, classDoc.classCode, student.id]);
 
   const markRead = (lessonId) => {
     setReadIds((prev) => {
@@ -136,6 +154,9 @@ export function LessonsView({
     if (lesson) {
       markRead(lesson.id);
       saveLastLessonId(classDoc.classCode, student.id, lesson.id);
+      recordLessonOpened(student.id, classDoc.classCode, lesson.id, lesson.sessionNumber).catch(
+        () => {},
+      );
     }
   };
 
@@ -168,6 +189,7 @@ export function LessonsView({
         onSelectLesson={openLesson}
         onBack={() => setActiveIndex(null)}
         onSubmitted={(lessonId) => onFeedbackSubmitted?.(lessonId)}
+        onQuizFocusChange={onQuizFocusChange}
       />
     );
   }
@@ -185,7 +207,7 @@ export function LessonsView({
       </div>
 
       {resumeLesson && (
-        <div className="sticky top-[3.25rem] z-20 -mx-4 mt-4 border-b border-slate-200/80 bg-slate-50/95 px-4 py-3 backdrop-blur dark:border-slate-800/80 dark:bg-slate-950/95 sm:static sm:mx-0 sm:rounded-xl sm:border sm:px-0 sm:py-0 sm:backdrop-blur-none">
+        <div className="student-sticky-below-header -mx-4 mt-4 border-b border-slate-200/80 bg-slate-50/95 px-4 py-3 backdrop-blur dark:border-slate-800/80 dark:bg-slate-950/95 sm:static sm:mx-0 sm:rounded-xl sm:border sm:px-0 sm:py-0 sm:backdrop-blur-none">
           <Button
             size="lg"
             className="w-full min-h-12 shadow-sm sm:mt-4"
@@ -201,6 +223,7 @@ export function LessonsView({
         {lessons.map((lesson, index) => {
           const isRead = readIds.has(lesson.id);
           const isSubmitted = submittedMap[lesson.id];
+          const activity = lessonActivity[lesson.id];
           const thumb = lesson.bannerImageUrl || lesson.coverImageUrl;
           return (
             <button
@@ -222,7 +245,15 @@ export function LessonsView({
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Badge tone="brand">Buổi {lesson.sessionNumber}</Badge>
                   {isSubmitted && <Badge tone="green">Đã phản hồi</Badge>}
-                  {isRead && !isSubmitted && <Badge tone="slate">Đã đọc</Badge>}
+                  {activity?.quizSubmitted && <Badge tone="blue">Đã nộp quiz</Badge>}
+                  {activity?.practiceDone && (
+                    <Badge tone="slate">
+                      Ôn tập {activity.practiceScore != null ? `${activity.practiceScore}%` : ''}
+                    </Badge>
+                  )}
+                  {isRead && !isSubmitted && (
+                    <Badge tone="slate">Đã đọc</Badge>
+                  )}
                 </div>
                 <h3 className="mt-2 line-clamp-2 font-semibold text-slate-800 dark:text-slate-100">
                   {lesson.title || `Buổi ${lesson.sessionNumber}`}
@@ -252,20 +283,25 @@ function LessonDetail({
   onSelectLesson,
   onBack,
   onSubmitted,
+  onQuizFocusChange,
 }) {
   const { open, images, index, openLightbox, closeLightbox } = useImageLightbox();
   const [contentTab, setContentTab] = useState('lesson');
   const [quizPhase, setQuizPhase] = useState(null);
   const [fullLesson, setFullLesson] = useState(lesson);
   const [loadingContent, setLoadingContent] = useState(false);
-  const isQuizFocusSession = QUIZ_FOCUS_SESSIONS.includes(Number(lesson.sessionNumber));
-  const quizUiActive = Boolean(quizPhase && !['hidden', 'loading'].includes(quizPhase));
+  const quizExamActive = quizPhase === 'exam';
   const displayLesson = fullLesson || lesson;
   const hasExercise = Boolean(displayLesson.exercise && displayLesson.exerciseVisible);
   const allImages = lessonImages(displayLesson);
   const galleryItems =
     Array.isArray(displayLesson.images) && displayLesson.images.length > 0 ? displayLesson.images : [];
   const heroUrl = displayLesson.bannerImageUrl || displayLesson.coverImageUrl;
+
+  useEffect(() => {
+    onQuizFocusChange?.(quizExamActive);
+    return () => onQuizFocusChange?.(false);
+  }, [quizExamActive, onQuizFocusChange]);
 
   useEffect(() => {
     setContentTab('lesson');
@@ -294,7 +330,7 @@ function LessonDetail({
 
   return (
     <div>
-      {!quizUiActive && (
+      {!quizExamActive && (
       <button
         type="button"
         onClick={onBack}
@@ -305,15 +341,15 @@ function LessonDetail({
       </button>
       )}
 
-      {!quizUiActive && (
-      <div className="sticky top-[3.25rem] z-20 -mx-4 mb-4 overflow-x-auto border-b border-slate-200/80 bg-slate-50/95 px-4 py-2 backdrop-blur dark:border-slate-800/80 dark:bg-slate-950/95 sm:mx-0 sm:rounded-xl sm:border sm:px-3 sm:backdrop-blur-none">
+      {!quizExamActive && (
+      <div className="student-sticky-below-header -mx-4 mb-4 overflow-x-auto border-b border-slate-200/80 bg-slate-50/95 px-4 py-2 backdrop-blur dark:border-slate-800/80 dark:bg-slate-950/95 sm:mx-0 sm:rounded-xl sm:border sm:px-3 sm:backdrop-blur-none">
         <div className="flex gap-2 pb-1">
           {lessons.map((l, i) => (
             <button
               key={l.id}
               type="button"
               onClick={() => onSelectLesson(i)}
-              className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
+              className={`shrink-0 rounded-full px-3.5 py-2 text-sm font-medium transition ${
                 i === activeIndex
                   ? 'bg-brand-600 text-white shadow-sm'
                   : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:ring-brand-300 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700'
@@ -326,7 +362,7 @@ function LessonDetail({
       </div>
       )}
 
-      {!quizUiActive && (
+      {!quizExamActive && (
       <article className="card overflow-hidden">
         <div className="border-b border-slate-200 px-5 py-4 dark:border-slate-700 sm:px-6">
           <Badge tone="brand">Buổi {displayLesson.sessionNumber}</Badge>
@@ -379,7 +415,7 @@ function LessonDetail({
                   aria-label="Phóng to ảnh"
                 >
                   <img src={heroUrl} alt={displayLesson.title} className="aspect-[2/1] w-full object-cover" />
-                  <span className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1 text-xs text-white opacity-0 transition group-hover:opacity-100">
+                  <span className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-black/50 px-2.5 py-1 text-xs text-white opacity-100 sm:opacity-0 sm:transition sm:group-hover:opacity-100">
                     <ZoomIn className="h-3.5 w-3.5" />
                     Phóng to
                   </span>
@@ -405,8 +441,8 @@ function LessonDetail({
                           alt={img.alt || ''}
                           className="aspect-[4/3] w-full object-cover transition group-hover:scale-[1.03]"
                         />
-                        <span className="absolute inset-0 flex items-center justify-center bg-black/0 transition group-hover:bg-black/20">
-                          <ZoomIn className="h-5 w-5 text-white opacity-0 transition group-hover:opacity-100" />
+                        <span className="absolute inset-0 flex items-center justify-center bg-black/10 sm:bg-black/0 sm:transition sm:group-hover:bg-black/20">
+                          <ZoomIn className="h-5 w-5 text-white opacity-90 sm:opacity-0 sm:transition sm:group-hover:opacity-100" />
                         </span>
                       </button>
                     ))}
@@ -465,7 +501,7 @@ function LessonDetail({
       </article>
       )}
 
-      {!quizUiActive && (
+      {!quizExamActive && (
       <div className="mt-4 flex items-center justify-between gap-3">
         <Button variant="secondary" onClick={() => onSelectLesson(activeIndex - 1)} disabled={activeIndex <= 0}>
           <ArrowLeft className="h-4 w-4" />
@@ -489,7 +525,7 @@ function LessonDetail({
         onPhaseChange={setQuizPhase}
       />
 
-      {!isQuizFocusSession && !quizUiActive && (
+      {!quizExamActive && (
         <FeedbackForm
           lesson={displayLesson}
           classDoc={classDoc}
@@ -628,7 +664,7 @@ function FeedbackForm({ lesson, classDoc, student, onSubmitted }) {
         />
       </Field>
 
-      <div className="sticky bottom-0 -mx-5 border-t border-slate-100 bg-white/95 px-5 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
+      <div className="student-sticky-footer dark:border-slate-800">
         <Button type="submit" size="lg" className="w-full min-h-12" loading={submitting}>
           Gửi phản hồi
         </Button>

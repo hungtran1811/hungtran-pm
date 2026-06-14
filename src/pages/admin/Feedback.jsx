@@ -4,7 +4,7 @@ import { MessageSquare, Copy } from 'lucide-react';
 import { Button } from '../../ui/components/Button.jsx';
 import { EmptyState } from '../../ui/components/EmptyState.jsx';
 import { ConfirmDialog } from '../../ui/components/ConfirmDialog.jsx';
-import { SkeletonRows } from '../../ui/components/Skeleton.jsx';
+import { SelectClassPrompt, LoadingCatState } from '../../ui/components/WaitingCatIllustration.jsx';
 import { ClassFilterBar } from '../../ui/components/ClassFilterBar.jsx';
 import { Input, Select } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
@@ -284,7 +284,7 @@ export function FeedbackPanel({
   return (
     <>
       {loadingClasses ? (
-        <SkeletonRows count={3} />
+        <LoadingCatState message="Đang tải danh sách lớp..." />
       ) : classes.length === 0 ? (
         <EmptyState icon={<MessageSquare className="h-7 w-7" />} title="Chưa có lớp" />
       ) : (
@@ -324,7 +324,12 @@ export function FeedbackPanel({
             </div>
           </div>
 
-          {!selectedClass ? null : (
+          {!selectedClass ? (
+            <SelectClassPrompt
+              title="Chọn lớp để xem phản hồi"
+              description="Chọn lớp ở bộ lọc phía trên để xem phản hồi buổi học."
+            />
+          ) : (
             <>
           <AdminSnapshotControls
             lastLoadedAt={lastLoadedAt}
@@ -376,14 +381,20 @@ export function FeedbackPanel({
                     Chưa nộp phản hồi buổi {group.session} ({group.students.length} học sinh)
                   </p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    {group.students.map((s) => (
+                    {group.students.map((s) => {
+                      const openedSession = Number(s.lastOpenedSessionNumber ?? 0);
+                      const hasOpened = openedSession >= group.session;
+                      return (
                       <span
                         key={s.id}
                         className="rounded-full bg-white/80 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-slate-900/60 dark:text-amber-200"
+                        title={hasOpened ? 'Đã mở bài giảng buổi này' : 'Chưa mở bài giảng buổi này'}
                       >
                         {s.fullName}
+                        {!hasOpened && ' · chưa mở bài'}
                       </span>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               ))}
@@ -391,7 +402,7 @@ export function FeedbackPanel({
           )}
 
           {loading ? (
-            <SkeletonRows count={5} />
+            <LoadingCatState message="Đang tải phản hồi học sinh..." />
           ) : visible.length === 0 ? (
             <EmptyState
               title={

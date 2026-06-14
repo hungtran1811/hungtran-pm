@@ -6,7 +6,7 @@ import { Badge } from '../../ui/components/Badge.jsx';
 import { Modal } from '../../ui/components/Modal.jsx';
 import { ConfirmDialog } from '../../ui/components/ConfirmDialog.jsx';
 import { EmptyState } from '../../ui/components/EmptyState.jsx';
-import { SkeletonRows } from '../../ui/components/Skeleton.jsx';
+import { SelectClassPrompt, LoadingCatState } from '../../ui/components/WaitingCatIllustration.jsx';
 import { ClassFilterBar } from '../../ui/components/ClassFilterBar.jsx';
 import { Field, Input, Select } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
@@ -167,7 +167,7 @@ export function StudentsPage() {
       }
     >
       {loadingClasses ? (
-        <SkeletonRows count={3} />
+        <LoadingCatState message="Đang tải danh sách lớp..." />
       ) : classes.length === 0 ? (
         <EmptyState icon={<School className="h-7 w-7" />} title="Chưa có lớp học" />
       ) : (
@@ -207,8 +207,13 @@ export function StudentsPage() {
             </div>
           </div>
 
-          {!selectedClass ? null : loadingStudents ? (
-            <SkeletonRows count={5} />
+          {!selectedClass ? (
+            <SelectClassPrompt
+              title="Chọn lớp để xem học sinh"
+              description="Chọn lớp ở bộ lọc phía trên để quản lý danh sách học sinh."
+            />
+          ) : loadingStudents ? (
+            <LoadingCatState message="Đang tải học sinh..." />
           ) : filtered.length === 0 ? (
             <EmptyState
               icon={<Users className="h-7 w-7" />}

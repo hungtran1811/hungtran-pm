@@ -45,6 +45,10 @@ export function toStudentModel(snapshot) {
     latestReportId: data.latestReportId ?? '',
     lastReportedAt: toDate(data.lastReportedAt),
     progressStalledCount: Number(data.progressStalledCount ?? 0),
+    lastOpenedLessonId: data.lastOpenedLessonId ?? '',
+    lastOpenedSessionNumber: Number(data.lastOpenedSessionNumber ?? 0),
+    lastOpenedAt: toDate(data.lastOpenedAt),
+    openedLessonIds: Array.isArray(data.openedLessonIds) ? data.openedLessonIds : [],
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt),
   };
@@ -69,6 +73,23 @@ export function toReportModel(snapshot) {
     submittedDateKey: data.submittedDateKey ?? '',
     source: data.source ?? 'student-form',
     createdAt: toDate(data.createdAt),
+  };
+}
+
+export function toFeedbackSummaryModel(snapshot) {
+  const data = snapshot.data() || {};
+  return {
+    id: snapshot.id,
+    feedbackId: data.feedbackId ?? snapshot.id,
+    classCode: data.classCode ?? '',
+    studentId: data.studentId ?? '',
+    lessonId: data.lessonId ?? '',
+    sessionNumber: Number(data.sessionNumber ?? 0),
+    understoodTopics: data.understoodTopics ?? '',
+    unclearTopics: data.unclearTopics ?? '',
+    understandingLevel: Number(data.understandingLevel ?? 3),
+    supportRequest: data.supportRequest ?? '',
+    submittedAt: toDate(data.submittedAt),
   };
 }
 

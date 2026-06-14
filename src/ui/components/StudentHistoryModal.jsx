@@ -51,6 +51,13 @@ export function StudentHistoryModal({ student, onClose, feedbackOnly = false }) 
     return items.sort((a, b) => (b.at?.getTime?.() ?? 0) - (a.at?.getTime?.() ?? 0));
   }, [reports, feedbacks]);
 
+  const latestReportId = useMemo(() => {
+    if (!reports.length) return null;
+    return [...reports].sort(
+      (a, b) => (b.submittedAt?.getTime?.() ?? 0) - (a.submittedAt?.getTime?.() ?? 0),
+    )[0]?.id;
+  }, [reports]);
+
   return (
     <Modal
       open
@@ -90,7 +97,11 @@ export function StudentHistoryModal({ student, onClose, feedbackOnly = false }) 
           <div className="space-y-3">
             {timeline.map((item, i) =>
               item.kind === 'report' ? (
-                <TimelineReport key={`r-${i}`} report={item.data} />
+                <TimelineReport
+                  key={`r-${i}`}
+                  report={item.data}
+                  isLatest={item.data.id === latestReportId}
+                />
               ) : (
                 <TimelineFeedback key={`f-${i}`} feedback={item.data} />
               ),
@@ -102,11 +113,18 @@ export function StudentHistoryModal({ student, onClose, feedbackOnly = false }) 
   );
 }
 
-function TimelineReport({ report }) {
+function TimelineReport({ report, isLatest = false }) {
   return (
-    <div className="card-prose min-w-0 overflow-hidden rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+    <div
+      className={`card-prose min-w-0 overflow-hidden rounded-xl border p-4 ${
+        isLatest
+          ? 'border-brand-400 bg-brand-50/50 ring-2 ring-brand-400/25 dark:border-brand-500/50 dark:bg-brand-500/10 dark:ring-brand-400/20'
+          : 'border-slate-200 dark:border-slate-700'
+      }`}
+    >
       <div className="flex flex-wrap items-center gap-2">
         <Badge tone="brand">Báo cáo tiến độ</Badge>
+        {isLatest && <Badge tone="brand">Mới nhất</Badge>}
         <Badge tone={STATUS_TONES[report.status] || 'slate'}>{report.status}</Badge>
         <span className="text-xs text-slate-400">
           {report.submittedAt ? formatDateTime(report.submittedAt) : ''}

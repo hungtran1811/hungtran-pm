@@ -7,13 +7,14 @@ import {
   getDocs,
   limit,
   onSnapshot,
+  orderBy,
   query,
   serverTimestamp,
   where,
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '../config/firebase.js';
-import { toKnowledgeReportModel } from '../models/index.js';
+import { toFeedbackSummaryModel, toKnowledgeReportModel } from '../models/index.js';
 
 const knowledgeReportsRef = collection(db, 'knowledgeReports');
 
@@ -108,6 +109,42 @@ export function subscribeFeedbackReceipt(classCode, studentId, lessonId, onData,
   );
 }
 
+function sortFeedbackSummaries(docs) {
+  return docs
+    .map(toFeedbackSummaryModel)
+    .sort((a, b) => (b.submittedAt?.getTime?.() ?? 0) - (a.submittedAt?.getTime?.() ?? 0));
+}
+
+export async function listFeedbackSummariesForStudent(classCode, studentId, max = 50) {
+  if (!classCode || !studentId) return [];
+  const snapshot = await getDocs(
+    query(
+      collection(db, 'knowledgeReportStudentSummaries'),
+      where('classCode', '==', classCode),
+      where('studentId', '==', studentId),
+      orderBy('submittedAt', 'desc'),
+      limit(max),
+    ),
+  );
+  return sortFeedbackSummaries(snapshot.docs);
+}
+
+export function subscribeFeedbackSummariesForStudent(classCode, studentId, onData, onError, max = 50) {
+  if (!classCode || !studentId) return () => {};
+  const q = query(
+    collection(db, 'knowledgeReportStudentSummaries'),
+    where('classCode', '==', classCode),
+    where('studentId', '==', studentId),
+    orderBy('submittedAt', 'desc'),
+    limit(max),
+  );
+  return onSnapshot(
+    q,
+    (snapshot) => onData(sortFeedbackSummaries(snapshot.docs)),
+    onError,
+  );
+}
+
 export function subscribeKnowledgeReportsByStudent(studentId, onData, onError, max = 50) {
   if (!studentId) return () => {};
   const q = query(knowledgeReportsRef, where('studentId', '==', studentId), limit(max));
@@ -149,6 +186,21 @@ export async function submitKnowledgeReport({ student, classDoc, lesson, form })
 
   batch.set(receiptRef, base);
 
+  const summaryRef = doc(db, 'knowledgeReportStudentSummaries', feedbackId);
+  batch.set(summaryRef, {
+    feedbackId,
+    classCode: classDoc.classCode,
+    studentId: student.id,
+    curriculumProgramId: classDoc.curriculumProgramId,
+    sessionNumber: Number(lesson.sessionNumber),
+    lessonId: lesson.id,
+    understoodTopics: form.understoodTopics.trim(),
+    unclearTopics: form.unclearTopics.trim(),
+    understandingLevel: Number(form.understandingLevel),
+    supportRequest: form.supportRequest?.trim() ?? '',
+    submittedAt: serverTimestamp(),
+  });
+
   const indexRef = doc(
     db,
     'studentFeedbackIndex',
@@ -176,6 +228,7 @@ export async function resetKnowledgeFeedback(feedbackId) {
   const batch = writeBatch(db);
   batch.delete(doc(db, 'knowledgeReports', feedbackId));
   batch.delete(doc(db, 'knowledgeReportReceipts', feedbackId));
+  batch.delete(doc(db, 'knowledgeReportStudentSummaries', feedbackId));
 
   if (reportSnap.exists()) {
     const { classCode, studentId, lessonId } = reportSnap.data();

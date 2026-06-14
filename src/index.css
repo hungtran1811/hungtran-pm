@@ -53,7 +53,88 @@
   }
 
   .label-base {
-    @apply mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300;
+    @apply mb-1.5 block text-sm font-semibold text-slate-800 dark:text-slate-200;
+  }
+
+  .admin-app {
+    @apply text-[15px] leading-relaxed text-slate-800 antialiased dark:text-slate-100;
+  }
+
+  .admin-app h2 {
+    @apply font-bold tracking-tight text-slate-900 dark:text-slate-50;
+  }
+
+  .admin-app h3 {
+    @apply font-semibold text-slate-900 dark:text-slate-100;
+  }
+
+  .admin-app .input-base {
+    @apply font-medium;
+  }
+
+  .admin-app table {
+    @apply text-[14px];
+  }
+
+  .admin-app th {
+    @apply font-semibold text-slate-700 dark:text-slate-200;
+  }
+
+  .student-portal {
+    --student-header-height: 3.75rem;
+    --student-bottom-nav-height: 3.75rem;
+  }
+
+  .student-main-with-nav {
+    padding-bottom: calc(var(--student-bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 1rem);
+  }
+
+  .student-bottom-nav {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .student-sticky-below-header {
+    position: sticky;
+    top: var(--student-header-height);
+    z-index: 20;
+  }
+
+  .student-sticky-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    margin-left: -1rem;
+    margin-right: -1rem;
+    border-top-width: 1px;
+    border-color: rgb(241 245 249 / 0.95);
+    background-color: rgb(255 255 255 / 0.95);
+    padding: 1rem;
+    backdrop-filter: blur(8px);
+  }
+
+  .student-portal:has(.student-main-with-nav) .student-sticky-footer {
+    bottom: calc(var(--student-bottom-nav-height) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .dark .student-sticky-footer {
+    border-color: rgb(30 41 59 / 0.95);
+    background-color: rgb(2 6 23 / 0.95);
+  }
+
+  @media (min-width: 640px) {
+    .student-sticky-footer {
+      position: static;
+      margin-left: 0;
+      margin-right: 0;
+      border-top-width: 0;
+      background-color: transparent;
+      padding: 0;
+      backdrop-filter: none;
+    }
+  }
+
+  .admin-app td {
+    @apply font-medium text-slate-800 dark:text-slate-200;
   }
 }
 
@@ -509,3 +590,247 @@
     font-size: 0.72rem;
   }
 }
+
+@keyframes olympia-step-pop {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 16px rgba(52, 211, 153, 0.6);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.olympia-step-pop {
+  animation: olympia-step-pop 0.6s ease-out;
+}
+
+.olympia-climber-highlight {
+  filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.5));
+}
+
+/* Brand mark — empty / loading states (hungtranPM mascot) */
+.brand-mark {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 11rem;
+  height: 11rem;
+}
+
+.brand-mark--prompt {
+  width: 12.5rem;
+  height: 12.5rem;
+}
+
+.brand-mark-orbit {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.brand-mark-core {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brand-mark-logo {
+  width: auto;
+  height: 4.75rem;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 28px rgb(49 111 253 / 0.22));
+}
+
+.brand-mark--prompt .brand-mark-logo {
+  height: 5.25rem;
+}
+
+.brand-mark-glow {
+  animation: brand-mark-glow 3.2s ease-in-out infinite;
+}
+
+.brand-mark-ring-outer {
+  opacity: 0.28;
+  stroke-dasharray: 6 10;
+}
+
+.brand-mark--idle .brand-mark-ring-outer {
+  animation: brand-mark-spin-slow 28s linear infinite;
+}
+
+.brand-mark-ring-inner {
+  opacity: 0.45;
+}
+
+.brand-mark--idle .brand-mark-ring-inner {
+  stroke-dasharray: 2 14;
+  animation: brand-mark-spin-slow 18s linear infinite reverse;
+}
+
+.brand-mark-ring-progress {
+  opacity: 0.95;
+  stroke-dasharray: 110 380;
+  transform-origin: center;
+  animation: brand-mark-spin 1.1s linear infinite;
+}
+
+.brand-mark--loading .brand-mark-logo {
+  animation: brand-mark-float 1.8s ease-in-out infinite;
+}
+
+.brand-mark--idle .brand-mark-logo {
+  animation: brand-mark-float 3.4s ease-in-out infinite;
+}
+
+.brand-mark-paws {
+  position: absolute;
+  bottom: 0.15rem;
+  z-index: 3;
+  display: flex;
+  gap: 0.45rem;
+}
+
+.brand-mark-paw {
+  display: block;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 0.15rem;
+  background: linear-gradient(135deg, #13d4e6 0%, #1596ff 40%, #5142ff 70%, #8b2af6 100%);
+  opacity: 0.55;
+}
+
+.brand-mark--idle .brand-mark-paw {
+  animation: brand-mark-paw-idle 2.4s ease-in-out infinite;
+}
+
+.brand-mark--loading .brand-mark-paw {
+  animation: brand-mark-paw-load 0.9s ease-in-out infinite;
+}
+
+.brand-empty-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed rgb(148 163 184 / 0.45);
+  border-radius: 1rem;
+  padding: 3rem 1.5rem;
+  text-align: center;
+}
+
+.dark .brand-empty-panel {
+  border-color: rgb(100 116 139 / 0.35);
+}
+
+.brand-empty-panel--loading {
+  border-color: transparent;
+  padding-top: 2.5rem;
+  padding-bottom: 2.5rem;
+}
+
+.brand-empty-title {
+  margin-top: 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgb(51 65 85);
+}
+
+.dark .brand-empty-title {
+  color: rgb(226 232 240);
+}
+
+.brand-empty-desc {
+  margin-top: 0.35rem;
+  max-width: 26rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: rgb(100 116 139);
+}
+
+.dark .brand-empty-desc {
+  color: rgb(148 163 184);
+}
+
+.brand-empty-message {
+  margin-top: 0.85rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgb(71 85 105);
+}
+
+.dark .brand-empty-message {
+  color: rgb(203 213 225);
+}
+
+@keyframes brand-mark-glow {
+  0%,
+  100% {
+    opacity: 0.75;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+@keyframes brand-mark-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes brand-mark-spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes brand-mark-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes brand-mark-paw-idle {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0) scale(0.9);
+  }
+  50% {
+    opacity: 0.75;
+    transform: translateY(-2px) scale(1);
+  }
+}
+
+@keyframes brand-mark-paw-load {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
+}
+
+/* Legacy aliases — giữ nếu CSS cũ còn tham chiếu */
+.waiting-cat-dot {
+  animation: brand-mark-paw-load 0.9s ease-in-out infinite;
+}
+

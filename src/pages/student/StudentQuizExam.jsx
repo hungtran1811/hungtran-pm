@@ -11,6 +11,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { Button } from '../../ui/components/Button.jsx';
+import { Badge } from '../../ui/components/Badge.jsx';
 import { CodeQuestionPanel } from '../../ui/components/CodeQuestionPanel.jsx';
 import { EmptyState } from '../../ui/components/EmptyState.jsx';
 import { Spinner } from '../../ui/components/Spinner.jsx';
@@ -19,15 +20,33 @@ import { getErrorMessage } from '../../lib/firestore.js';
 import {
   canTakeQuizAttempt,
   getPublicQuiz,
-  getQuizLatestStatus,
   getRemainingQuizAttempts,
   resolveQuizMaxAttempts,
+  subscribeQuizLatestStatus,
   submitQuizSubmission,
 } from '../../services/quiz.service.js';
 import { resolveProgramId } from '../../services/curriculum.service.js';
 
 function examDraftKey(classCode, studentId, lessonId) {
   return `quizExamDraft:${classCode}:${studentId}:${lessonId}`;
+}
+
+function readExamDraft(classCode, studentId, lessonId) {
+  try {
+    const raw = localStorage.getItem(examDraftKey(classCode, studentId, lessonId));
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function clearExamDraft(classCode, studentId, lessonId) {
+  try {
+    localStorage.removeItem(examDraftKey(classCode, studentId, lessonId));
+  } catch {
+    // ignore
+  }
 }
 
 function formatCountdown(totalSeconds) {
@@ -53,6 +72,14 @@ function isQuestionAnswered(q, answers) {
     return true;
   }
   return answers[q.id] !== undefined;
+}
+
+function seedCodeAnswers(questions) {
+  const seeded = {};
+  questions.forEach((q) => {
+    if (q.type === 'code' && q.starterCode) seeded[q.id] = q.starterCode;
+  });
+  return seeded;
 }
 
 function QuestionNavButton({ index, q, answers, marked, isCurrent, onClick }) {
@@ -95,7 +122,9 @@ export function StudentQuizExam({ lesson, classDoc, student, onPhaseChange }) {
   const [remainingSeconds, setRemainingSeconds] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [loadError, setLoadError] = useState(null);
+  const [timedOutSubmitFailed, setTimedOutSubmitFailed] = useState(false);
   const autoSubmittedRef = useRef(false);
+  const expiredDraftSubmitRef = useRef(false);
 
   useEffect(() => {
     onPhaseChange?.(phase);
@@ -105,21 +134,13 @@ export function StudentQuizExam({ lesson, classDoc, student, onPhaseChange }) {
     setLoading(true);
     setLoadError(null);
     try {
-      const [publicQuiz, status] = await Promise.all([
-        getPublicQuiz(programId, lesson.id),
-        getQuizLatestStatus(classDoc.classCode, student.id, lesson.id),
-      ]);
+      const publicQuiz = await getPublicQuiz(programId, lesson.id);
       setQuiz(publicQuiz);
-      setLatestStatus(status);
       if (!publicQuiz?.enabled || !publicQuiz.questions?.length) {
         setPhase('hidden');
         return;
       }
-      if (status?.attemptNumber > 0) {
-        setPhase('done');
-      } else {
-        setPhase('intro');
-      }
+      setPhase('intro');
     } catch (error) {
       setQuiz(null);
       const message = getErrorMessage(error);
@@ -129,11 +150,34 @@ export function StudentQuizExam({ lesson, classDoc, student, onPhaseChange }) {
     } finally {
       setLoading(false);
     }
-  }, [programId, lesson.id, classDoc.classCode, student.id, toast]);
+  }, [programId, lesson.id, toast]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!quiz?.enabled || !quiz?.questions?.length) return undefined;
+
+    return subscribeQuizLatestStatus(
+      classDoc.classCode,
+      student.id,
+      lesson.id,
+      (status) => {
+        setLatestStatus(status);
+        const attempts = Number(status?.attemptNumber ?? 0);
+        setPhase((current) => {
+          if (attempts > 0) {
+            if (current === 'exam') return current;
+            return 'done';
+          }
+          if (current === 'done') return 'intro';
+          return current;
+        });
+      },
+      () => {},
+    );
+  }, [quiz, classDoc.classCode, student.id, lesson.id]);
 
   const timeLimitSeconds = useMemo(() => {
     const mins = Number(quiz?.timeLimitMinutes ?? 0);
@@ -179,18 +223,19 @@ export function StudentQuizExam({ lesson, classDoc, student, onPhaseChange }) {
     [phase, classDoc.classCode, student.id, lesson.id, currentIndex],
   );
 
-  const doSubmit = useCallback(
-    async (timedOut = false) => {
-      if (!quiz || submitting) return;
-      if (!timedOut) {
-        const unanswered = quiz.questions.filter((q) => !isQuestionAnswered(q, answers));
+  const performSubmit = useCallback(
+    async ({ answerMap, startedMs, timedOut = false }) => {
+      if (!quiz || submitting) return false;
+      const allowPartial = timedOut || timedOutSubmitFailed;
+      if (!allowPartial) {
+        const unanswered = quiz.questions.filter((q) => !isQuestionAnswered(q, answerMap));
         if (unanswered.length) {
           toast.error('Hãy trả lời tất cả câu hỏi trước khi nộp.');
-          return;
+          return false;
         }
       }
-      const durationSeconds = startedAtMs
-        ? Math.round((Date.now() - startedAtMs) / 1000)
+      const durationSeconds = startedMs
+        ? Math.round((Date.now() - startedMs) / 1000)
         : 0;
       setSubmitting(true);
       try {
@@ -200,23 +245,26 @@ export function StudentQuizExam({ lesson, classDoc, student, onPhaseChange }) {
           lesson,
           programId,
           quiz,
-          answers,
-          startedAtMs,
+          answers: answerMap,
+          startedAtMs: startedMs,
           durationSeconds,
           timedOut,
         });
         setLatestStatus({ attemptNumber: result.attemptNumber });
         setPhase('done');
-        try {
-          localStorage.removeItem(examDraftKey(classDoc.classCode, student.id, lesson.id));
-        } catch {
-          // ignore
-        }
+        setTimedOutSubmitFailed(false);
+        clearExamDraft(classDoc.classCode, student.id, lesson.id);
         toast.success(
           timedOut ? 'Hết giờ — bài đã được nộp tự động.' : 'Đã nộp bài kiểm tra.',
         );
+        return true;
       } catch (error) {
+        if (timedOut) {
+          autoSubmittedRef.current = false;
+          setTimedOutSubmitFailed(true);
+        }
         toast.error(getErrorMessage(error));
+        return false;
       } finally {
         setSubmitting(false);
       }
@@ -224,14 +272,36 @@ export function StudentQuizExam({ lesson, classDoc, student, onPhaseChange }) {
     [
       quiz,
       submitting,
-      answers,
-      startedAtMs,
+      timedOutSubmitFailed,
       student,
       classDoc,
       lesson,
       programId,
       toast,
     ],
+  );
+
+  const doSubmit = useCallback(
+    async (timedOut = false) => {
+      await performSubmit({ answerMap: answers, startedMs: startedAtMs, timedOut });
+    },
+    [performSubmit, answers, startedAtMs],
+  );
+
+  const submitExpiredDraft = useCallback(
+    async (parsed) => {
+      if (!quiz || expiredDraftSubmitRef.current) return;
+      expiredDraftSubmitRef.current = true;
+      const answerMap = parsed.answers ?? seedCodeAnswers(quiz.questions);
+      const startedMs = parsed.startedAtMs ?? Date.now();
+      setAnswers(answerMap);
+      setMarked(new Set(parsed.marked ?? []));
+      setStartedAtMs(startedMs);
+      setPhase('exam');
+      await performSubmit({ answerMap, startedMs, timedOut: true });
+      expiredDraftSubmitRef.current = false;
+    },
+    [quiz, performSubmit],
   );
 
   useEffect(() => {
@@ -255,41 +325,68 @@ export function StudentQuizExam({ lesson, classDoc, student, onPhaseChange }) {
     persistDraft(answers, marked, startedAtMs);
   }, [answers, marked, startedAtMs, persistDraft]);
 
-  const startExam = () => {
+  useEffect(() => {
+    if (phase !== 'intro' || !quiz || !timeLimitSeconds || attemptCount > 0) return;
+    const parsed = readExamDraft(classDoc.classCode, student.id, lesson.id);
+    if (!parsed?.startedAtMs) return;
+    const elapsed = Math.floor((Date.now() - parsed.startedAtMs) / 1000);
+    if (elapsed >= timeLimitSeconds) {
+      submitExpiredDraft(parsed);
+    }
+  }, [
+    phase,
+    quiz,
+    timeLimitSeconds,
+    attemptCount,
+    classDoc.classCode,
+    student.id,
+    lesson.id,
+    submitExpiredDraft,
+  ]);
+
+  const restoreDraftToExam = (parsed, now) => {
+    setAnswers(parsed.answers ?? seedCodeAnswers(quiz.questions));
+    setMarked(new Set(parsed.marked ?? []));
+    setCurrentIndex(Number(parsed.currentIndex) || 0);
+    setStartedAtMs(parsed.startedAtMs ?? now);
+    setTimedOutSubmitFailed(false);
+    setPhase('exam');
+    if (timeLimitSeconds && parsed.startedAtMs) {
+      const elapsed = Math.floor((now - parsed.startedAtMs) / 1000);
+      setRemainingSeconds(Math.max(0, timeLimitSeconds - elapsed));
+    } else {
+      setRemainingSeconds(null);
+    }
+  };
+
+  const startExam = async () => {
     if (!canTakeQuizAttempt(quiz, attemptCount)) {
       toast.error(`Đã hết lượt làm bài (tối đa ${maxAttempts} lần).`);
       return;
     }
     const now = Date.now();
-    try {
-      const raw = localStorage.getItem(examDraftKey(classDoc.classCode, student.id, lesson.id));
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed.startedAtMs && timeLimitSeconds) {
-          const elapsed = Math.floor((now - parsed.startedAtMs) / 1000);
-          if (elapsed < timeLimitSeconds) {
-            setAnswers(parsed.answers ?? {});
-            setMarked(new Set(parsed.marked ?? []));
-            setCurrentIndex(Number(parsed.currentIndex) || 0);
-            setStartedAtMs(parsed.startedAtMs);
-            setPhase('exam');
-            setRemainingSeconds(timeLimitSeconds - elapsed);
-            return;
-          }
+    const parsed = readExamDraft(classDoc.classCode, student.id, lesson.id);
+    if (parsed) {
+      if (parsed.startedAtMs && timeLimitSeconds) {
+        const elapsed = Math.floor((now - parsed.startedAtMs) / 1000);
+        if (elapsed < timeLimitSeconds) {
+          restoreDraftToExam(parsed, now);
+          return;
         }
+        await submitExpiredDraft(parsed);
+        return;
       }
-    } catch {
-      // ignore
+      if (parsed.answers && Object.keys(parsed.answers).length > 0) {
+        restoreDraftToExam(parsed, now);
+        return;
+      }
     }
-    const seeded = {};
-    quiz.questions.forEach((q) => {
-      if (q.type === 'code' && q.starterCode) seeded[q.id] = q.starterCode;
-    });
-    setAnswers(seeded);
+    setAnswers(seedCodeAnswers(quiz.questions));
     setMarked(new Set());
     setCurrentIndex(0);
     setStartedAtMs(now);
     setRemainingSeconds(timeLimitSeconds);
+    setTimedOutSubmitFailed(false);
     setPhase('exam');
   };
 
@@ -303,11 +400,8 @@ export function StudentQuizExam({ lesson, classDoc, student, onPhaseChange }) {
     setCurrentIndex(0);
     setStartedAtMs(null);
     setRemainingSeconds(null);
-    try {
-      localStorage.removeItem(examDraftKey(classDoc.classCode, student.id, lesson.id));
-    } catch {
-      // ignore
-    }
+    setTimedOutSubmitFailed(false);
+    clearExamDraft(classDoc.classCode, student.id, lesson.id);
     setPhase('intro');
   };
 
@@ -361,6 +455,9 @@ export function StudentQuizExam({ lesson, classDoc, student, onPhaseChange }) {
             <h3 className="text-lg font-bold">{title}</h3>
           </div>
           <p className="mt-2 text-sm text-brand-100">Bài kiểm tra trắc nghiệm &amp; lập trình</p>
+          <Badge tone="amber" className="mt-2">
+            Bài kiểm tra · giới hạn lượt
+          </Badge>
         </div>
         <div className="space-y-4 p-5">
           <div className="grid gap-3 sm:grid-cols-3">
@@ -392,6 +489,7 @@ export function StudentQuizExam({ lesson, classDoc, student, onPhaseChange }) {
             )}
           </div>
           <ul className="space-y-1.5 text-sm text-slate-600 dark:text-slate-300">
+            <li>• Xem lại bài giảng phía trên trước khi bắt đầu.</li>
             <li>• Chọn câu từ danh sách bên cạnh, đánh dấu câu cần xem lại.</li>
             <li>• Trả lời hết câu hỏi trước khi nộp bài.</li>
             {timeLimitSeconds && (
@@ -423,7 +521,7 @@ export function StudentQuizExam({ lesson, classDoc, student, onPhaseChange }) {
               Đã nộp bài kiểm tra (lần {attemptCount}/{maxAttempts})
             </p>
             <p className="mt-1 text-sm text-slate-500">
-              Giáo viên sẽ xem và chấm bài của bạn. Bạn không thấy điểm ngay sau khi nộp.
+              Giáo viên sẽ xem và chấm bài của bạn. Bạn không thấy điểm trên cổng học sinh.
             </p>
             {canRetake ? (
               <Button size="sm" variant="secondary" className="mt-4" onClick={handleRetake}>
@@ -446,7 +544,7 @@ export function StudentQuizExam({ lesson, classDoc, student, onPhaseChange }) {
       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
         Danh sách câu
       </p>
-      <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-6 lg:grid-cols-4">
+      <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 lg:grid-cols-4">
         {quiz.questions.map((q, i) => (
           <QuestionNavButton
             key={q.id}
@@ -474,7 +572,7 @@ export function StudentQuizExam({ lesson, classDoc, student, onPhaseChange }) {
 
   return (
     <div className="mt-5 -mx-4 sm:mx-0">
-      <div className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-950/95 sm:rounded-t-xl sm:border sm:border-b-0">
+      <div className="student-sticky-below-header border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-slate-700 dark:bg-slate-950/95 sm:rounded-t-xl sm:border sm:border-b-0">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">
@@ -610,6 +708,13 @@ export function StudentQuizExam({ lesson, classDoc, student, onPhaseChange }) {
             </Button>
           </div>
 
+          {timedOutSubmitFailed && (
+            <div className="mt-4 flex items-center gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800 dark:bg-red-500/10 dark:text-red-200">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              Hết giờ nhưng nộp tự động thất bại — hãy bấm nộp bài để gửi các câu đã trả lời.
+            </div>
+          )}
+
           {timeLimitSeconds && remainingSeconds !== null && remainingSeconds <= 120 && (
             <div className="mt-4 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
               <AlertCircle className="h-4 w-4 shrink-0" />
@@ -617,14 +722,14 @@ export function StudentQuizExam({ lesson, classDoc, student, onPhaseChange }) {
             </div>
           )}
 
-          <div className="sticky bottom-0 -mx-4 mt-4 border-t border-slate-100 bg-white/95 px-4 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0 lg:backdrop-blur-none">
+          <div className="student-sticky-footer mt-4 dark:border-slate-800 lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
             <Button
               size="lg"
               className="w-full min-h-12"
               loading={submitting}
-              onClick={() => doSubmit(false)}
+              onClick={() => doSubmit(timedOutSubmitFailed)}
             >
-              Nộp bài kiểm tra
+              {timedOutSubmitFailed ? 'Nộp bài (hết giờ)' : 'Nộp bài kiểm tra'}
             </Button>
             {startedAtMs && (
               <p className="mt-2 text-center text-xs text-slate-400">

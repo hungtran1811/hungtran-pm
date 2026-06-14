@@ -8,6 +8,7 @@ import { STAGES, STATUSES, STATUS_TONES } from '../../constants/index.js';
 import { submitProgressReport } from '../../services/reports.service.js';
 import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
 import { isProjectNameApproved, projectNameAwaitingReview } from '../../lib/classFinalMode.js';
+import { ProgressReportHistory } from './ProgressReportHistory.jsx';
 
 export function ProgressReportView({ classDoc, student, onUpdateStudent }) {
   const toast = useToast();
@@ -170,13 +171,15 @@ export function ProgressReportView({ classDoc, student, onUpdateStudent }) {
           />
         </Field>
 
-        <div className="sticky bottom-0 -mx-5 border-t border-slate-100 bg-white/95 px-5 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/95 sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:backdrop-blur-none">
+        <div className="student-sticky-footer dark:border-slate-800 lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
           <Button type="submit" size="lg" className="w-full min-h-12" loading={submitting}>
             Gửi báo cáo
           </Button>
         </div>
       </form>
       )}
+
+      <ProgressReportHistory studentId={student.id} />
     </div>
   );
 }

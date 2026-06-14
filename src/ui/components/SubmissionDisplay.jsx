@@ -111,6 +111,7 @@ export function SubmissionCardShell({
   onClick,
   children,
   actions,
+  highlighted = false,
 }) {
   return (
     <div
@@ -125,8 +126,10 @@ export function SubmissionCardShell({
           : undefined
       }
       className={`card card-prose overflow-hidden transition ${
-        onClick ? 'cursor-pointer hover:border-brand-400 hover:shadow-md' : ''
-      }`}
+        highlighted
+          ? 'border-brand-400 bg-brand-50/50 shadow-md ring-2 ring-brand-400/25 dark:border-brand-500/50 dark:bg-brand-500/10 dark:ring-brand-400/20'
+          : ''
+      } ${onClick ? 'cursor-pointer hover:border-brand-400 hover:shadow-md' : ''}`}
     >
       <div className="border-b border-slate-100 px-4 py-3 dark:border-slate-800 sm:px-5">
         <div className="flex flex-wrap items-start justify-between gap-3">

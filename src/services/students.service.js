@@ -128,6 +128,33 @@ export async function getStudent(studentId) {
   return snapshot.exists() ? toStudentModel(snapshot) : null;
 }
 
+/** HS: ghi nhận đã mở bài giảng (sync server cho giáo viên theo dõi). */
+const MAX_OPENED_LESSON_IDS = 200;
+
+export async function recordLessonOpened(studentId, classCode, lessonId, sessionNumber) {
+  if (!studentId || !classCode || !lessonId) return;
+
+  const ref = doc(db, 'students', studentId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return;
+
+  const currentIds = Array.isArray(snap.data().openedLessonIds) ? snap.data().openedLessonIds : [];
+  let openedLessonIds = currentIds.includes(lessonId) ? currentIds : [...currentIds, lessonId];
+  if (openedLessonIds.length > MAX_OPENED_LESSON_IDS) {
+    openedLessonIds = openedLessonIds.slice(openedLessonIds.length - MAX_OPENED_LESSON_IDS);
+  }
+
+  const lastOpenedSessionNumber = Math.max(1, Math.min(50, Number(sessionNumber) || 1));
+
+  await updateDoc(ref, {
+    lastOpenedLessonId: lessonId,
+    lastOpenedSessionNumber,
+    lastOpenedAt: serverTimestamp(),
+    openedLessonIds,
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function createStudent(payload) {
   const classCode = payload.classCode.trim();
   const ref = await addDoc(studentsRef, {

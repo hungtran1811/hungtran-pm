@@ -4,7 +4,7 @@ import { Badge } from '../../ui/components/Badge.jsx';
 import { Button } from '../../ui/components/Button.jsx';
 import { ConfirmDialog } from '../../ui/components/ConfirmDialog.jsx';
 import { EmptyState } from '../../ui/components/EmptyState.jsx';
-import { SkeletonRows } from '../../ui/components/Skeleton.jsx';
+import { SelectClassPrompt, LoadingCatState } from '../../ui/components/WaitingCatIllustration.jsx';
 import { ClassFilterBar } from '../../ui/components/ClassFilterBar.jsx';
 import { Select, Input } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
@@ -149,7 +149,7 @@ export function PracticePanel({ activeOnly = false }) {
     }
   };
 
-  if (loadingClasses) return <SkeletonRows count={3} />;
+  if (loadingClasses) return <LoadingCatState message="Đang tải danh sách lớp..." />;
   if (poolClasses.length === 0) {
     return (
       <EmptyState
@@ -206,7 +206,7 @@ export function PracticePanel({ activeOnly = false }) {
       </div>
 
       {loading ? (
-        <SkeletonRows count={5} />
+        <LoadingCatState message="Đang tải bài ôn tập..." />
       ) : filtered.length === 0 ? (
         <EmptyState title="Chưa có bài ôn tập" />
       ) : (

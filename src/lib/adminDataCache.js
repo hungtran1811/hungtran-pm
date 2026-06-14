@@ -1,4 +1,4 @@
-import { listClasses } from '../services/classes.service.js';
+import { listClasses, isOperationalClassStatus } from '../services/classes.service.js';
 import { listStudentsByClassCodes } from '../services/students.service.js';
 
 const TTL_MS = 90_000;
@@ -16,8 +16,10 @@ export async function fetchAdminBaseData({ force = false, activeStudentsOnly = t
   }
 
   const classes = await listClasses();
-  const activeCodes = classes.filter((c) => c.status === 'active').map((c) => c.classCode);
-  const students = await listStudentsByClassCodes(activeCodes, { activeOnly: activeStudentsOnly });
+  const studentClassCodes = classes
+    .filter((c) => isOperationalClassStatus(c.status) || c.status === 'archived')
+    .map((c) => c.classCode);
+  const students = await listStudentsByClassCodes(studentClassCodes, { activeOnly: activeStudentsOnly });
 
   cache = { classes, students, fetchedAt: Date.now() };
   return cache;

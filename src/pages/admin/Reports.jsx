@@ -4,7 +4,7 @@ import { TrendingUp, Copy } from 'lucide-react';
 import { Button } from '../../ui/components/Button.jsx';
 import { Badge } from '../../ui/components/Badge.jsx';
 import { EmptyState } from '../../ui/components/EmptyState.jsx';
-import { SkeletonRows } from '../../ui/components/Skeleton.jsx';
+import { SelectClassPrompt, LoadingCatState } from '../../ui/components/WaitingCatIllustration.jsx';
 import { ClassFilterBar } from '../../ui/components/ClassFilterBar.jsx';
 import { Input } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
@@ -13,9 +13,6 @@ import {
   PanelSummaryGrid,
   PanelSummaryStat,
   ProgressMiniBar,
-  SubmissionCardActions,
-  SubmissionCardShell,
-  SubmissionField,
 } from '../../ui/components/SubmissionDisplay.jsx';
 import { STATUS_TONES } from '../../constants/index.js';
 import { ALL_CLASSES_VALUE, resolveScopedClasses } from '../../lib/classFilterScope.js';
@@ -135,13 +132,28 @@ export function ReportsPanel({
     }));
     const q = search.trim().toLowerCase();
     if (q) list = list.filter((item) => item.student.fullName.toLowerCase().includes(q));
+
+    const reportTime = (item) => item.report?.submittedAt?.getTime?.() ?? 0;
+
     return list.sort((a, b) => {
+      const aHas = Boolean(a.report);
+      const bHas = Boolean(b.report);
+      if (aHas !== bHas) return aHas ? -1 : 1;
+
+      const timeDiff = reportTime(b) - reportTime(a);
+      if (timeDiff !== 0) return timeDiff;
+
       if (isAllClasses && a.student.classCode !== b.student.classCode) {
         return a.student.classCode.localeCompare(b.student.classCode, 'vi');
       }
       return a.student.fullName.localeCompare(b.student.fullName, 'vi');
     });
   }, [students, resolveReport, search, isAllClasses]);
+
+  const newestStudentId = useMemo(() => {
+    const first = visible.find((item) => item.report && !item.report.snapshotOnly);
+    return first?.student.id ?? null;
+  }, [visible]);
 
   const reportsForCopy = useMemo(
     () => visible.map((item) => item.report).filter((r) => r && !r.snapshotOnly),
@@ -159,6 +171,14 @@ export function ReportsPanel({
     () => visible.filter((item) => !item.student.lastReportedAt).length,
     [visible],
   );
+
+  const openHistory = (student, report) => {
+    setHistoryTarget({
+      id: student.id,
+      fullName: student.fullName,
+      currentProgressPercent: report?.progressPercent ?? student.currentProgressPercent,
+    });
+  };
 
   const copyAll = async () => {
     if (!reportsForCopy.length) return;
@@ -180,7 +200,7 @@ export function ReportsPanel({
   return (
     <>
       {loadingClasses ? (
-        <SkeletonRows count={3} />
+        <LoadingCatState message="Đang tải danh sách lớp..." />
       ) : classes.length === 0 ? (
         <EmptyState icon={<TrendingUp className="h-7 w-7" />} title="Chưa có lớp" />
       ) : (
@@ -205,7 +225,12 @@ export function ReportsPanel({
             />
           </div>
 
-          {!selectedClass ? null : (
+          {!selectedClass ? (
+            <SelectClassPrompt
+              title="Chọn lớp để xem báo cáo"
+              description="Chọn lớp ở bộ lọc phía trên để xem báo cáo tiến độ học sinh."
+            />
+          ) : (
             <>
               <AdminSnapshotControls
                 lastLoadedAt={lastLoadedAt}
@@ -239,32 +264,35 @@ export function ReportsPanel({
                 </Button>
               </div>
 
+              {missingCount > 0 && !isAllClasses && (
+                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+                  <strong>{missingCount} học sinh</strong> chưa gửi báo cáo tiến độ
+                  {selectedClass ? ` cho lớp ${selectedClass}` : ''}. Học sinh cần nộp trên cổng
+                  học sinh trước khi bạn cập nhật tiến độ thủ công.
+                </div>
+              )}
+
               {loading ? (
-                <SkeletonRows count={5} />
+                <LoadingCatState message="Đang tải báo cáo học sinh..." />
               ) : visible.length === 0 ? (
                 <EmptyState title="Chưa có học sinh" />
               ) : (
-                <div className="min-w-0 space-y-3">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {visible.map(({ student, report }) =>
                     report ? (
-                      <ReportCard
+                      <ReportGridCard
                         key={student.id}
                         report={report}
                         showClass={isAllClasses}
-                        onViewHistory={() =>
-                          setHistoryTarget({
-                            id: student.id,
-                            fullName: student.fullName,
-                            currentProgressPercent: report.progressPercent,
-                          })
-                        }
+                        isNewest={student.id === newestStudentId}
+                        onViewHistory={() => openHistory(student, report)}
                       />
                     ) : (
-                      <SubmissionCardShell
+                      <MissingReportCard
                         key={student.id}
-                        title={student.fullName}
-                        meta={`${isAllClasses ? `${student.classCode} · ` : ''}Chưa gửi báo cáo tiến độ`}
-                        badges={<Badge tone="slate">Chưa báo cáo</Badge>}
+                        student={student}
+                        showClass={isAllClasses}
+                        onViewHistory={() => openHistory(student, null)}
                       />
                     ),
                   )}
@@ -282,14 +310,43 @@ export function ReportsPanel({
   );
 }
 
-function ReportCard({ report, showClass, onViewHistory }) {
-  const toast = useToast();
+function MissingReportCard({ student, showClass, onViewHistory }) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onViewHistory}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') onViewHistory();
+      }}
+      className="card flex h-full cursor-pointer flex-col border-dashed p-5 opacity-90 transition hover:border-slate-400 hover:shadow-sm"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="truncate text-base font-semibold text-slate-800 dark:text-slate-100">
+            {student.fullName}
+          </h3>
+          <p className="mt-0.5 truncate text-xs text-slate-400">
+            {showClass ? `${student.classCode} · ` : ''}Chưa gửi báo cáo tiến độ
+          </p>
+        </div>
+        <Badge tone="slate">Chưa báo cáo</Badge>
+      </div>
+      <p className="mt-4 flex-1 text-sm text-slate-500 dark:text-slate-400">
+        Học sinh chưa nộp báo cáo trên cổng học sinh. Nhấn để xem lịch sử.
+      </p>
+    </div>
+  );
+}
 
-  const stop = (e) => e.stopPropagation();
+function ReportGridCard({ report, showClass, isNewest = false, onViewHistory }) {
+  const toast = useToast();
+  const hasFull = !report.snapshotOnly;
+  const percent = Number(report.progressPercent || 0);
 
   const copyContent = async (e) => {
-    stop(e);
-    if (report.snapshotOnly) {
+    e.stopPropagation();
+    if (!hasFull) {
       toast.error('Chỉ có snapshot tiến độ — mở lịch sử để xem nội dung đầy đủ.');
       return;
     }
@@ -301,51 +358,82 @@ function ReportCard({ report, showClass, onViewHistory }) {
     }
   };
 
+  const highlightClass = isNewest
+    ? 'border-brand-300 bg-brand-50/40 dark:border-brand-500/40 dark:bg-brand-500/10'
+    : hasFull
+      ? 'border-slate-200 dark:border-slate-700'
+      : '';
+
   return (
-    <SubmissionCardShell
-      title={report.studentName}
-      meta={`${showClass ? `${report.classCode} · ` : ''}${report.projectName} · ${formatDateTime(report.submittedAt)}${report.snapshotOnly ? ' · snapshot' : ''}`}
-      badges={
-        <>
-          <Badge tone={STATUS_TONES[report.status] || 'slate'}>{report.status}</Badge>
-          <Badge tone="slate">{report.stage}</Badge>
-        </>
-      }
-      right={<Badge tone="brand">{report.progressPercent}%</Badge>}
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onViewHistory}
-      actions={
-        <SubmissionCardActions
-          onHistory={(e) => {
-            stop(e);
-            onViewHistory();
-          }}
-          onCopy={copyContent}
-        />
-      }
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') onViewHistory();
+      }}
+      className={`card flex h-full cursor-pointer flex-col p-5 transition hover:border-brand-400 hover:shadow-md ${highlightClass}`}
     >
-      <ProgressMiniBar percent={report.progressPercent} className="mb-4" />
-      {report.snapshotOnly ? (
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Tiến độ và trạng thái mới nhất từ hồ sơ học sinh. Bấm <strong>Lịch sử</strong> để xem nội dung báo cáo đầy đủ.
-          {report.difficulties && (
-            <span className="mt-2 block text-amber-700 dark:text-amber-300">
-              Khó khăn ghi nhận: {report.difficulties}
-            </span>
-          )}
-        </p>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="truncate text-base font-semibold text-slate-800 dark:text-slate-100">
+            {report.studentName}
+          </h3>
+          <p className="mt-0.5 truncate text-xs text-slate-400">
+            {showClass ? `${report.classCode} · ` : ''}
+            {report.projectName}
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          {isNewest && <Badge tone="brand">Mới nhất</Badge>}
+          <Badge tone={STATUS_TONES[report.status] || 'slate'}>{report.status}</Badge>
+        </div>
+      </div>
+
+      <dl className="mt-4 flex-1 space-y-1.5 text-sm">
+        <div className="flex justify-between gap-2">
+          <dt className="text-slate-400">Tiến độ</dt>
+          <dd className="font-semibold tabular-nums text-brand-600 dark:text-brand-300">{percent}%</dd>
+        </div>
+        <ProgressMiniBar percent={percent} className="pb-1" />
+        <div className="flex justify-between gap-2">
+          <dt className="text-slate-400">Giai đoạn</dt>
+          <dd className="font-medium text-slate-700 dark:text-slate-200">{report.stage}</dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="text-slate-400">Nộp lúc</dt>
+          <dd className="text-right font-medium text-slate-700 dark:text-slate-200">
+            {hasFull ? formatDateTime(report.submittedAt) : 'Snapshot'}
+          </dd>
+        </div>
+      </dl>
+
+      {hasFull ? (
+        <div className="mt-3 rounded-lg border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
+            Đã làm được
+          </p>
+          <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
+            {report.doneToday}
+          </p>
+        </div>
       ) : (
-        <div className="grid gap-3 lg:grid-cols-2">
-          <SubmissionField label="Đã làm">{report.doneToday}</SubmissionField>
-          <SubmissionField label="Mục tiêu tiếp theo">{report.nextGoal}</SubmissionField>
-          {report.difficulties && (
-            <div className="lg:col-span-2">
-              <SubmissionField label="Khó khăn" variant="warning">
-                {report.difficulties}
-              </SubmissionField>
-            </div>
-          )}
+        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
+          Chỉ có snapshot tiến độ. Nhấn card để xem lịch sử đầy đủ.
+        </p>
+      )}
+
+      {hasFull && (
+        <div
+          className="mt-4 flex justify-end border-t border-slate-100 pt-4 dark:border-slate-800"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Button size="sm" variant="ghost" onClick={copyContent}>
+            <Copy className="h-4 w-4" />
+            Copy
+          </Button>
         </div>
       )}
-    </SubmissionCardShell>
+    </div>
   );
 }

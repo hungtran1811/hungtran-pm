@@ -1,20 +1,25 @@
 import { useEffect, useState } from 'react';
-import { Dices, Hash, Layers } from 'lucide-react';
+import { Dices, Hash, Layers, Mountain } from 'lucide-react';
 import { AppShell } from '../../ui/components/AppShell.jsx';
 import { SkeletonRows } from '../../ui/components/Skeleton.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { subscribeClasses } from '../../services/classes.service.js';
 import { listCurriculumPrograms } from '../../services/curriculum.service.js';
 import { getErrorMessage } from '../../lib/firestore.js';
+import { FEATURE_OLYMPIA_ENABLED } from '../../config/features.js';
 import { RandomStudentPicker } from './games/RandomStudentPicker.jsx';
 import { NumberGuessGame } from './games/NumberGuessGame.jsx';
 import { CardFlipGame } from './games/CardFlipGame.jsx';
 
-const GAMES = [
+const BASE_GAMES = [
   { id: 'random-student', title: 'Quay tên', icon: Dices },
   { id: 'number-guess', title: 'Đoán số', icon: Hash },
   { id: 'card-flip', title: 'Lật bài', icon: Layers },
 ];
+
+const OLYMPIA_GAME = { id: 'olympia', title: 'Olympia Python', icon: Mountain };
+
+const GAMES = FEATURE_OLYMPIA_ENABLED ? [...BASE_GAMES, OLYMPIA_GAME] : BASE_GAMES;
 
 export function MiniGamesPage() {
   const toast = useToast();

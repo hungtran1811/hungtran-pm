@@ -13,6 +13,8 @@ export default defineConfig({
         manualChunks: {
           firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
           vendor: ['react', 'react-dom', 'react-router-dom'],
+          charts: ['recharts'],
+          editor: ['@uiw/react-codemirror', '@codemirror/lang-python', '@codemirror/theme-one-dark'],
         },
       },
     },

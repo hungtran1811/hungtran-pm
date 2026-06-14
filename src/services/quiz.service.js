@@ -302,19 +302,71 @@ export async function syncAllQuizBanks(programId, lessons) {
   await Promise.all(withQuiz.map((lesson) => saveQuizBank(programId, lesson)));
 }
 
+function mapQuizLatestSnapshot(snapshot) {
+  if (!snapshot.exists()) return null;
+  const data = snapshot.data();
+  return {
+    attemptNumber: Number(data.attemptNumber ?? 0),
+    submittedAt: data.submittedAt,
+    mcqCorrect: Number(data.mcqCorrect ?? 0),
+    mcqTotal: Number(data.mcqTotal ?? 0),
+    mcqPercent: Number(data.mcqPercent ?? 0),
+    codeCorrect: Number(data.codeCorrect ?? 0),
+    codeGraded: Number(data.codeGraded ?? 0),
+    gradedCorrect: Number(data.gradedCorrect ?? 0),
+    gradedTotal: Number(data.gradedTotal ?? 0),
+    gradedPercent: Number(data.gradedPercent ?? 0),
+    pendingCodeCount: Number(data.pendingCodeCount ?? 0),
+    gradingStatus: data.gradingStatus ?? '',
+    gradedAt: data.gradedAt ?? null,
+  };
+}
+
+export function deriveGradingStatus(responses = []) {
+  const codeResponses = responses.filter((r) => r.questionType === 'code');
+  if (!codeResponses.length) return 'complete';
+  const pending = codeResponses.filter(
+    (r) => r.isCorrect !== true && r.isCorrect !== false,
+  ).length;
+  if (pending === 0) return 'complete';
+  const graded = codeResponses.length - pending;
+  if (graded > 0) return 'partial';
+  return 'pending';
+}
+
+export function buildQuizLatestGradeFields(scores, responses) {
+  const pendingCodeCount = countPendingCodeGrades(responses);
+  return {
+    mcqCorrect: scores.mcqCorrect,
+    mcqTotal: scores.mcqTotal,
+    mcqPercent: scores.mcqPercent,
+    codeCorrect: scores.codeCorrect,
+    codeGraded: scores.codeGraded,
+    gradedCorrect: scores.gradedCorrect,
+    gradedTotal: scores.gradedTotal,
+    gradedPercent: scores.gradedPercent,
+    pendingCodeCount,
+    gradingStatus: deriveGradingStatus(responses),
+  };
+}
+
 export async function getQuizLatestStatus(classCode, studentId, lessonId) {
   const latestId = buildQuizAttemptId(classCode, studentId, lessonId);
   try {
     const snapshot = await getDoc(doc(db, 'studentQuizLatest', latestId));
-    if (!snapshot.exists()) return null;
-    const data = snapshot.data();
-    return {
-      attemptNumber: Number(data.attemptNumber ?? 0),
-      submittedAt: data.submittedAt,
-    };
+    return mapQuizLatestSnapshot(snapshot);
   } catch {
     return null;
   }
+}
+
+export function subscribeQuizLatestStatus(classCode, studentId, lessonId, onData, onError) {
+  const latestId = buildQuizAttemptId(classCode, studentId, lessonId);
+  return onSnapshot(
+    doc(db, 'studentQuizLatest', latestId),
+    (snapshot) => onData(mapQuizLatestSnapshot(snapshot)),
+    onError,
+  );
 }
 
 export async function hasSubmittedQuiz(classCode, studentId, lessonId) {

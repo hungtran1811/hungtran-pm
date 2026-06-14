@@ -3,9 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   School,
   Users,
-  Flag,
   Target,
-  CheckCircle2,
   TrendingUp,
   BarChart3,
   ClipboardList,
@@ -16,19 +14,15 @@ import {
 } from 'lucide-react';
 import { AppShell } from '../../ui/components/AppShell.jsx';
 import { StatCard } from '../../ui/components/StatCard.jsx';
-import { Badge } from '../../ui/components/Badge.jsx';
-import { EmptyState } from '../../ui/components/EmptyState.jsx';
 import { SkeletonCardGrid, SkeletonRows } from '../../ui/components/Skeleton.jsx';
 import { Button } from '../../ui/components/Button.jsx';
 import { Field, Input, Select } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
-import { STATUS_TONES } from '../../constants/index.js';
-import {
-  isArchivedClassStatus,
-  setClassCurrentSession,
-} from '../../services/classes.service.js';
-import { fetchAdminBaseData, invalidateAdminDataCache } from '../../lib/adminDataCache.js';
-import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
+import { isArchivedClassStatus, setClassCurrentSession } from '../../services/classes.service.js';
+import { invalidateAdminDataCache } from '../../lib/adminDataCache.js';
+import { loadDashboardOpsSnapshot } from '../../lib/adminPanelData.js';
+import { QuizClassReport } from '../../ui/components/QuizClassReport.jsx';
+import { getErrorMessage } from '../../lib/firestore.js';
 
 function QuickAction({ to, icon, title }) {
   return (
@@ -142,13 +136,16 @@ export function DashboardPage() {
   const toast = useToast();
   const [classes, setClasses] = useState([]);
   const [students, setStudents] = useState([]);
+  const [quizSubmissions, setQuizSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [quizReportClass, setQuizReportClass] = useState('');
 
   const loadDashboard = async (force = false) => {
     try {
-      const base = await fetchAdminBaseData({ force });
-      setClasses(base.classes);
-      setStudents(base.students);
+      const ops = await loadDashboardOpsSnapshot({ force });
+      setClasses(ops.classes);
+      setStudents(ops.students);
+      setQuizSubmissions(ops.quizSubmissions);
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -161,56 +158,56 @@ export function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const classSets = useMemo(() => {
-    const activeClassCodes = new Set(
-      classes.filter((c) => c.status === 'active').map((c) => c.classCode),
+  useEffect(() => {
+    const active = classes.filter((c) => c.status === 'active');
+    if (!active.length) {
+      setQuizReportClass('');
+      return;
+    }
+    setQuizReportClass((prev) =>
+      prev && active.some((c) => c.classCode === prev) ? prev : active[0].classCode,
     );
-    const archivedClassCodes = new Set(
-      classes.filter((c) => isArchivedClassStatus(c.status)).map((c) => c.classCode),
-    );
-    return { activeClassCodes, archivedClassCodes };
   }, [classes]);
 
   const stats = useMemo(() => {
-    const { activeClassCodes, archivedClassCodes } = classSets;
+    const activeClassCodes = new Set(
+      classes.filter((c) => c.status === 'active').map((c) => c.classCode),
+    );
+    const finishedClassCodes = new Set(
+      classes.filter((c) => isArchivedClassStatus(c.status)).map((c) => c.classCode),
+    );
     const inActiveClass = (s) => s.active && activeClassCodes.has(s.classCode);
-    const inArchivedClass = (s) => s.active && archivedClassCodes.has(s.classCode);
-    const activeStudents = students.filter(inActiveClass);
 
     return {
       activeClasses: activeClassCodes.size,
       totalClasses: classes.length,
-      students: activeStudents.length,
-      needSupport: activeStudents.filter((s) => s.currentStatus === 'Cần hỗ trợ').length,
-      nearlyDone: activeStudents.filter((s) => s.currentStatus === 'Gần hoàn thành').length,
-      completedCourse: students.filter(inArchivedClass).length,
+      students: students.filter(inActiveClass).length,
+      nearlyDone: students.filter(
+        (s) => inActiveClass(s) && s.currentStatus === 'Gần hoàn thành',
+      ).length,
+      completedCourse: students.filter(
+        (s) =>
+          s.active &&
+          (s.currentStatus === 'Hoàn thành' || finishedClassCodes.has(s.classCode)),
+      ).length,
     };
-  }, [classes, students, classSets]);
+  }, [classes, students]);
 
-  const attention = useMemo(
-    () =>
-      students
-        .filter(
-          (s) =>
-            s.active &&
-            s.currentStatus === 'Cần hỗ trợ' &&
-            classSets.activeClassCodes.has(s.classCode),
-        )
-        .sort((a, b) => (b.lastReportedAt?.getTime() || 0) - (a.lastReportedAt?.getTime() || 0))
-        .slice(0, 8),
-    [students, classSets],
+  const activeClasses = useMemo(
+    () => classes.filter((c) => c.status === 'active'),
+    [classes],
   );
 
   return (
     <AppShell title="Tổng quan">
       {loading ? (
         <div className="space-y-6">
-          <SkeletonCardGrid count={5} />
+          <SkeletonCardGrid count={4} />
           <SkeletonRows count={4} />
         </div>
       ) : (
         <div className="space-y-8">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
               label="Lớp đang vận hành"
               value={stats.activeClasses}
@@ -222,12 +219,6 @@ export function DashboardPage() {
               value={stats.students}
               tone="brand"
               icon={<Users className="h-5 w-5" />}
-            />
-            <StatCard
-              label="Cần hỗ trợ"
-              value={stats.needSupport}
-              tone="red"
-              icon={<Flag className="h-5 w-5" />}
             />
             <StatCard
               label="Gần hoàn thành"
@@ -280,36 +271,26 @@ export function DashboardPage() {
             </div>
           </section>
 
-          <section>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Cần hỗ trợ</h2>
-              <Link to="/admin/students" className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-300">
-                Xem tất cả học sinh
-              </Link>
-            </div>
-            {attention.length === 0 ? (
-              <EmptyState icon={<CheckCircle2 className="h-7 w-7 text-green-500" />} title="Không có học sinh cần hỗ trợ" />
-            ) : (
-              <div className="card divide-y divide-slate-100 dark:divide-slate-800">
-                {attention.map((s) => (
-                  <div key={s.id} className="flex items-center justify-between gap-3 px-5 py-3.5">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-slate-800 dark:text-slate-100">{s.fullName}</p>
-                      <p className="truncate text-xs text-slate-400">
-                        {s.classCode} · {s.currentDifficulties || 'Không ghi rõ khó khăn'}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <Badge tone={STATUS_TONES[s.currentStatus] || 'slate'}>{s.currentStatus}</Badge>
-                      <span className="hidden text-xs text-slate-400 sm:inline">
-                        {s.lastReportedAt ? formatDateTime(s.lastReportedAt) : '—'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+          {activeClasses.length > 0 && (
+            <section>
+              <div className="mb-3">
+                <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                  Báo cáo quiz
+                </h2>
+                <p className="mt-0.5 text-sm text-slate-500">
+                  Điểm trung bình lớp, câu làm đúng nhiều và câu sai nhiều (buổi hiện tại).
+                </p>
               </div>
-            )}
-          </section>
+              <div className="card p-4 sm:p-5">
+                <QuizClassReport
+                  submissions={quizSubmissions}
+                  classes={activeClasses}
+                  classCode={quizReportClass}
+                  onClassChange={setQuizReportClass}
+                />
+              </div>
+            </section>
+          )}
         </div>
       )}
     </AppShell>

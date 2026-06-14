@@ -14,7 +14,8 @@
     "migrate:feedback-index": "node scripts/migrate-student-feedback-index.js",
     "migrate:feedback-index:dry": "node scripts/migrate-student-feedback-index.js --dry-run",
     "audit:curriculum": "node scripts/audit-curriculum-collections.js",
-    "inspect:lessons": "node scripts/inspect-program-lessons.js"
+    "inspect:lessons": "node scripts/inspect-program-lessons.js",
+    "deploy:firestore": "firebase deploy --only firestore:rules,firestore:indexes"
   },
   "dependencies": {
     "@codemirror/lang-python": "^6.2.1",
@@ -33,6 +34,7 @@
     "@tailwindcss/vite": "^4.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "firebase-admin": "^13.10.0",
+    "firebase-tools": "^15.20.0",
     "tailwindcss": "^4.0.0",
     "vite": "^6.0.0"
   }
