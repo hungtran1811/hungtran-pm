@@ -341,19 +341,25 @@
 @keyframes game-reveal-shake {
   0%,
   100% {
-    transform: translateX(0);
+    transform: translateX(0) scale(1);
   }
-  15% {
-    transform: translateX(-6px);
+  10% {
+    transform: translateX(-14px) scale(1.01);
+  }
+  20% {
+    transform: translateX(14px) scale(1.02);
   }
   30% {
-    transform: translateX(6px);
+    transform: translateX(-12px) scale(1.01);
   }
-  45% {
-    transform: translateX(-4px);
+  40% {
+    transform: translateX(12px) scale(1.02);
+  }
+  50% {
+    transform: translateX(-8px) scale(1.01);
   }
   60% {
-    transform: translateX(4px);
+    transform: translateX(8px) scale(1);
   }
 }
 
@@ -832,5 +838,354 @@
 /* Legacy aliases — giữ nếu CSS cũ còn tham chiếu */
 .waiting-cat-dot {
   animation: brand-mark-paw-load 0.9s ease-in-out infinite;
+}
+
+/* Mini game — stage readability */
+.game-stage-text {
+  color: rgb(255 255 255 / 0.92);
+}
+
+.game-stage-label {
+  color: rgb(255 255 255 / 0.72);
+}
+
+.game-spotlight-text {
+  text-shadow: 0 2px 24px rgb(0 0 0 / 0.35);
+}
+
+@keyframes game-box-suspense-shake {
+  0%,
+  100% {
+    transform: translateX(0) scale(1) rotate(0deg);
+  }
+  10% {
+    transform: translateX(-10px) scale(1.04) rotate(-2deg);
+  }
+  20% {
+    transform: translateX(10px) scale(1.06) rotate(2deg);
+  }
+  30% {
+    transform: translateX(-8px) scale(1.08) rotate(-1deg);
+  }
+  40% {
+    transform: translateX(8px) scale(1.1) rotate(1deg);
+  }
+  50% {
+    transform: translateX(-6px) scale(1.12);
+  }
+  60% {
+    transform: translateX(6px) scale(1.14);
+  }
+  70% {
+    transform: translateX(-4px) scale(1.16);
+  }
+  80% {
+    transform: translateX(4px) scale(1.18);
+  }
+  90% {
+    transform: translateX(0) scale(1.2);
+  }
+}
+
+.game-box-suspense-shake {
+  animation: game-box-suspense-shake 0.85s ease-in-out infinite;
+  z-index: 5;
+}
+
+.game-box-suspense-glow {
+  animation: game-box-suspense-glow 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes game-box-suspense-glow {
+  0% {
+    box-shadow: 0 0 12px rgb(251 191 36 / 0.3);
+    border-color: rgb(251 191 36 / 0.5);
+  }
+  100% {
+    box-shadow: 0 0 36px rgb(251 191 36 / 0.75);
+    border-color: rgb(251 191 36 / 0.95);
+  }
+}
+
+.game-mystery-box--presenting-full {
+  min-height: clamp(88px, 12vh, 140px);
+}
+
+.game-mystery-stage-full {
+  width: 100%;
+  max-width: 100%;
+  margin-inline: auto;
+  overflow: visible;
+}
+
+.game-mystery-grid-root {
+  overflow: visible;
+}
+
+.game-mystery-row {
+  overflow: visible;
+  padding-block: 0.625rem;
+}
+
+.game-mystery-stage-fullscreen {
+  flex: 1;
+  width: 100%;
+  max-width: min(98vw, 1600px);
+  align-content: center;
+  justify-content: center;
+  overflow-y: auto;
+}
+
+.game-mystery-presenting-wrap {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  align-self: stretch;
+}
+
+.game-presenting-name-banner {
+  border-radius: 1rem;
+  border: 1px solid rgb(255 255 255 / 0.22);
+  background: rgb(0 0 0 / 0.55);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgb(0 0 0 / 0.35);
+}
+
+.game-box-reveal-pop {
+  animation: game-box-reveal-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.game-box-reveal-suspense {
+  animation: game-box-reveal-suspense 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes game-box-reveal-pop {
+  0% {
+    transform: scale(0.5) rotate(-4deg);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes game-box-reveal-suspense {
+  0% {
+    transform: scale(0.96);
+    box-shadow: 0 0 20px rgb(251 191 36 / 0.35);
+  }
+  100% {
+    transform: scale(1.04);
+    box-shadow: 0 0 48px rgb(251 191 36 / 0.75);
+  }
+}
+
+@keyframes game-screen-flash-reward-kf {
+  0% {
+    background: rgb(52 211 153 / 0);
+  }
+  35% {
+    background: rgb(52 211 153 / 0.35);
+  }
+  100% {
+    background: rgb(52 211 153 / 0);
+  }
+}
+
+@keyframes game-screen-flash-penalty-kf {
+  0% {
+    background: rgb(248 113 113 / 0);
+  }
+  35% {
+    background: rgb(248 113 113 / 0.4);
+  }
+  100% {
+    background: rgb(248 113 113 / 0);
+  }
+}
+
+.game-screen-flash-reward {
+  animation: game-screen-flash-reward-kf 0.9s ease-out;
+}
+
+.game-screen-flash-penalty {
+  animation: game-screen-flash-penalty-kf 0.9s ease-out;
+}
+
+.game-screen-flash-neutral {
+  animation: game-screen-flash-reward-kf 0.7s ease-out;
+}
+
+.game-mystery-box--opened {
+  opacity: 0.82;
+}
+
+@keyframes game-box-shake {
+  0%,
+  100% {
+    transform: translateX(0) scale(1);
+  }
+  20% {
+    transform: translateX(-8px) scale(1.02);
+  }
+  40% {
+    transform: translateX(8px) scale(1.04);
+  }
+  60% {
+    transform: translateX(-5px) scale(1.02);
+  }
+  80% {
+    transform: translateX(5px) scale(1);
+  }
+}
+
+.game-box-shake {
+  animation: game-box-shake 0.55s ease-in-out;
+}
+
+@keyframes game-box-open {
+  0% {
+    transform: scale(1) rotateY(0deg);
+  }
+  40% {
+    transform: scale(1.08) rotateY(8deg);
+  }
+  100% {
+    transform: scale(1) rotateY(0deg);
+  }
+}
+
+.game-box-open {
+  animation: game-box-open 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes game-box-deal-in {
+  0% {
+    opacity: 0;
+    transform: translate(var(--deal-x, 0), var(--deal-y, -80px)) scale(0.4) rotate(-12deg);
+  }
+  70% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1.08) rotate(3deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+}
+
+.game-box-deal-in {
+  animation: game-box-deal-in 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes game-box-shuffle-swap {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  25% {
+    transform: translate(var(--swap-x, 20px), var(--swap-y, -10px)) scale(1.05);
+  }
+  50% {
+    transform: translate(var(--swap-x2, -15px), var(--swap-y2, 8px)) scale(0.95);
+  }
+  75% {
+    transform: translate(var(--swap-x3, 10px), var(--swap-y3, -5px)) scale(1.02);
+  }
+}
+
+.game-box-shuffle-swap {
+  animation: game-box-shuffle-swap 0.45s ease-in-out;
+}
+
+@keyframes game-box-lid-pop {
+  0% {
+    transform: perspective(400px) rotateX(0deg) scale(1);
+  }
+  35% {
+    transform: perspective(400px) rotateX(-55deg) scale(1.12);
+  }
+  100% {
+    transform: perspective(400px) rotateX(0deg) scale(1);
+  }
+}
+
+.game-box-lid-pop {
+  animation: game-box-lid-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes game-box-flash-reward {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(52 211 153 / 0);
+  }
+  50% {
+    box-shadow: 0 0 40px 12px rgb(52 211 153 / 0.55);
+  }
+}
+
+.game-box-flash-reward {
+  animation: game-box-flash-reward 0.7s ease-out;
+}
+
+@keyframes game-box-flash-penalty {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(248 113 113 / 0);
+  }
+  50% {
+    box-shadow: 0 0 40px 12px rgb(248 113 113 / 0.55);
+  }
+}
+
+.game-box-flash-penalty {
+  animation: game-box-flash-penalty 0.7s ease-out;
+}
+
+@keyframes game-phrase-reveal {
+  0% {
+    transform: rotateY(90deg) scale(0.8);
+    opacity: 0;
+  }
+  100% {
+    transform: rotateY(0deg) scale(1);
+    opacity: 1;
+  }
+}
+
+.game-phrase-tile-reveal {
+  animation: game-phrase-reveal 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.game-mystery-box {
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    opacity 0.3s ease;
+}
+
+.game-mystery-box:not(:disabled):hover {
+  transform: translateY(-4px) scale(1.03);
+}
+
+.game-mystery-box--presenting:not(:disabled):hover {
+  transform: translateY(-6px) scale(1.05);
+}
+
+.game-wheel-wrap {
+  filter: drop-shadow(0 12px 40px rgb(49 111 253 / 0.35));
+}
+
+.game-wheel-pointer {
+  filter: drop-shadow(0 4px 8px rgb(0 0 0 / 0.45));
+}
+
+.game-puzzle-card {
+  animation: game-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.game-wheel-segment-label {
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.65);
 }
 

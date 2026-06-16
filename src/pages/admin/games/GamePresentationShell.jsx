@@ -45,15 +45,34 @@ export function GamePresentationShell({
   return (
     <div
       ref={shellRef}
-      className={`flex flex-col overflow-hidden transition-all duration-500 ${
+      className={`relative flex flex-col transition-all duration-500 ${
         presenting
-          ? 'game-presenting relative min-h-screen rounded-none border-0 bg-black'
-          : `rounded-3xl border-2 bg-slate-950 ${stageBorder}`
+          ? 'game-presenting min-h-screen overflow-hidden rounded-none border-0 bg-black'
+          : `overflow-visible rounded-3xl border-2 bg-slate-950 ${stageBorder}`
       }`}
     >
+      {presenting && (
+        <div className="absolute left-0 right-0 top-0 z-30 flex items-center gap-2 border-b border-white/10 bg-black/80 px-4 py-3 backdrop-blur-md">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 overflow-x-auto">
+            {toolbar}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="shrink-0 border border-white/10 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white"
+            onClick={onTogglePresentation}
+            title="Thoát trình chiếu"
+          >
+            <Minimize2 className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
       <div
-        className={`relative flex flex-1 flex-col items-center justify-center ${
-          presenting ? 'min-h-0 flex-1 px-6 py-10 sm:px-12' : `px-4 py-6 sm:px-8 sm:py-10 ${stageMinHeight}`
+        className={`relative flex flex-1 flex-col ${
+          presenting
+            ? 'min-h-0 flex-1 overflow-hidden pt-[4.25rem]'
+            : `items-center justify-center px-4 py-6 sm:px-8 sm:py-10 ${stageMinHeight}`
         }`}
       >
         <div
@@ -65,43 +84,31 @@ export function GamePresentationShell({
         />
         {presenting && <div className="game-stage-vignette pointer-events-none absolute inset-0" />}
         <div
-          className={`relative z-10 w-full ${
-            presenting ? 'flex min-h-0 flex-1 flex-col' : ''
+          className={`relative z-10 flex w-full flex-1 flex-col ${
+            presenting ? 'min-h-0 overflow-hidden px-4 pb-4 sm:px-8' : ''
           }`}
         >
           {children}
         </div>
       </div>
 
-      <div
-        className={`shrink-0 ${
-          presenting
-            ? 'absolute bottom-0 left-0 right-0 z-20 border-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent px-4 pb-5 pt-10'
-            : 'flex flex-col gap-3 border-t border-slate-800 bg-slate-900/95 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-4'
-        }`}
-      >
-        <div
-          className={`flex min-w-0 flex-1 flex-wrap items-center gap-2 ${
-            presenting ? 'justify-center' : ''
-          }`}
-        >
-          {toolbar}
+      {!presenting && (
+        <div className="flex shrink-0 flex-col gap-3 border-t border-slate-800 bg-slate-900/95 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-4">
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 overflow-x-auto">
+            {toolbar}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="shrink-0 self-end sm:self-auto"
+            onClick={onTogglePresentation}
+            title="Trình chiếu"
+          >
+            <Maximize2 className="h-4 w-4" />
+            <span className="ml-1.5">Trình chiếu</span>
+          </Button>
         </div>
-        <Button
-          variant={presenting ? 'ghost' : 'ghost'}
-          size="sm"
-          className={`shrink-0 ${
-            presenting
-              ? 'absolute right-4 top-2 border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
-              : 'self-end sm:self-auto'
-          }`}
-          onClick={onTogglePresentation}
-          title={presenting ? 'Thoát trình chiếu' : 'Trình chiếu'}
-        >
-          {presenting ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          {!presenting && <span className="ml-1.5">Trình chiếu</span>}
-        </Button>
-      </div>
+      )}
 
       {footer && !presenting ? (
         <div className="shrink-0 overflow-auto border-t border-slate-800 bg-slate-900/80">

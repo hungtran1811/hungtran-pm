@@ -187,6 +187,22 @@ export function StudentPortalPage() {
     setSearchParams(next, { replace: true });
   };
 
+  const isFinalPhase = classDoc?.curriculumPhase === 'final';
+  const finalMode = resolveFinalMode(classDoc, program);
+
+  const bottomNavItems = useMemo(() => {
+    const items = [{ id: 'overview', label: 'Tổng quan', sectionId: 'student-overview' }];
+    if (isFinalPhase && finalMode === 'project') {
+      items.push({ id: 'report', label: 'Báo cáo', sectionId: 'student-report' });
+    } else {
+      items.push({ id: 'lessons', label: 'Bài giảng', sectionId: 'student-lessons' });
+    }
+    if (!isFinalPhase) {
+      items.push({ id: 'feedback', label: 'Phản hồi', sectionId: 'student-feedback' });
+    }
+    return items;
+  }, [isFinalPhase, finalMode]);
+
   const showOlympiaBanner =
     FEATURE_OLYMPIA_ENABLED &&
     !olympiaSessionId &&
@@ -224,8 +240,6 @@ export function StudentPortalPage() {
     );
   }
 
-  const isFinalPhase = classDoc.curriculumPhase === 'final';
-  const finalMode = resolveFinalMode(classDoc, program);
   const usesProjectNames = classUsesProjectNames(classDoc, program);
   const awaitingProjectReview = isProjectNameAwaitingReview(selectedStudent);
   const showProjectSetup = needsProjectNameSetup(selectedStudent, classDoc, program);
@@ -235,19 +249,6 @@ export function StudentPortalPage() {
     || (isFinalPhase && showProjectSetup)
   );
   const displayProject = projectNameDisplay(selectedStudent);
-
-  const bottomNavItems = useMemo(() => {
-    const items = [{ id: 'overview', label: 'Tổng quan', sectionId: 'student-overview' }];
-    if (isFinalPhase && finalMode === 'project') {
-      items.push({ id: 'report', label: 'Báo cáo', sectionId: 'student-report' });
-    } else {
-      items.push({ id: 'lessons', label: 'Bài giảng', sectionId: 'student-lessons' });
-    }
-    if (!isFinalPhase) {
-      items.push({ id: 'feedback', label: 'Phản hồi', sectionId: 'student-feedback' });
-    }
-    return items;
-  }, [isFinalPhase, finalMode]);
 
   if (FEATURE_OLYMPIA_ENABLED && olympiaSessionId && selectedStudent && OlympiaStudentViewLazy) {
     const OlympiaStudentView = OlympiaStudentViewLazy;
