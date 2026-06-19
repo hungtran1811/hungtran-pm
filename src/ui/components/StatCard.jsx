@@ -13,7 +13,7 @@ export function StatCard({ label, value, hint, tone = 'brand', icon }) {
         <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{label}</p>
         {icon && <span className={TONES[tone] || TONES.brand}>{icon}</span>}
       </div>
-      <p className={`mt-2 text-3xl font-bold ${TONES[tone] || TONES.brand}`}>{value}</p>
+      <p className={`mt-2 text-3xl font-semibold tabular-nums ${TONES[tone] || TONES.brand}`}>{value}</p>
       {hint && <p className="mt-1 text-xs text-slate-400">{hint}</p>}
     </div>
   );

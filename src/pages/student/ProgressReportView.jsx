@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import { Button } from '../../ui/components/Button.jsx';
 import { Badge } from '../../ui/components/Badge.jsx';
@@ -9,8 +9,9 @@ import { submitProgressReport } from '../../services/reports.service.js';
 import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
 import { isProjectNameApproved, projectNameAwaitingReview } from '../../lib/classFinalMode.js';
 import { ProgressReportHistory } from './ProgressReportHistory.jsx';
+import { ProjectProductLinks, ProjectLinksReadonly } from './ProjectProductLinks.jsx';
 
-export function ProgressReportView({ classDoc, student, onUpdateStudent }) {
+export function ProgressReportView({ classDoc, student, onUpdateStudent, embedded = false }) {
   const toast = useToast();
   const [form, setForm] = useState({
     stage: student.currentStage || STAGES[0],
@@ -20,10 +21,22 @@ export function ProgressReportView({ classDoc, student, onUpdateStudent }) {
     nextGoal: '',
     difficulties: '',
   });
+  const [links, setLinks] = useState({
+    githubUrl: student.projectGithubUrl || '',
+    canvaUrl: student.projectCanvaUrl || '',
+  });
   const [submitting, setSubmitting] = useState(false);
   const [justSubmitted, setJustSubmitted] = useState(false);
 
+  useEffect(() => {
+    setLinks({
+      githubUrl: student.projectGithubUrl || '',
+      canvaUrl: student.projectCanvaUrl || '',
+    });
+  }, [student.id, student.projectGithubUrl, student.projectCanvaUrl]);
+
   const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+  const updateLink = (key, value) => setLinks((prev) => ({ ...prev, [key]: value }));
 
   const validate = () => {
     if (form.doneToday.trim().length < 10) return 'Phần "đã làm được" cần ít nhất 10 ký tự.';
@@ -46,7 +59,15 @@ export function ProgressReportView({ classDoc, student, onUpdateStudent }) {
     }
     setSubmitting(true);
     try {
-      await submitProgressReport({ student, classDoc, form });
+      await submitProgressReport({
+        student,
+        classDoc,
+        form: {
+          ...form,
+          projectGithubUrl: links.githubUrl,
+          projectCanvaUrl: links.canvaUrl,
+        },
+      });
       toast.success('Đã gửi báo cáo.');
       setJustSubmitted(true);
       onUpdateStudent?.({
@@ -55,6 +76,8 @@ export function ProgressReportView({ classDoc, student, onUpdateStudent }) {
         currentStatus: form.status,
         currentProgressPercent: Number(form.progressPercent),
         currentDifficulties: form.difficulties.trim(),
+        projectGithubUrl: links.githubUrl.trim(),
+        projectCanvaUrl: links.canvaUrl.trim(),
         lastReportedAt: new Date(),
       });
       setForm((prev) => ({ ...prev, doneToday: '', nextGoal: '', difficulties: '' }));
@@ -68,36 +91,49 @@ export function ProgressReportView({ classDoc, student, onUpdateStudent }) {
   const pct = student.currentProgressPercent || 0;
   const canReport = isProjectNameApproved(student);
 
-  return (
-    <div className="space-y-5">
-      <div className="card overflow-hidden p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-4xl font-bold tabular-nums text-brand-600 dark:text-brand-400">{pct}%</p>
-            <p className="mt-1 text-sm text-slate-500">
-              {student.currentStage || '—'} ·{' '}
-              {student.lastReportedAt ? formatDateTime(student.lastReportedAt) : 'Chưa báo cáo'}
-            </p>
-          </div>
-          <Badge tone={STATUS_TONES[student.currentStatus] || 'slate'}>{student.currentStatus}</Badge>
-        </div>
-        <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-400 transition-all"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-      </div>
-
-      {!canReport ? (
-        <div className="card p-5 text-sm text-slate-600 dark:text-slate-300">
-          <p className="font-medium text-slate-800 dark:text-slate-100">Chưa thể báo cáo tiến độ</p>
-          <p className="mt-2">
-            Tên dự án <em>{projectNameAwaitingReview(student)}</em> đang chờ giáo viên duyệt. Sau khi được duyệt, bạn
-            có thể gửi báo cáo tiến độ sản phẩm.
+  const summaryCard = (
+    <div className={`card overflow-hidden p-5 ${embedded ? 'mb-5' : ''}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-4xl font-bold tabular-nums text-brand-600 dark:text-brand-400">{pct}%</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {student.currentStage || '—'} ·{' '}
+            {student.lastReportedAt ? formatDateTime(student.lastReportedAt) : 'Chưa báo cáo'}
           </p>
         </div>
-      ) : (
+        <Badge tone={STATUS_TONES[student.currentStatus] || 'slate'}>{student.currentStatus}</Badge>
+      </div>
+      <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-400 transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <ProjectLinksReadonly
+        githubUrl={student.projectGithubUrl}
+        canvaUrl={student.projectCanvaUrl}
+        className="mt-4"
+      />
+    </div>
+  );
+
+  const reportContent = !canReport ? (
+    <div className="card p-5 text-sm text-slate-600 dark:text-slate-300">
+      <p className="font-medium text-slate-800 dark:text-slate-100">Chưa thể báo cáo tiến độ</p>
+      <p className="mt-2">
+        Tên dự án <em>{projectNameAwaitingReview(student)}</em> đang chờ giáo viên duyệt. Sau khi được duyệt, bạn
+        có thể gửi báo cáo tiến độ sản phẩm.
+      </p>
+    </div>
+  ) : (
+    <>
+      <ProjectProductLinks
+        student={student}
+        links={links}
+        onChange={updateLink}
+        disabled={submitting}
+      />
+
       <form onSubmit={handleSubmit} className="card space-y-4 p-5">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">Báo cáo tiến độ</h3>
@@ -177,8 +213,22 @@ export function ProgressReportView({ classDoc, student, onUpdateStudent }) {
           </Button>
         </div>
       </form>
-      )}
+    </>
+  );
 
+  if (embedded) {
+    return (
+      <div className="space-y-5">
+        {summaryCard}
+        {reportContent}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {summaryCard}
+      {reportContent}
       <ProgressReportHistory studentId={student.id} />
     </div>
   );

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { History } from 'lucide-react';
 import { Badge } from '../../ui/components/Badge.jsx';
+import { EmptyState } from '../../ui/components/EmptyState.jsx';
 import { Spinner } from '../../ui/components/Spinner.jsx';
 import { STATUS_TONES } from '../../constants/index.js';
 import { formatDateTime } from '../../lib/firestore.js';
 import { subscribeReportsByStudent } from '../../services/reports.service.js';
+import { ProjectLinksReadonly } from './ProjectProductLinks.jsx';
 
 function ReportHistoryCard({ report }) {
   const [open, setOpen] = useState(false);
@@ -48,13 +50,17 @@ function ReportHistoryCard({ report }) {
               </p>
             </div>
           )}
+          <ProjectLinksReadonly
+            githubUrl={report.projectGithubUrl}
+            canvaUrl={report.projectCanvaUrl}
+          />
         </div>
       )}
     </div>
   );
 }
 
-export function ProgressReportHistory({ studentId }) {
+export function ProgressReportHistory({ studentId, embedded = false }) {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -78,28 +84,52 @@ export function ProgressReportHistory({ studentId }) {
   }, [studentId]);
 
   if (loading) {
-    return (
+    return embedded ? (
+      <div className="flex justify-center py-10">
+        <Spinner />
+      </div>
+    ) : (
       <div className="card flex justify-center p-6">
         <Spinner />
       </div>
     );
   }
 
-  if (reports.length <= 1) return null;
+  if (reports.length === 0) {
+    return (
+      <EmptyState
+        icon={<History className="h-7 w-7" />}
+        title="Chưa có báo cáo"
+        description="Các báo cáo tiến độ bạn gửi sẽ hiển thị tại đây."
+      />
+    );
+  }
 
-  return (
-    <div className="card space-y-3 p-5">
-      <div className="flex items-center gap-2">
-        <History className="h-5 w-5 text-slate-500" />
-        <h3 className="font-semibold text-slate-800 dark:text-slate-100">
-          Lịch sử báo cáo ({reports.length})
-        </h3>
-      </div>
+  const list = (
+    <>
+      {!embedded && (
+        <div className="flex items-center gap-2">
+          <History className="h-5 w-5 text-slate-500" />
+          <h3 className="font-semibold text-slate-800 dark:text-slate-100">
+            Lịch sử báo cáo ({reports.length})
+          </h3>
+        </div>
+      )}
       <div className="space-y-2">
-        {reports.slice(0, 5).map((report) => (
+        {reports.map((report) => (
           <ReportHistoryCard key={report.id} report={report} />
         ))}
       </div>
+    </>
+  );
+
+  if (embedded) {
+    return <div className="space-y-3">{list}</div>;
+  }
+
+  return (
+    <div className="card space-y-3 p-5">
+      {list}
     </div>
   );
 }

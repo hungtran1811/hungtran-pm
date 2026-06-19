@@ -18,6 +18,7 @@ import { ImageLightbox, useImageLightbox } from '../../ui/components/ImageLightb
 import { Spinner } from '../../ui/components/Spinner.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { UNDERSTANDING_LEVELS } from '../../constants/index.js';
+import { unlockedLessonSessionCap } from '../../lib/sessionScope.js';
 import { loadStudentLessonActivity } from '../../lib/lessonActivity.js';
 import { getProgramLesson } from '../../services/curriculum.service.js';
 import {
@@ -74,6 +75,27 @@ function loadReadIds(classCode, studentId) {
   }
 }
 
+function lessonGalleryImages(lesson) {
+  const bannerUrl = lesson.bannerImageUrl || lesson.bannerImage?.secureUrl;
+  const heroUrl = lesson.bannerImageUrl || lesson.coverImageUrl;
+  const seen = new Set();
+  const list = [];
+  const add = (img) => {
+    if (!img) return;
+    const url = img.secureUrl || (typeof img === 'string' ? img : null);
+    if (!url || seen.has(url)) return;
+    if (bannerUrl && url === bannerUrl) return;
+    seen.add(url);
+    list.push(typeof img === 'object' && img.secureUrl ? img : { secureUrl: url, alt: '' });
+  };
+  if (Array.isArray(lesson.images)) lesson.images.forEach(add);
+  const coverUrl = lesson.coverImageUrl || lesson.coverImage?.secureUrl;
+  if (coverUrl && coverUrl !== heroUrl && !seen.has(coverUrl)) {
+    add(lesson.coverImage || { secureUrl: coverUrl, alt: '' });
+  }
+  return list;
+}
+
 function lessonImages(lesson) {
   const seen = new Set();
   const list = [];
@@ -84,8 +106,8 @@ function lessonImages(lesson) {
     list.push(typeof img === 'string' ? { secureUrl: img, alt: '' } : img);
   };
   if (lesson.bannerImage) add(lesson.bannerImage);
-  if (Array.isArray(lesson.images)) lesson.images.forEach(add);
-  else if (lesson.coverImage) add(lesson.coverImage);
+  lessonGalleryImages(lesson).forEach(add);
+  if (!list.length && lesson.coverImage) add(lesson.coverImage);
   return list;
 }
 
@@ -94,6 +116,8 @@ export function LessonsView({
   program,
   student,
   submittedLessonIds = [],
+  isFinalPhase = false,
+  embedded = false,
   onFeedbackSubmitted,
   onQuizFocusChange,
 }) {
@@ -103,11 +127,12 @@ export function LessonsView({
 
   const lessons = useMemo(() => {
     if (!program) return [];
+    const sessionCap = unlockedLessonSessionCap(classDoc);
     return program.lessons
       .filter(
         (l) =>
           !l.archived &&
-          Number(l.sessionNumber) <= Number(classDoc.curriculumCurrentSession || 0),
+          Number(l.sessionNumber) <= sessionCap,
       )
       .sort((a, b) => Number(a.sessionNumber) - Number(b.sessionNumber));
   }, [program, classDoc]);
@@ -190,6 +215,7 @@ export function LessonsView({
         onBack={() => setActiveIndex(null)}
         onSubmitted={(lessonId) => onFeedbackSubmitted?.(lessonId)}
         onQuizFocusChange={onQuizFocusChange}
+        isFinalPhase={isFinalPhase}
       />
     );
   }
@@ -199,15 +225,37 @@ export function LessonsView({
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Bài giảng</h2>
-        <span className="shrink-0 rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-600 dark:bg-brand-500/10 dark:text-brand-300">
-          {readCount}/{lessons.length}
-        </span>
-      </div>
+      {!embedded && (
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Bài giảng</h2>
+            {isFinalPhase && (
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                Xem lại các buổi học trước khi làm sản phẩm cuối khóa.
+              </p>
+            )}
+          </div>
+          <span className="shrink-0 rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-600 dark:bg-brand-500/10 dark:text-brand-300">
+            {readCount}/{lessons.length}
+          </span>
+        </div>
+      )}
+
+      {embedded && (
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Xem lại các buổi học trước khi làm sản phẩm cuối khóa.
+          </p>
+          <span className="shrink-0 rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-600 dark:bg-brand-500/10 dark:text-brand-300">
+            {readCount}/{lessons.length}
+          </span>
+        </div>
+      )}
 
       {resumeLesson && (
-        <div className="student-sticky-below-header -mx-4 mt-4 border-b border-slate-200/80 bg-slate-50/95 px-4 py-3 backdrop-blur dark:border-slate-800/80 dark:bg-slate-950/95 sm:static sm:mx-0 sm:rounded-xl sm:border sm:px-0 sm:py-0 sm:backdrop-blur-none">
+        <div className={`student-sticky-below-header border-b border-slate-200/80 bg-slate-50/95 py-3 backdrop-blur dark:border-slate-800/80 dark:bg-slate-950/95 sm:static sm:rounded-xl sm:border sm:py-0 sm:backdrop-blur-none ${
+          embedded ? 'mt-0 -mx-1 px-1 sm:mx-0 sm:px-0' : '-mx-4 mt-4 px-4 sm:mx-0'
+        }`}>
           <Button
             size="lg"
             className="w-full min-h-12 shadow-sm sm:mt-4"
@@ -219,7 +267,7 @@ export function LessonsView({
         </div>
       )}
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className={embedded ? 'mt-4 grid gap-3 sm:grid-cols-2' : 'mt-4 grid gap-3 sm:grid-cols-2'}>
         {lessons.map((lesson, index) => {
           const isRead = readIds.has(lesson.id);
           const isSubmitted = submittedMap[lesson.id];
@@ -284,6 +332,7 @@ function LessonDetail({
   onBack,
   onSubmitted,
   onQuizFocusChange,
+  isFinalPhase = false,
 }) {
   const { open, images, index, openLightbox, closeLightbox } = useImageLightbox();
   const [contentTab, setContentTab] = useState('lesson');
@@ -294,8 +343,7 @@ function LessonDetail({
   const displayLesson = fullLesson || lesson;
   const hasExercise = Boolean(displayLesson.exercise && displayLesson.exerciseVisible);
   const allImages = lessonImages(displayLesson);
-  const galleryItems =
-    Array.isArray(displayLesson.images) && displayLesson.images.length > 0 ? displayLesson.images : [];
+  const galleryItems = lessonGalleryImages(displayLesson);
   const heroUrl = displayLesson.bannerImageUrl || displayLesson.coverImageUrl;
 
   useEffect(() => {
@@ -424,8 +472,10 @@ function LessonDetail({
 
               {galleryItems.length > 0 && (
                 <div className="mb-6">
-                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">Hình ảnh</p>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  <p className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-400">
+                    Hình ảnh minh họa ({galleryItems.length})
+                  </p>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {galleryItems.map((img, i) => (
                       <button
                         key={img.secureUrl || i}
@@ -438,11 +488,11 @@ function LessonDetail({
                       >
                         <img
                           src={img.secureUrl}
-                          alt={img.alt || ''}
-                          className="aspect-[4/3] w-full object-cover transition group-hover:scale-[1.03]"
+                          alt={img.alt || `Hình minh họa ${i + 1}`}
+                          className="aspect-video w-full object-contain bg-slate-100 transition group-hover:scale-[1.01] dark:bg-slate-900"
                         />
                         <span className="absolute inset-0 flex items-center justify-center bg-black/10 sm:bg-black/0 sm:transition sm:group-hover:bg-black/20">
-                          <ZoomIn className="h-5 w-5 text-white opacity-90 sm:opacity-0 sm:transition sm:group-hover:opacity-100" />
+                          <ZoomIn className="h-6 w-6 text-white opacity-90 sm:opacity-0 sm:transition sm:group-hover:opacity-100" />
                         </span>
                       </button>
                     ))}
@@ -525,7 +575,7 @@ function LessonDetail({
         onPhaseChange={setQuizPhase}
       />
 
-      {!quizExamActive && (
+      {!quizExamActive && !isFinalPhase && (
         <FeedbackForm
           lesson={displayLesson}
           classDoc={classDoc}

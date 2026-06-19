@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Badge } from '../../ui/components/Badge.jsx';
 import { displayStudentStatus, displayStudentStatusTone } from '../../lib/classFinalMode.js';
+import { unlockedLessonSessionCap } from '../../lib/sessionScope.js';
 import { daysSince, STALE_REPORT_DAYS } from '../../lib/submissionTracking.js';
 import { formatDateTime } from '../../lib/firestore.js';
 
@@ -10,7 +11,7 @@ export function StudentOverview({ classDoc, student, program, isFinalPhase, subm
     ? program.lessons.filter(
         (l) =>
           !l.archived &&
-          Number(l.sessionNumber) <= Number(classDoc.curriculumCurrentSession || 0),
+          Number(l.sessionNumber) <= unlockedLessonSessionCap(classDoc),
       )
     : [];
 

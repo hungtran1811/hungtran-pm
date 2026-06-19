@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { ArrowRight, Ban, Mountain, UserRound, Users } from 'lucide-react';
+import { ArrowRight, Ban, Mountain, Swords, UserRound, Users } from 'lucide-react';
 import { StudentShell } from './StudentShell.jsx';
 import { Button } from '../../ui/components/Button.jsx';
 import { Input } from '../../ui/components/Field.jsx';
@@ -15,8 +15,8 @@ import {
 import { getCurriculumProgram } from '../../services/curriculum.service.js';
 import { getStudentFeedbackLessonIds } from '../../services/knowledgeReports.service.js';
 import { getErrorMessage } from '../../lib/firestore.js';
+import { FinalProjectStudentView } from './FinalProjectStudentView.jsx';
 import { LessonsView } from './LessonsView.jsx';
-import { ProgressReportView } from './ProgressReportView.jsx';
 import { StudentOverview } from './StudentOverview.jsx';
 import { StudentFeedbackHistory } from './StudentFeedbackHistory.jsx';
 import { ProjectNamePendingBanner, ProjectNameSetup } from './ProjectNameSetup.jsx';
@@ -28,10 +28,14 @@ import {
   projectNameDisplay,
   resolveFinalMode,
 } from '../../lib/classFinalMode.js';
-import { FEATURE_OLYMPIA_ENABLED } from '../../config/features.js';
+import { FEATURE_CODING_SHOWDOWN_ENABLED, FEATURE_OLYMPIA_ENABLED } from '../../config/features.js';
 
 const OlympiaStudentViewLazy = FEATURE_OLYMPIA_ENABLED
   ? lazy(() => import('./OlympiaStudentView.jsx').then((m) => ({ default: m.OlympiaStudentView })))
+  : null;
+
+const ShowdownStudentViewLazy = FEATURE_CODING_SHOWDOWN_ENABLED
+  ? lazy(() => import('./ShowdownStudentView.jsx').then((m) => ({ default: m.ShowdownStudentView })))
   : null;
 
 function storageKey(classCode) {
@@ -43,6 +47,7 @@ export function StudentPortalPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const classCode = decodeURIComponent(rawCode || '');
   const olympiaParam = searchParams.get('olympia');
+  const showdownParam = searchParams.get('showdown');
   const toast = useToast();
 
   const [loading, setLoading] = useState(true);
@@ -61,6 +66,8 @@ export function StudentPortalPage() {
   const [submittedLessonIds, setSubmittedLessonIds] = useState([]);
   const [activeOlympia, setActiveOlympia] = useState(null);
   const [olympiaSessionId, setOlympiaSessionId] = useState(() => olympiaParam || null);
+  const [activeShowdown, setActiveShowdown] = useState(null);
+  const [showdownSessionId, setShowdownSessionId] = useState(() => showdownParam || null);
   const [quizFocus, setQuizFocus] = useState(false);
 
   useEffect(() => {
@@ -187,18 +194,93 @@ export function StudentPortalPage() {
     setSearchParams(next, { replace: true });
   };
 
+  useEffect(() => {
+    if (!FEATURE_CODING_SHOWDOWN_ENABLED || !showdownParam || !classCode) return;
+    let cancelled = false;
+    import('../../services/showdown.service.js').then(({ fetchShowdownSession }) => {
+      fetchShowdownSession(showdownParam).then((session) => {
+        if (cancelled) return;
+        if (!session) {
+          toast.error('Không tìm thấy phòng thi.');
+          setShowdownSessionId(null);
+          const next = new URLSearchParams(searchParams);
+          next.delete('showdown');
+          setSearchParams(next, { replace: true });
+          return;
+        }
+        if (session.classCode !== classCode) {
+          toast.error('Phòng thi không thuộc lớp học này.');
+          setShowdownSessionId(null);
+          const next = new URLSearchParams(searchParams);
+          next.delete('showdown');
+          setSearchParams(next, { replace: true });
+          return;
+        }
+        setShowdownSessionId(showdownParam);
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [showdownParam, classCode, toast, searchParams, setSearchParams]);
+
+  // Students can't list showdownSessions (Firestore rules block anonymous list),
+  // so we follow the active session id mirrored on the class doc and read it by id.
+  const activeShowdownPointer = classDoc?.activeShowdownSessionId || null;
+  useEffect(() => {
+    if (!FEATURE_CODING_SHOWDOWN_ENABLED || !activeShowdownPointer) {
+      setActiveShowdown(null);
+      return undefined;
+    }
+    let cancelled = false;
+    let unsubscribe = () => {};
+    import('../../services/showdown.service.js').then(({ subscribeShowdownSession }) => {
+      if (cancelled) return;
+      unsubscribe = subscribeShowdownSession(
+        activeShowdownPointer,
+        (data) => setActiveShowdown(data),
+        (err) => {
+          console.error('[showdown] active session subscription failed:', err);
+          setActiveShowdown(null);
+        },
+      );
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [activeShowdownPointer]);
+
+  const enterShowdown = (sessionId) => {
+    if (activeShowdown?.classCode && activeShowdown.classCode !== classCode) {
+      toast.error('Phòng thi không thuộc lớp học này.');
+      return;
+    }
+    setShowdownSessionId(sessionId);
+    const next = new URLSearchParams(searchParams);
+    next.set('showdown', sessionId);
+    setSearchParams(next, { replace: true });
+  };
+
+  const exitShowdown = () => {
+    setShowdownSessionId(null);
+    const next = new URLSearchParams(searchParams);
+    next.delete('showdown');
+    setSearchParams(next, { replace: true });
+  };
+
   const isFinalPhase = classDoc?.curriculumPhase === 'final';
   const finalMode = resolveFinalMode(classDoc, program);
 
   const bottomNavItems = useMemo(() => {
     const items = [{ id: 'overview', label: 'Tổng quan', sectionId: 'student-overview' }];
     if (isFinalPhase && finalMode === 'project') {
-      items.push({ id: 'report', label: 'Báo cáo', sectionId: 'student-report' });
+      items.push({ id: 'report', label: 'Dự án', sectionId: 'student-report' });
     } else {
       items.push({ id: 'lessons', label: 'Bài giảng', sectionId: 'student-lessons' });
-    }
-    if (!isFinalPhase) {
-      items.push({ id: 'feedback', label: 'Phản hồi', sectionId: 'student-feedback' });
+      if (!isFinalPhase) {
+        items.push({ id: 'feedback', label: 'Phản hồi', sectionId: 'student-feedback' });
+      }
     }
     return items;
   }, [isFinalPhase, finalMode]);
@@ -209,6 +291,13 @@ export function StudentPortalPage() {
     activeOlympia &&
     selectedStudent &&
     ['lobby', 'playing', 'reveal'].includes(activeOlympia.status);
+
+  const showShowdownBanner =
+    FEATURE_CODING_SHOWDOWN_ENABLED &&
+    !showdownSessionId &&
+    activeShowdown &&
+    selectedStudent &&
+    ['lobby', 'playing', 'reveal'].includes(activeShowdown.status);
 
   const chooseStudent = (student) => {
     setSelectedStudentId(student.id);
@@ -249,6 +338,22 @@ export function StudentPortalPage() {
     || (isFinalPhase && showProjectSetup)
   );
   const displayProject = projectNameDisplay(selectedStudent);
+
+  if (FEATURE_CODING_SHOWDOWN_ENABLED && showdownSessionId && selectedStudent && ShowdownStudentViewLazy) {
+    const ShowdownStudentView = ShowdownStudentViewLazy;
+    return (
+      <StudentShell subtitle={`${classDoc.className || classDoc.classCode} · Coding Showdown`}>
+        <Suspense fallback={<FullPageLoader label="Đang tải Coding Showdown..." />}>
+          <ShowdownStudentView
+            sessionId={showdownSessionId}
+            classCode={classCode}
+            student={selectedStudent}
+            onExit={exitShowdown}
+          />
+        </Suspense>
+      </StudentShell>
+    );
+  }
 
   if (FEATURE_OLYMPIA_ENABLED && olympiaSessionId && selectedStudent && OlympiaStudentViewLazy) {
     const OlympiaStudentView = OlympiaStudentViewLazy;
@@ -317,6 +422,23 @@ export function StudentPortalPage() {
         </div>
       )}
 
+      {showShowdownBanner && (
+        <div className="mb-5 flex flex-col gap-3 rounded-2xl border-2 border-cyan-400/50 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <Swords className="mt-0.5 h-6 w-6 shrink-0 text-cyan-600 dark:text-cyan-400" />
+            <div>
+              <p className="font-bold text-slate-800 dark:text-slate-100">Coding Showdown đang diễn ra!</p>
+              <p className="text-sm text-slate-600 dark:text-slate-300">
+                Giáo viên đã mở phòng thi đấu — tham gia ngay để ghi điểm cùng lớp.
+              </p>
+            </div>
+          </div>
+          <Button onClick={() => enterShowdown(activeShowdown.id)} className="min-h-12 shrink-0">
+            Tham gia Showdown
+          </Button>
+        </div>
+      )}
+
       <section id="student-overview" className="scroll-mt-[4.5rem]">
         <StudentOverview
           classDoc={classDoc}
@@ -338,13 +460,9 @@ export function StudentPortalPage() {
         </section>
       )}
 
-      {isFinalPhase && finalMode === 'project' ? (
+      {isFinalPhase && finalMode === 'project' && (
         <section id="student-report" className="mt-8 scroll-mt-[4.5rem]">
-          <ProgressReportView classDoc={classDoc} student={selectedStudent} />
-        </section>
-      ) : (
-        <section id="student-lessons" className="mt-8 scroll-mt-[4.5rem]">
-          <LessonsView
+          <FinalProjectStudentView
             classDoc={classDoc}
             program={program}
             student={selectedStudent}
@@ -355,6 +473,22 @@ export function StudentPortalPage() {
             }
           />
         </section>
+      )}
+
+      {!(isFinalPhase && finalMode === 'project') && (
+      <section id="student-lessons" className="mt-8 scroll-mt-[4.5rem]">
+        <LessonsView
+          classDoc={classDoc}
+          program={program}
+          student={selectedStudent}
+          submittedLessonIds={submittedLessonIds}
+          isFinalPhase={isFinalPhase}
+          onQuizFocusChange={setQuizFocus}
+          onFeedbackSubmitted={(lessonId) =>
+            setSubmittedLessonIds((prev) => (prev.includes(lessonId) ? prev : [...prev, lessonId]))
+          }
+        />
+      </section>
       )}
     </StudentShell>
   );

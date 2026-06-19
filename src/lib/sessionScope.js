@@ -1,5 +1,10 @@
 export const ALL_SESSIONS_VALUE = 'all';
 
+/** Buổi học tối đa học sinh được xem (theo buổi hiện tại của lớp). */
+export function unlockedLessonSessionCap(classDoc) {
+  return Number(classDoc?.curriculumCurrentSession) || 0;
+}
+
 /** Buổi 1 … buổi hiện tại của lớp. */
 export function sessionNumbersUpToCurrent(classDoc) {
   const current = Number(classDoc?.curriculumCurrentSession) || 0;

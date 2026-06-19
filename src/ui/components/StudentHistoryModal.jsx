@@ -3,6 +3,7 @@ import { Modal } from './Modal.jsx';
 import { Badge } from './Badge.jsx';
 import { Spinner } from './Spinner.jsx';
 import { EmptyState } from './EmptyState.jsx';
+import { ProjectLinksReadonly } from '../../pages/student/ProjectProductLinks.jsx';
 import { useToast } from './Toast.jsx';
 import { STATUS_TONES, UNDERSTANDING_LEVELS } from '../../constants/index.js';
 import { listReportsByStudent } from '../../services/reports.service.js';
@@ -87,6 +88,16 @@ export function StudentHistoryModal({ student, onClose, feedbackOnly = false }) 
           </div>
         </div>
 
+        {!feedbackOnly && (student.projectGithubUrl || student.projectCanvaUrl) && (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
+            <p className="mb-2 text-xs font-medium text-slate-500">Liên kết sản phẩm</p>
+            <ProjectLinksReadonly
+              githubUrl={student.projectGithubUrl}
+              canvaUrl={student.projectCanvaUrl}
+            />
+          </div>
+        )}
+
         {loading ? (
           <div className="flex justify-center py-10">
             <Spinner />
@@ -149,6 +160,11 @@ function TimelineReport({ report, isLatest = false }) {
           <span className="font-medium">Khó khăn:</span> {report.difficulties}
         </p>
       )}
+      <ProjectLinksReadonly
+        githubUrl={report.projectGithubUrl}
+        canvaUrl={report.projectCanvaUrl}
+        className="mt-2"
+      />
     </div>
   );
 }

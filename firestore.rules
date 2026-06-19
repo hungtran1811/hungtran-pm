@@ -76,11 +76,18 @@ service cloud.firestore {
         && curriculumProgramDoc(programId).data.active == true;
     }
 
+    function isValidOptionalProjectLink(value) {
+      return value is string
+        && value.size() <= 500
+        && (value == '' || value.matches('^https://.+$'));
+    }
+
     function isValidPublicReportCreate() {
       return request.resource.data.keys().hasOnly([
           'classId', 'classCode', 'studentId', 'studentName', 'projectName',
           'progressPercent', 'stage', 'status', 'doneToday', 'nextGoal',
-          'difficulties', 'submittedAt', 'submittedDateKey', 'source', 'createdAt'
+          'difficulties', 'projectGithubUrl', 'projectCanvaUrl',
+          'submittedAt', 'submittedDateKey', 'source', 'createdAt'
         ])
         && request.resource.data.classId == request.resource.data.classCode
         && isOpenClass(request.resource.data.classCode)
@@ -95,6 +102,8 @@ service cloud.firestore {
         && request.resource.data.nextGoal is string
         && request.resource.data.nextGoal.size() >= 10
         && request.resource.data.difficulties is string
+        && isValidOptionalProjectLink(request.resource.data.projectGithubUrl)
+        && isValidOptionalProjectLink(request.resource.data.projectCanvaUrl)
         && (request.resource.data.status != 'Cần hỗ trợ' || request.resource.data.difficulties.size() >= 15)
         && (request.resource.data.status != 'Hoàn thành' || request.resource.data.progressPercent == 100)
         && request.resource.data.submittedAt == request.time
@@ -594,11 +603,23 @@ service cloud.firestore {
         && request.resource.data.submittedAt == request.time;
     }
 
+    function isValidPublicProjectLinksUpdate(studentId) {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'projectGithubUrl', 'projectCanvaUrl', 'updatedAt'
+        ])
+        && resource.data.active == true
+        && isOpenClass(resource.data.classId)
+        && isValidOptionalProjectLink(request.resource.data.projectGithubUrl)
+        && isValidOptionalProjectLink(request.resource.data.projectCanvaUrl)
+        && request.resource.data.updatedAt == request.time;
+    }
+
     function isValidPublicStudentSnapshotUpdate(studentId) {
       return request.resource.data.diff(resource.data).changedKeys().hasOnly([
           'currentProgressPercent', 'currentStage', 'currentStatus',
           'currentDifficulties', 'lastReportedAt', 'latestReportId',
-          'progressStalledCount', 'updatedAt'
+          'progressStalledCount', 'projectGithubUrl', 'projectCanvaUrl',
+          'updatedAt'
         ])
         && resource.data.active == true
         && isOpenClass(resource.data.classId)
@@ -606,6 +627,8 @@ service cloud.firestore {
         && isValidStage(request.resource.data.currentStage)
         && isValidStatus(request.resource.data.currentStatus)
         && request.resource.data.currentDifficulties is string
+        && isValidOptionalProjectLink(request.resource.data.projectGithubUrl)
+        && isValidOptionalProjectLink(request.resource.data.projectCanvaUrl)
         && request.resource.data.lastReportedAt == request.time
         && request.resource.data.updatedAt == request.time
         && request.resource.data.latestReportId is string
@@ -678,6 +701,7 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update: if isAdmin()
         || isValidPublicStudentSnapshotUpdate(studentId)
+        || isValidPublicProjectLinksUpdate(studentId)
         || isValidPublicProjectNameSubmit(studentId)
         || isValidPublicLessonProgressUpdate(studentId);
       allow delete: if isAdmin();
@@ -883,6 +907,130 @@ service cloud.firestore {
     }
 
     match /olympiaAnswerKeys/{sessionId} {
+      allow read, write: if isAdmin();
+    }
+
+    function showdownSessionDoc(sessionId) {
+      return get(/databases/$(database)/documents/showdownSessions/$(sessionId));
+    }
+
+    function isReadableShowdownSession(sessionId) {
+      return exists(/databases/$(database)/documents/showdownSessions/$(sessionId))
+        && isOpenClass(showdownSessionDoc(sessionId).data.classCode);
+    }
+
+    function isShowdownJoinableStatus(status) {
+      return status == 'lobby' || status == 'playing' || status == 'reveal';
+    }
+
+    function isShowdownSessionPlaying(sessionId) {
+      return showdownSessionDoc(sessionId).data.status == 'playing';
+    }
+
+    function isValidShowdownRound(round) {
+      return round == 'startup' || round == 'obstacle' || round == 'finish';
+    }
+
+    function isShowdownResponseId(responseId, data) {
+      return responseId is string
+        && data.studentId is string
+        && isValidShowdownRound(data.round)
+        && data.questionIndex is int
+        && data.questionIndex >= 0
+        && responseId == data.studentId + '__' + data.round + '__' + string(data.questionIndex);
+    }
+
+    function isValidShowdownParticipantCreate(sessionId, studentId) {
+      return isReadableShowdownSession(sessionId)
+        && isShowdownJoinableStatus(showdownSessionDoc(sessionId).data.status)
+        && request.resource.data.keys().hasOnly([
+          'studentName', 'joinedAt', 'totalScore', 'lastActiveAt'
+        ])
+        && request.resource.data.studentName is string
+        && request.resource.data.studentName.size() > 0
+        && studentDoc(studentId).data.fullName == request.resource.data.studentName
+        && isActiveStudentInClass(studentId, showdownSessionDoc(sessionId).data.classCode)
+        && request.resource.data.totalScore == 0;
+    }
+
+    function isValidShowdownResponseCreate(sessionId, responseId) {
+      return isShowdownSessionPlaying(sessionId)
+        && showdownSessionDoc(sessionId).data.roundMode != 'oral'
+        && isOpenClass(showdownSessionDoc(sessionId).data.classCode)
+        && isActiveStudentInClass(request.resource.data.studentId, showdownSessionDoc(sessionId).data.classCode)
+        && studentDoc(request.resource.data.studentId).data.fullName == request.resource.data.studentName
+        && isShowdownResponseId(responseId, request.resource.data)
+        && request.resource.data.round == showdownSessionDoc(sessionId).data.currentRound
+        && request.resource.data.questionIndex == showdownSessionDoc(sessionId).data.questionIndex
+        && request.resource.data.questionId is string
+        && request.resource.data.questionId.size() > 0
+        && (
+          (
+            request.resource.data.selectedOption is int
+            && request.resource.data.selectedOption >= 0
+            && request.resource.data.selectedOption <= 3
+          )
+          || (
+            request.resource.data.textAnswer is string
+            && request.resource.data.textAnswer.size() > 0
+          )
+        )
+        && request.resource.data.isCorrect == null
+        && request.resource.data.pointsEarned == 0
+        && request.resource.data.responseMs is int
+        && request.resource.data.responseMs >= 0
+        && request.resource.data.answeredAt == request.time
+        && (
+          request.resource.data.round != 'finish'
+          || (
+            showdownSessionDoc(sessionId).data.activeStudentId == request.resource.data.studentId
+            && request.resource.data.finishChoice is int
+            && (
+              request.resource.data.finishChoice == 10
+              || request.resource.data.finishChoice == 20
+              || request.resource.data.finishChoice == 30
+            )
+          )
+        )
+        && (
+          request.resource.data.round == 'finish'
+          || request.resource.data.finishChoice == null
+        );
+    }
+
+    function isShowdownResponseReadable(sessionId) {
+      return showdownSessionDoc(sessionId).data.status == 'reveal'
+        || showdownSessionDoc(sessionId).data.status == 'finished';
+    }
+
+    match /showdownSessions/{sessionId} {
+      allow read: if isAdmin() || isReadableShowdownSession(sessionId);
+      allow create, update, delete: if isAdmin();
+
+      match /participants/{studentId} {
+        allow read: if isAdmin() || isReadableShowdownSession(sessionId);
+        allow create: if isAdmin() || isValidShowdownParticipantCreate(sessionId, studentId);
+        allow update, delete: if isAdmin();
+      }
+
+      match /responses/{responseId} {
+        allow get: if isAdmin()
+          || (isReadableShowdownSession(sessionId) && isShowdownResponseReadable(sessionId));
+        allow list: if isAdmin();
+        allow create: if isAdmin() || isValidShowdownResponseCreate(sessionId, responseId);
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    match /showdownAnswerKeys/{sessionId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /showdownQuestions/{questionId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /showdownMatrices/{matrixId} {
       allow read, write: if isAdmin();
     }
   }

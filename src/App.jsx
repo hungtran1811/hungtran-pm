@@ -9,6 +9,10 @@ import { StudentPortalPage } from './pages/student/StudentPortal.jsx';
 import { NotFoundPage } from './pages/NotFound.jsx';
 import { ErrorBoundary } from './ui/components/ErrorBoundary.jsx';
 
+const ShowdownPresentationPage = lazy(() =>
+  import('./pages/ShowdownPresentationPage.jsx').then((m) => ({ default: m.ShowdownPresentationPage })),
+);
+
 const DashboardPage = lazy(() =>
   import('./pages/admin/Dashboard.jsx').then((m) => ({ default: m.DashboardPage })),
 );
@@ -87,6 +91,17 @@ export default function App() {
         element={
           <ErrorBoundary title="Cổng học sinh gặp sự cố" homeTo="/" variant="student">
             <StudentPortalPage />
+          </ErrorBoundary>
+        }
+      />
+
+      <Route
+        path="/present/:sessionId"
+        element={
+          <ErrorBoundary title="Màn trình chiếu gặp sự cố" homeTo="/" variant="student">
+            <Suspense fallback={<FullPageLoader label="Đang tải màn trình chiếu..." />}>
+              <ShowdownPresentationPage />
+            </Suspense>
           </ErrorBoundary>
         }
       />

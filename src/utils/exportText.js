@@ -18,6 +18,8 @@ export function formatProgressReport(report) {
     `Đã làm: ${report.doneToday}`,
     `Mục tiêu tiếp theo: ${report.nextGoal}`,
     report.difficulties ? `Khó khăn: ${report.difficulties}` : '',
+    report.projectGithubUrl ? `GitHub: ${report.projectGithubUrl}` : '',
+    report.projectCanvaUrl ? `Canva: ${report.projectCanvaUrl}` : '',
     report.submittedAt ? `Thời gian: ${formatDateTime(report.submittedAt)}` : '',
   ]
     .filter(Boolean)

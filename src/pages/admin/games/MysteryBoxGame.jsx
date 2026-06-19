@@ -25,7 +25,7 @@ import { GamePresentationShell, useGamePresentation } from './GamePresentationSh
 const TYPE_OPTIONS = [
   { value: 'reward', label: 'Thưởng' },
   { value: 'penalty', label: 'Phạt' },
-  { value: 'neutral', label: 'Trung tính' },
+  { value: 'neutral', label: 'An toàn' },
 ];
 
 const OPEN_MS = {

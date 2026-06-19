@@ -40,7 +40,7 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }) {
       >
         {title && (
           <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
-            <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">{title}</h3>
+            <h3 className="text-lg font-medium text-slate-800 dark:text-slate-100">{title}</h3>
             <button
               type="button"
               onClick={onClose}

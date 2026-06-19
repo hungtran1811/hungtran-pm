@@ -9,6 +9,7 @@ import { ClassFilterBar } from '../../ui/components/ClassFilterBar.jsx';
 import { Input } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { StudentHistoryModal } from '../../ui/components/StudentHistoryModal.jsx';
+import { ProjectLinksReadonly } from '../student/ProjectProductLinks.jsx';
 import {
   PanelSummaryGrid,
   PanelSummaryStat,
@@ -177,6 +178,8 @@ export function ReportsPanel({
       id: student.id,
       fullName: student.fullName,
       currentProgressPercent: report?.progressPercent ?? student.currentProgressPercent,
+      projectGithubUrl: student.projectGithubUrl,
+      projectCanvaUrl: student.projectCanvaUrl,
     });
   };
 
@@ -283,6 +286,7 @@ export function ReportsPanel({
                       <ReportGridCard
                         key={student.id}
                         report={report}
+                        student={student}
                         showClass={isAllClasses}
                         isNewest={student.id === newestStudentId}
                         onViewHistory={() => openHistory(student, report)}
@@ -339,7 +343,7 @@ function MissingReportCard({ student, showClass, onViewHistory }) {
   );
 }
 
-function ReportGridCard({ report, showClass, isNewest = false, onViewHistory }) {
+function ReportGridCard({ report, student, showClass, isNewest = false, onViewHistory }) {
   const toast = useToast();
   const hasFull = !report.snapshotOnly;
   const percent = Number(report.progressPercent || 0);
@@ -407,6 +411,12 @@ function ReportGridCard({ report, showClass, isNewest = false, onViewHistory }) 
           </dd>
         </div>
       </dl>
+
+      <ProjectLinksReadonly
+        githubUrl={report.projectGithubUrl || student.projectGithubUrl}
+        canvaUrl={report.projectCanvaUrl || student.projectCanvaUrl}
+        className="mt-3"
+      />
 
       {hasFull ? (
         <div className="mt-3 rounded-lg border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-500/20 dark:bg-emerald-500/10">

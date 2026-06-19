@@ -94,13 +94,33 @@ function imageToStore(img) {
   };
 }
 
+/** Gallery images (excludes banner). Preserves all supplementary images when cover is set. */
+function collectLessonGalleryImages(lesson) {
+  const bannerUrl = imageToStore(lesson.bannerImage)?.secureUrl;
+  const seen = new Set();
+  const list = [];
+  const add = (img) => {
+    const stored = imageToStore(img);
+    if (!stored || seen.has(stored.secureUrl)) return;
+    if (bannerUrl && stored.secureUrl === bannerUrl) return;
+    seen.add(stored.secureUrl);
+    list.push(stored);
+  };
+  if (Array.isArray(lesson.images)) {
+    lesson.images.forEach(add);
+  }
+  const cover = imageToStore(lesson.coverImage);
+  if (cover && !seen.has(cover.secureUrl)) {
+    list.unshift({ ...cover, order: cover.order || 1 });
+  }
+  return list;
+}
+
 function serializeLesson(lesson) {
   const raw = lesson._raw && typeof lesson._raw === 'object' ? lesson._raw : {};
   const banner = imageToStore(lesson.bannerImage);
   const cover = imageToStore(lesson.coverImage);
-  const images = cover
-    ? [{ ...cover, order: 1 }]
-    : (Array.isArray(lesson.images) ? lesson.images.map(imageToStore).filter(Boolean) : []);
+  const images = collectLessonGalleryImages(lesson);
 
   const next = {
     ...raw,
@@ -135,7 +155,7 @@ function toSlimLessonIndex(lesson) {
     exerciseVisible: Boolean(lesson.exerciseVisible),
     bannerImage: banner,
     coverImage: cover,
-    images: cover ? [{ ...cover, order: 1 }] : [],
+    images: collectLessonGalleryImages(lesson),
   };
 }
 

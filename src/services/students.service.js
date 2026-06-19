@@ -18,6 +18,7 @@ import {
 import { db } from '../config/firebase.js';
 import { toStudentModel } from '../models/index.js';
 import { normalizeKey } from '../lib/firestore.js';
+import { validateProjectLinks } from '../lib/projectLinks.js';
 import { isLegacyUnapprovedProject, meaningfulProjectName } from '../lib/classFinalMode.js';
 import { DEFAULT_STAGE, DEFAULT_STATUS } from '../constants/index.js';
 
@@ -168,6 +169,8 @@ export async function createStudent(payload) {
     projectNameStatus: '',
     projectNameReviewNote: '',
     projectNameSubmittedAt: null,
+    projectGithubUrl: '',
+    projectCanvaUrl: '',
     currentStatus: payload.currentStatus ?? DEFAULT_STATUS,
     currentStage: payload.currentStage ?? DEFAULT_STAGE,
     currentProgressPercent: Number(payload.currentProgressPercent ?? 0),
@@ -222,6 +225,22 @@ export async function submitProjectName(studentId, projectName) {
     projectNameStatus: 'pending',
     projectNameReviewNote: '',
     projectNameSubmittedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function submitProjectLinks(studentId, { githubUrl, canvaUrl }) {
+  const validated = validateProjectLinks({ githubUrl, canvaUrl });
+  if (validated.error) {
+    throw new Error(validated.error);
+  }
+  const student = await getStudent(studentId);
+  if (!student?.active) {
+    throw new Error('Học sinh không hợp lệ.');
+  }
+  await updateDoc(doc(db, 'students', studentId), {
+    projectGithubUrl: validated.githubUrl,
+    projectCanvaUrl: validated.canvaUrl,
     updatedAt: serverTimestamp(),
   });
 }

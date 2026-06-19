@@ -1,17 +1,22 @@
 import { useEffect, useState } from 'react';
-import { CircleDot, Dices, Gift, Hash, Layers, Mountain } from 'lucide-react';
+import { CircleDot, Dices, Gift, Hash, Layers, Mountain, Swords } from 'lucide-react';
 import { AppShell } from '../../ui/components/AppShell.jsx';
 import { SkeletonRows } from '../../ui/components/Skeleton.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { subscribeClasses } from '../../services/classes.service.js';
 import { listCurriculumPrograms } from '../../services/curriculum.service.js';
 import { getErrorMessage } from '../../lib/firestore.js';
-import { FEATURE_OLYMPIA_ENABLED, FEATURE_WHEEL_OF_FORTUNE_ENABLED } from '../../config/features.js';
+import {
+  FEATURE_CODING_SHOWDOWN_ENABLED,
+  FEATURE_OLYMPIA_ENABLED,
+  FEATURE_WHEEL_OF_FORTUNE_ENABLED,
+} from '../../config/features.js';
 import { RandomStudentPicker } from './games/RandomStudentPicker.jsx';
 import { NumberGuessGame } from './games/NumberGuessGame.jsx';
 import { CardFlipGame } from './games/CardFlipGame.jsx';
 import { MysteryBoxGame } from './games/MysteryBoxGame.jsx';
 import { WheelOfFortuneGame } from './games/WheelOfFortuneGame.jsx';
+import { CodingShowdownGame } from './games/CodingShowdownGame.jsx';
 
 const BASE_GAMES = [
   { id: 'random-student', title: 'Quay tên', icon: Dices },
@@ -20,6 +25,9 @@ const BASE_GAMES = [
   { id: 'mystery-box', title: 'Hộp bí ẩn', icon: Gift },
   ...(FEATURE_WHEEL_OF_FORTUNE_ENABLED
     ? [{ id: 'wheel-of-fortune', title: 'Chiếc nón kỳ diệu', icon: CircleDot }]
+    : []),
+  ...(FEATURE_CODING_SHOWDOWN_ENABLED
+    ? [{ id: 'coding-showdown', title: 'Coding Showdown', icon: Swords }]
     : []),
 ];
 
@@ -91,6 +99,8 @@ export function MiniGamesPage() {
         <MysteryBoxGame classes={classes} programs={programs} />
       ) : activeGame === 'wheel-of-fortune' ? (
         <WheelOfFortuneGame classes={classes} programs={programs} />
+      ) : activeGame === 'coding-showdown' ? (
+        <CodingShowdownGame classes={classes} programs={programs} />
       ) : null}
     </AppShell>
   );

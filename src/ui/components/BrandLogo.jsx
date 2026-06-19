@@ -47,7 +47,7 @@ function BrandWordmark({ sizeKey }) {
   const s = SIZES[sizeKey] || SIZES.md;
   return (
     <span
-      className={`shrink-0 font-bold leading-none tracking-tight ${s.wordmark}`}
+      className={`shrink-0 font-semibold leading-none tracking-tight ${s.wordmark}`}
       aria-label="hungtranPM"
     >
       <span className="text-slate-800 dark:text-slate-100">hung</span>

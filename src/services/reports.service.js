@@ -14,6 +14,7 @@ import {
 import { db } from '../config/firebase.js';
 import { toReportModel } from '../models/index.js';
 import { dateKey } from '../lib/firestore.js';
+import { validateProjectLinks } from '../lib/projectLinks.js';
 
 const reportsRef = collection(db, 'reports');
 
@@ -53,6 +54,8 @@ export function reportFromStudentSnapshot(student) {
     doneToday: '—',
     nextGoal: '—',
     difficulties: student.currentDifficulties || '',
+    projectGithubUrl: student.projectGithubUrl || '',
+    projectCanvaUrl: student.projectCanvaUrl || '',
     submittedAt: student.lastReportedAt,
     submittedDateKey: '',
     source: 'student-snapshot',
@@ -114,6 +117,13 @@ export async function submitProgressReport({ student, classDoc, form }) {
 
   const progressPercent = Number(form.progressPercent);
   const difficulties = form.difficulties?.trim() ?? '';
+  const linkValidation = validateProjectLinks({
+    githubUrl: form.projectGithubUrl ?? student.projectGithubUrl ?? '',
+    canvaUrl: form.projectCanvaUrl ?? student.projectCanvaUrl ?? '',
+  });
+  if (linkValidation.error) {
+    throw new Error(linkValidation.error);
+  }
 
   batch.set(reportRef, {
     classId: classDoc.classCode,
@@ -127,6 +137,8 @@ export async function submitProgressReport({ student, classDoc, form }) {
     doneToday: form.doneToday.trim(),
     nextGoal: form.nextGoal.trim(),
     difficulties,
+    projectGithubUrl: linkValidation.githubUrl,
+    projectCanvaUrl: linkValidation.canvaUrl,
     submittedAt: serverTimestamp(),
     submittedDateKey: dateKey(),
     source: 'student-form',
@@ -143,6 +155,8 @@ export async function submitProgressReport({ student, classDoc, form }) {
     currentStage: form.stage,
     currentStatus: form.status,
     currentDifficulties: difficulties,
+    projectGithubUrl: linkValidation.githubUrl,
+    projectCanvaUrl: linkValidation.canvaUrl,
     lastReportedAt: serverTimestamp(),
     latestReportId: reportRef.id,
     progressStalledCount: stalled,

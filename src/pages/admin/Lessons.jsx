@@ -12,6 +12,7 @@ import { Field, Input, Textarea } from '../../ui/components/Field.jsx';
 import { Select } from '../../ui/components/Field.jsx';
 import { Markdown } from '../../ui/components/Markdown.jsx';
 import { ImageUpload } from '../../ui/components/ImageUpload.jsx';
+import { ImageGalleryUpload } from '../../ui/components/ImageGalleryUpload.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import {
   createProgram,
@@ -495,6 +496,7 @@ function ProgramFormModal({ initial, saving, onClose, onSave }) {
 }
 
 function LessonPreviewPane({ form }) {
+  const gallery = Array.isArray(form.images) ? form.images.filter((img) => img?.secureUrl) : [];
   return (
     <div className="max-h-[65vh] overflow-y-auto rounded-xl border border-slate-200 p-5 dark:border-slate-700">
       {(form.bannerImage?.secureUrl || form.coverImage?.secureUrl) && (
@@ -503,6 +505,18 @@ function LessonPreviewPane({ form }) {
           alt=""
           className="mb-4 aspect-[2/1] w-full rounded-xl object-cover"
         />
+      )}
+      {gallery.length > 0 && (
+        <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {gallery.map((img, i) => (
+            <img
+              key={img.secureUrl || i}
+              src={img.secureUrl}
+              alt={img.alt || ''}
+              className="aspect-video w-full rounded-xl object-contain bg-slate-100 dark:bg-slate-800"
+            />
+          ))}
+        </div>
       )}
       <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">{form.title || 'Chưa có tiêu đề'}</h2>
       <Markdown content={form.content} className="mt-3" />
@@ -961,6 +975,11 @@ function LessonEditor({ lesson, programId, initialMode = 'lesson', onClose, onAp
           <div className="space-y-4">
             <ImageUpload label="Ảnh banner" value={form.bannerImage} onChange={(v) => update('bannerImage', v)} />
             <ImageUpload label="Ảnh bìa" value={form.coverImage} onChange={(v) => update('coverImage', v)} />
+            <ImageGalleryUpload
+              label="Ảnh minh họa"
+              value={form.images}
+              onChange={(v) => update('images', v)}
+            />
             <label className="flex items-center gap-2.5 rounded-xl border border-slate-200 px-3.5 py-3 dark:border-slate-700">
               <input
                 type="checkbox"

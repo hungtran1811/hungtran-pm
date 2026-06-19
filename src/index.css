@@ -16,8 +16,13 @@
   --color-brand-900: #1a318e;
   --color-brand-950: #151f56;
 
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+  --font-sans: 'Exo 2', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
     'Helvetica Neue', Arial, sans-serif;
+
+  /* Nhẹ hơn mặc định Tailwind — tránh chữ đậm quá */
+  --font-weight-semibold: 550;
+  --font-weight-bold: 600;
+  --font-weight-extrabold: 700;
 }
 
 @layer base {
@@ -26,8 +31,10 @@
   }
 
   body {
-    @apply bg-slate-50 text-slate-800 antialiased;
+    @apply bg-slate-50 text-slate-800 font-normal subpixel-antialiased;
     font-family: var(--font-sans);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
   }
 
   .dark body {
@@ -53,23 +60,19 @@
   }
 
   .label-base {
-    @apply mb-1.5 block text-sm font-semibold text-slate-800 dark:text-slate-200;
+    @apply mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300;
   }
 
   .admin-app {
-    @apply text-[15px] leading-relaxed text-slate-800 antialiased dark:text-slate-100;
+    @apply text-[15px] font-normal leading-relaxed text-slate-800 dark:text-slate-100;
   }
 
   .admin-app h2 {
-    @apply font-bold tracking-tight text-slate-900 dark:text-slate-50;
+    @apply font-semibold tracking-tight text-slate-900 dark:text-slate-50;
   }
 
   .admin-app h3 {
-    @apply font-semibold text-slate-900 dark:text-slate-100;
-  }
-
-  .admin-app .input-base {
-    @apply font-medium;
+    @apply font-medium text-slate-900 dark:text-slate-100;
   }
 
   .admin-app table {
@@ -77,12 +80,13 @@
   }
 
   .admin-app th {
-    @apply font-semibold text-slate-700 dark:text-slate-200;
+    @apply font-medium text-slate-600 dark:text-slate-300;
   }
 
   .student-portal {
     --student-header-height: 3.75rem;
     --student-bottom-nav-height: 3.75rem;
+    @apply font-normal text-slate-800 subpixel-antialiased dark:text-slate-100;
   }
 
   .student-main-with-nav {
@@ -134,7 +138,7 @@
   }
 
   .admin-app td {
-    @apply font-medium text-slate-800 dark:text-slate-200;
+    @apply font-normal text-slate-700 dark:text-slate-300;
   }
 }
 
@@ -142,13 +146,13 @@
   line-height: 1.75;
 }
 .prose-content h1 {
-  @apply mt-6 mb-3 text-2xl font-bold text-slate-900 dark:text-slate-50;
+  @apply mt-6 mb-3 text-2xl font-semibold text-slate-900 dark:text-slate-50;
 }
 .prose-content h2 {
-  @apply mt-5 mb-2.5 text-xl font-bold text-slate-900 dark:text-slate-50;
+  @apply mt-5 mb-2.5 text-xl font-semibold text-slate-900 dark:text-slate-50;
 }
 .prose-content h3 {
-  @apply mt-4 mb-2 text-lg font-semibold text-slate-900 dark:text-slate-100;
+  @apply mt-4 mb-2 text-lg font-medium text-slate-900 dark:text-slate-100;
 }
 .prose-content p {
   @apply my-3;
@@ -567,7 +571,7 @@
 
 .game-card-name {
   font-size: 0.65rem;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.2;
   text-align: center;
   color: #fff;

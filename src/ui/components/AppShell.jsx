@@ -31,7 +31,7 @@ const NAV_ITEMS = [
 
 function navLinkClass(isActive) {
   return [
-    'group flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-[15px] font-semibold transition-all',
+    'group flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-[15px] font-medium transition-all',
     isActive
       ? 'bg-brand-600 text-white shadow-md shadow-brand-600/25 ring-1 ring-brand-500/40'
       : 'text-slate-700 hover:bg-white hover:text-brand-700 hover:shadow-sm dark:text-slate-200 dark:hover:bg-slate-800/90 dark:hover:text-white',
@@ -41,7 +41,7 @@ function navLinkClass(isActive) {
 function NavItems({ onNavigate }) {
   return (
     <nav className="space-y-1">
-      <p className="mb-2 px-3.5 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
+      <p className="mb-2 px-3.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
         Quản lý
       </p>
       {NAV_ITEMS.map((item) => {
@@ -93,10 +93,10 @@ export function AppShell({ title, actions, children }) {
           <NavItems />
         </div>
         <div className="mt-4 rounded-2xl border border-slate-200/80 bg-white/80 p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-          <p className="truncate text-xs font-semibold text-slate-600 dark:text-slate-300">
+          <p className="truncate text-xs font-normal text-slate-600 dark:text-slate-300">
             {admin?.email}
           </p>
-          <Button variant="ghost" size="sm" className="mt-2 w-full font-semibold" onClick={handleLogout}>
+          <Button variant="ghost" size="sm" className="mt-2 w-full" onClick={handleLogout}>
             <LogOut className="h-4 w-4" />
             Đăng xuất
           </Button>
@@ -114,7 +114,7 @@ export function AppShell({ title, actions, children }) {
             >
               <Menu className="h-6 w-6" />
             </button>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900 lg:text-2xl dark:text-slate-50">
+            <h1 className="text-xl font-semibold tracking-tight text-slate-900 lg:text-2xl dark:text-slate-50">
               {title}
             </h1>
           </div>
@@ -145,7 +145,7 @@ export function AppShell({ title, actions, children }) {
             <div className="mt-6 flex-1">
               <NavItems onNavigate={() => setMobileOpen(false)} />
             </div>
-            <Button variant="ghost" size="sm" className="w-full font-semibold" onClick={handleLogout}>
+            <Button variant="ghost" size="sm" className="w-full" onClick={handleLogout}>
               Đăng xuất
             </Button>
           </aside>
