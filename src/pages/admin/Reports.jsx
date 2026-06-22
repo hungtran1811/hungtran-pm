@@ -9,6 +9,7 @@ import { ClassFilterBar } from '../../ui/components/ClassFilterBar.jsx';
 import { Input } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { StudentHistoryModal } from '../../ui/components/StudentHistoryModal.jsx';
+import { ClassCodeSubmissionsOverview } from '../../ui/components/ClassCodeSubmissionsOverview.jsx';
 import { ProjectLinksReadonly } from '../student/ProjectProductLinks.jsx';
 import {
   PanelSummaryGrid,
@@ -26,6 +27,10 @@ import {
   copyToClipboard,
   formatProgressReport,
 } from '../../utils/exportText.js';
+import {
+  listCodeSubmissionsByClass,
+  summarizeCodeSubmissions,
+} from '../../services/codeSubmissions.service.js';
 
 export function ReportsPanel({
   selectedClass: selectedClassProp,
@@ -46,6 +51,7 @@ export function ReportsPanel({
   const [lastLoadedAt, setLastLoadedAt] = useState(null);
   const [search, setSearch] = useState('');
   const [historyTarget, setHistoryTarget] = useState(null);
+  const [codeByStudent, setCodeByStudent] = useState(() => new Map());
 
   const isControlled = selectedClassProp !== undefined;
   const selectedClass = isControlled ? selectedClassProp : internalClass;
@@ -59,6 +65,14 @@ export function ReportsPanel({
   );
   const classCodes = useMemo(() => scopedClasses.map((c) => c.classCode), [scopedClasses]);
   const isAllClasses = selectedClass === ALL_CLASSES_VALUE;
+  const selectedClassDoc = useMemo(
+    () => classes.find((c) => c.classCode === selectedClass) ?? null,
+    [classes, selectedClass],
+  );
+  const showCodeOverview =
+    !isAllClasses &&
+    selectedClassDoc?.curriculumPhase === 'final' &&
+    selectedClassDoc?.finalMode !== 'exam';
 
   const toggleArchived = (checked) => {
     setShowArchived(checked);
@@ -116,9 +130,32 @@ export function ReportsPanel({
     loadSnapshot({ initial: true });
   }, [loadSnapshot]);
 
+  useEffect(() => {
+    if (!showCodeOverview || !selectedClass) {
+      setCodeByStudent(new Map());
+      return;
+    }
+    let cancelled = false;
+    listCodeSubmissionsByClass(selectedClass)
+      .then((rows) => {
+        if (!cancelled) setCodeByStudent(summarizeCodeSubmissions(rows));
+      })
+      .catch((error) => {
+        if (!cancelled) toast.error(getErrorMessage(error));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedClass, showCodeOverview, toast]);
+
   const handleRefresh = () => {
     invalidateAdminSnapshots();
     loadSnapshot({ force: true });
+    if (showCodeOverview && selectedClass) {
+      listCodeSubmissionsByClass(selectedClass)
+        .then((rows) => setCodeByStudent(summarizeCodeSubmissions(rows)))
+        .catch((error) => toast.error(getErrorMessage(error)));
+    }
   };
 
   const resolveReport = useCallback(
@@ -177,6 +214,8 @@ export function ReportsPanel({
     setHistoryTarget({
       id: student.id,
       fullName: student.fullName,
+      classId: student.classId || student.classCode || selectedClass,
+      classCode: student.classCode || student.classId || selectedClass,
       currentProgressPercent: report?.progressPercent ?? student.currentProgressPercent,
       projectGithubUrl: student.projectGithubUrl,
       projectCanvaUrl: student.projectCanvaUrl,
@@ -254,6 +293,13 @@ export function ReportsPanel({
                   {avgProgress != null && (
                     <PanelSummaryStat label="Tiến độ trung bình" value={`${avgProgress}%`} tone="green" />
                   )}
+                  {showCodeOverview && (
+                    <PanelSummaryStat
+                      label="Đã nộp code"
+                      value={`${codeByStudent.size}/${visible.length}`}
+                      tone={codeByStudent.size ? 'brand' : 'slate'}
+                    />
+                  )}
                 </PanelSummaryGrid>
                 <Button
                   size="sm"
@@ -280,6 +326,14 @@ export function ReportsPanel({
               ) : visible.length === 0 ? (
                 <EmptyState title="Chưa có học sinh" />
               ) : (
+                <>
+                  {showCodeOverview && (
+                    <ClassCodeSubmissionsOverview
+                      codeByStudent={codeByStudent}
+                      students={visible.map(({ student }) => student)}
+                      onSelectStudent={(student) => openHistory(student, resolveReport(student))}
+                    />
+                  )}
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {visible.map(({ student, report }) =>
                     report ? (
@@ -289,6 +343,7 @@ export function ReportsPanel({
                         student={student}
                         showClass={isAllClasses}
                         isNewest={student.id === newestStudentId}
+                        codeStats={codeByStudent.get(student.id)}
                         onViewHistory={() => openHistory(student, report)}
                       />
                     ) : (
@@ -296,11 +351,13 @@ export function ReportsPanel({
                         key={student.id}
                         student={student}
                         showClass={isAllClasses}
+                        codeStats={codeByStudent.get(student.id)}
                         onViewHistory={() => openHistory(student, null)}
                       />
                     ),
                   )}
                 </div>
+                </>
               )}
             </>
           )}
@@ -314,7 +371,7 @@ export function ReportsPanel({
   );
 }
 
-function MissingReportCard({ student, showClass, onViewHistory }) {
+function MissingReportCard({ student, showClass, codeStats, onViewHistory }) {
   return (
     <div
       role="button"
@@ -334,7 +391,10 @@ function MissingReportCard({ student, showClass, onViewHistory }) {
             {showClass ? `${student.classCode} · ` : ''}Chưa gửi báo cáo tiến độ
           </p>
         </div>
-        <Badge tone="slate">Chưa báo cáo</Badge>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <Badge tone="slate">Chưa báo cáo</Badge>
+          {codeStats && <Badge tone="brand">{codeStats.fileCount} file code</Badge>}
+        </div>
       </div>
       <p className="mt-4 flex-1 text-sm text-slate-500 dark:text-slate-400">
         Học sinh chưa nộp báo cáo trên cổng học sinh. Nhấn để xem lịch sử.
@@ -343,7 +403,7 @@ function MissingReportCard({ student, showClass, onViewHistory }) {
   );
 }
 
-function ReportGridCard({ report, student, showClass, isNewest = false, onViewHistory }) {
+function ReportGridCard({ report, student, showClass, isNewest = false, codeStats, onViewHistory }) {
   const toast = useToast();
   const hasFull = !report.snapshotOnly;
   const percent = Number(report.progressPercent || 0);
@@ -391,6 +451,7 @@ function ReportGridCard({ report, student, showClass, isNewest = false, onViewHi
         <div className="flex shrink-0 flex-col items-end gap-1">
           {isNewest && <Badge tone="brand">Mới nhất</Badge>}
           <Badge tone={STATUS_TONES[report.status] || 'slate'}>{report.status}</Badge>
+          {codeStats && <Badge tone="brand">{codeStats.fileCount} file code</Badge>}
         </div>
       </div>
 

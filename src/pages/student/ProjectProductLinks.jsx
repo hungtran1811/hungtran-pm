@@ -6,12 +6,15 @@ import { useToast } from '../../ui/components/Toast.jsx';
 import { validateProjectLinks } from '../../lib/projectLinks.js';
 import { getErrorMessage } from '../../lib/firestore.js';
 import { submitProjectLinks } from '../../services/students.service.js';
+import { GUIDE_SECTIONS } from './ProjectSubmissionGuide.jsx';
 
 export function ProjectProductLinks({
   student,
   links,
   onChange,
+  onOpenGuide,
   disabled = false,
+  compact = false,
 }) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
@@ -40,20 +43,34 @@ export function ProjectProductLinks({
     links.canvaUrl.trim() !== (student.projectCanvaUrl || '').trim();
 
   return (
-    <div className="card space-y-4 p-5">
-      <div className="flex items-start gap-3">
-        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-          <Link2 className="h-4 w-4" />
-        </span>
-        <div>
-          <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">Liên kết sản phẩm</h3>
-          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-            Lưu link GitHub (mã nguồn) và Canva (slide/thiết kế) để giáo viên xem nhanh.
-          </p>
+    <div className={compact ? 'space-y-3' : 'card space-y-4 p-5'}>
+      {!compact && (
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+            <Link2 className="h-4 w-4" />
+          </span>
+          <div>
+            <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">Liên kết sản phẩm</h3>
+            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
+              Lưu link GitHub (mã nguồn) và Canva (slide/thiết kế) để giáo viên xem nhanh.
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
-      <Field label="GitHub" hint="Ví dụ: github.com/username/ten-du-an">
+      <div className={compact ? 'grid gap-3 sm:grid-cols-2' : 'space-y-4'}>
+        <Field
+          label="GitHub"
+          hint={
+            compact ? (
+              onOpenGuide ? (
+                <GithubGuideHints onOpenGuide={onOpenGuide} />
+              ) : undefined
+            ) : (
+              'Ví dụ: github.com/username/ten-du-an'
+            )
+          }
+        >
         <div className="relative">
           <Code2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input
@@ -66,22 +83,34 @@ export function ProjectProductLinks({
             disabled={disabled || saving}
           />
         </div>
-      </Field>
+        </Field>
 
-      <Field label="Canva" hint="Ví dụ: canva.com/design/...">
-        <div className="relative">
-          <Palette className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input
-            type="url"
-            inputMode="url"
-            value={links.canvaUrl}
-            onChange={(e) => update('canvaUrl', e.target.value)}
-            placeholder="https://www.canva.com/design/..."
+        <Field
+          label="Canva"
+          hint={
+            compact ? (
+              onOpenGuide ? (
+      <GuideHint onOpen={() => onOpenGuide(GUIDE_SECTIONS.canva)} label="Hướng dẫn Canva" />
+              ) : undefined
+            ) : (
+              'canva.com/design/... hoặc canva.link/...'
+            )
+          }
+        >
+          <div className="relative">
+            <Palette className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              type="url"
+              inputMode="url"
+              value={links.canvaUrl}
+              onChange={(e) => update('canvaUrl', e.target.value)}
+              placeholder="https://www.canva.com/design/... hoặc canva.link/..."
             className="pl-9"
             disabled={disabled || saving}
           />
         </div>
-      </Field>
+        </Field>
+      </div>
 
       <Button
         type="button"
@@ -95,6 +124,28 @@ export function ProjectProductLinks({
         Lưu liên kết
       </Button>
     </div>
+  );
+}
+
+function GuideHint({ onOpen, label }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="text-brand-600 underline-offset-2 hover:underline dark:text-brand-400"
+    >
+      {label}
+    </button>
+  );
+}
+
+function GithubGuideHints({ onOpenGuide }) {
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+      <GuideHint onOpen={() => onOpenGuide(GUIDE_SECTIONS.github)} label="Hướng dẫn GitHub" />
+      <span className="text-slate-300 dark:text-slate-600">|</span>
+      <GuideHint onOpen={() => onOpenGuide(GUIDE_SECTIONS.git)} label="Git commit & push" />
+    </span>
   );
 }
 

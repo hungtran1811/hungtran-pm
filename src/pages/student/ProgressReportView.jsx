@@ -9,9 +9,10 @@ import { submitProgressReport } from '../../services/reports.service.js';
 import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
 import { isProjectNameApproved, projectNameAwaitingReview } from '../../lib/classFinalMode.js';
 import { ProgressReportHistory } from './ProgressReportHistory.jsx';
-import { ProjectProductLinks, ProjectLinksReadonly } from './ProjectProductLinks.jsx';
+import { ProjectLinksReadonly } from './ProjectProductLinks.jsx';
+import { ProjectExtrasPanel } from './ProjectExtrasPanel.jsx';
 
-export function ProgressReportView({ classDoc, student, onUpdateStudent, embedded = false }) {
+export function ProgressReportView({ classDoc, student, onUpdateStudent, onOpenGuide, embedded = false }) {
   const toast = useToast();
   const [form, setForm] = useState({
     stage: student.currentStage || STAGES[0],
@@ -90,146 +91,142 @@ export function ProgressReportView({ classDoc, student, onUpdateStudent, embedde
 
   const pct = student.currentProgressPercent || 0;
   const canReport = isProjectNameApproved(student);
+  const formShellClass = embedded
+    ? 'space-y-4'
+    : 'card space-y-4 p-5';
 
-  const summaryCard = (
-    <div className={`card overflow-hidden p-5 ${embedded ? 'mb-5' : ''}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-4xl font-bold tabular-nums text-brand-600 dark:text-brand-400">{pct}%</p>
+  const reportForm = (
+    <form onSubmit={handleSubmit} className={formShellClass}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">Báo cáo tiến độ</h3>
+            {justSubmitted && (
+              <span className="inline-flex items-center gap-1 text-sm font-medium text-green-600 dark:text-green-400">
+                <CheckCircle2 className="h-4 w-4" />
+                Đã gửi
+              </span>
+            )}
+          </div>
           <p className="mt-1 text-sm text-slate-500">
             {student.currentStage || '—'} ·{' '}
             {student.lastReportedAt ? formatDateTime(student.lastReportedAt) : 'Chưa báo cáo'}
           </p>
         </div>
-        <Badge tone={STATUS_TONES[student.currentStatus] || 'slate'}>{student.currentStatus}</Badge>
+        <div className="flex items-center gap-2">
+          <span className="text-2xl font-bold tabular-nums text-brand-600 dark:text-brand-400">{pct}%</span>
+          <Badge tone={STATUS_TONES[student.currentStatus] || 'slate'}>{student.currentStatus}</Badge>
+        </div>
       </div>
-      <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+
+      <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
         <div
           className="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-400 transition-all"
           style={{ width: `${pct}%` }}
         />
       </div>
+
       <ProjectLinksReadonly
         githubUrl={student.projectGithubUrl}
         canvaUrl={student.projectCanvaUrl}
-        className="mt-4"
       />
-    </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Field label="Giai đoạn">
+          <Select value={form.stage} onChange={(e) => update('stage', e.target.value)}>
+            {STAGES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Trạng thái">
+          <Select value={form.status} onChange={(e) => update('status', e.target.value)}>
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label={`Tiến độ ${form.progressPercent}%`}>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={form.progressPercent}
+            onChange={(e) => update('progressPercent', Number(e.target.value))}
+            className="mt-2 w-full accent-brand-600"
+          />
+        </Field>
+      </div>
+
+      <Field label="Đã làm được gì?" required>
+        <Textarea
+          rows={3}
+          value={form.doneToday}
+          onChange={(e) => update('doneToday', e.target.value)}
+          placeholder="Ví dụ: hoàn thành màn hình đăng nhập, kết nối cơ sở dữ liệu... (ít nhất 10 ký tự)"
+        />
+      </Field>
+
+      <Field label="Mục tiêu buổi sau?" required>
+        <Textarea
+          rows={3}
+          value={form.nextGoal}
+          onChange={(e) => update('nextGoal', e.target.value)}
+          placeholder="Ví dụ: làm chức năng thêm sản phẩm... (ít nhất 10 ký tự)"
+        />
+      </Field>
+
+      <Field label="Khó khăn (tuỳ chọn)">
+        <Textarea
+          rows={2}
+          value={form.difficulties}
+          onChange={(e) => update('difficulties', e.target.value)}
+          placeholder={
+            form.status === 'Cần hỗ trợ'
+              ? 'Mô tả khó khăn (ít nhất 15 ký tự)...'
+              : 'Ghi khó khăn nếu có...'
+          }
+        />
+      </Field>
+
+      <div className="student-sticky-footer dark:border-slate-800 lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
+        <Button type="submit" size="lg" className="w-full min-h-12" loading={submitting}>
+          Gửi báo cáo
+        </Button>
+      </div>
+    </form>
   );
 
   const reportContent = !canReport ? (
-    <div className="card p-5 text-sm text-slate-600 dark:text-slate-300">
+    <div className={embedded ? 'rounded-xl border border-amber-200 bg-amber-50/60 p-4 text-sm dark:border-amber-500/30 dark:bg-amber-500/10' : 'card p-5 text-sm'}>
       <p className="font-medium text-slate-800 dark:text-slate-100">Chưa thể báo cáo tiến độ</p>
-      <p className="mt-2">
+      <p className="mt-2 text-slate-600 dark:text-slate-300">
         Tên dự án <em>{projectNameAwaitingReview(student)}</em> đang chờ giáo viên duyệt. Sau khi được duyệt, bạn
         có thể gửi báo cáo tiến độ sản phẩm.
       </p>
     </div>
   ) : (
     <>
-      <ProjectProductLinks
+      {reportForm}
+      <ProjectExtrasPanel
+        classDoc={classDoc}
         student={student}
         links={links}
-        onChange={updateLink}
+        onChangeLink={updateLink}
+        onOpenGuide={onOpenGuide}
         disabled={submitting}
       />
-
-      <form onSubmit={handleSubmit} className="card space-y-4 p-5">
-        <div className="flex items-center justify-between gap-2">
-          <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">Báo cáo tiến độ</h3>
-          {justSubmitted && (
-            <span className="inline-flex items-center gap-1 text-sm font-medium text-green-600 dark:text-green-400">
-              <CheckCircle2 className="h-4 w-4" />
-              Đã gửi
-            </span>
-          )}
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Field label="Giai đoạn">
-            <Select value={form.stage} onChange={(e) => update('stage', e.target.value)}>
-              {STAGES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Trạng thái">
-            <Select value={form.status} onChange={(e) => update('status', e.target.value)}>
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label={`Tiến độ ${form.progressPercent}%`}>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={form.progressPercent}
-              onChange={(e) => update('progressPercent', Number(e.target.value))}
-              className="mt-2 w-full accent-brand-600"
-            />
-          </Field>
-        </div>
-
-        <Field label="Đã làm được gì?" required>
-          <Textarea
-            rows={3}
-            value={form.doneToday}
-            onChange={(e) => update('doneToday', e.target.value)}
-            placeholder="Ví dụ: hoàn thành màn hình đăng nhập, kết nối cơ sở dữ liệu... (ít nhất 10 ký tự)"
-          />
-        </Field>
-
-        <Field label="Mục tiêu buổi sau?" required>
-          <Textarea
-            rows={3}
-            value={form.nextGoal}
-            onChange={(e) => update('nextGoal', e.target.value)}
-            placeholder="Ví dụ: làm chức năng thêm sản phẩm... (ít nhất 10 ký tự)"
-          />
-        </Field>
-
-        <Field label="Khó khăn (tuỳ chọn)">
-          <Textarea
-            rows={2}
-            value={form.difficulties}
-            onChange={(e) => update('difficulties', e.target.value)}
-            placeholder={
-              form.status === 'Cần hỗ trợ'
-                ? 'Mô tả khó khăn (ít nhất 15 ký tự)...'
-                : 'Ghi khó khăn nếu có...'
-            }
-          />
-        </Field>
-
-        <div className="student-sticky-footer dark:border-slate-800 lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
-          <Button type="submit" size="lg" className="w-full min-h-12" loading={submitting}>
-            Gửi báo cáo
-          </Button>
-        </div>
-      </form>
     </>
   );
 
-  if (embedded) {
-    return (
-      <div className="space-y-5">
-        {summaryCard}
-        {reportContent}
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-5">
-      {summaryCard}
+    <div className="space-y-4">
       {reportContent}
-      <ProgressReportHistory studentId={student.id} />
+      {!embedded && <ProgressReportHistory studentId={student.id} />}
     </div>
   );
 }

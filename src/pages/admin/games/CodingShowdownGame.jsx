@@ -13,6 +13,7 @@ import {
   RotateCcw,
   SkipForward,
   Swords,
+  Timer,
   Tv,
   Users,
   X,
@@ -38,8 +39,10 @@ import {
   gradeOralQuestion,
   gradeShowdownCodeResponse,
   openShowdownLobby,
+  isShowdownTimerWaiting,
   resolveQuestionDeadlineMs,
   startShowdownGame,
+  startShowdownQuestionTimer,
   subscribeShowdownParticipants,
   subscribeShowdownResponses,
   subscribeShowdownSession,
@@ -388,6 +391,7 @@ export function CodingShowdownGame({ classes, programs = [] }) {
   const finishChoosing = isFinishRound && session?.finishStage === 'choosing';
   const finishHasMore =
     isFinishRound && (session?.finishQueueIndex || 0) < (session?.finishQueue?.length || 0) - 1;
+  const timerWaiting = session ? isShowdownTimerWaiting(session) : false;
   const oralNextLabel = !isOral || !session
     ? ''
     : !isLastStartupQuestionForStudent(session)
@@ -398,6 +402,21 @@ export function CodingShowdownGame({ classes, programs = [] }) {
 
   const footer = session ? (
     <div className="flex flex-col gap-3 px-4 py-3">
+      {timerWaiting && (
+        <div className="flex justify-center">
+          <Button
+            disabled={controlsLocked}
+            className="min-h-12 bg-amber-500 text-white hover:bg-amber-600"
+            onClick={() =>
+              runAction(() => startShowdownQuestionTimer(sessionId), 'Bắt đầu đếm giờ!', { sync: 'full' })
+            }
+          >
+            <Timer className="h-4 w-4" />
+            Bắt đầu đếm giờ
+          </Button>
+        </div>
+      )}
+
       {session.status === 'lobby' && (
         <div className="flex justify-center">
           <Button
@@ -463,7 +482,7 @@ export function CodingShowdownGame({ classes, programs = [] }) {
         <div className="space-y-2">
           <p className="text-center text-sm text-slate-300">
             <strong className="text-white">{session.activeStudentName || 'Học sinh'}</strong> chọn gói điểm —
-            bấm đúng gói bạn ấy công bố để phát đề & bắt đầu đếm giờ:
+            bấm đúng gói bạn ấy công bố để phát đề (sau đó bấm &quot;Bắt đầu đếm giờ&quot;):
           </p>
           <div className="flex flex-wrap items-center justify-center gap-2">
             {[10, 20, 30].map((pts) => (

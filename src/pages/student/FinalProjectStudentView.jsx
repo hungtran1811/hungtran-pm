@@ -1,13 +1,15 @@
 import { useState } from 'react';
-import { BookOpen, ClipboardList, History } from 'lucide-react';
+import { BookOpen, CircleHelp, ClipboardList, History } from 'lucide-react';
 import { ProgressReportView } from './ProgressReportView.jsx';
 import { ProgressReportHistory } from './ProgressReportHistory.jsx';
 import { LessonsView } from './LessonsView.jsx';
+import { GUIDE_SECTIONS, ProjectSubmissionGuide } from './ProjectSubmissionGuide.jsx';
 
 const FINAL_PROJECT_TABS = [
   { id: 'report', label: 'Báo cáo', icon: ClipboardList },
   { id: 'history', label: 'Lịch sử', icon: History },
   { id: 'lessons', label: 'Bài giảng', icon: BookOpen },
+  { id: 'guide', label: 'Hướng dẫn', icon: CircleHelp },
 ];
 
 export function FinalProjectStudentView({
@@ -20,6 +22,12 @@ export function FinalProjectStudentView({
   onUpdateStudent,
 }) {
   const [activeTab, setActiveTab] = useState('report');
+  const [guideSection, setGuideSection] = useState(GUIDE_SECTIONS.overview);
+
+  const openGuide = (section = GUIDE_SECTIONS.overview) => {
+    setGuideSection(section);
+    setActiveTab('guide');
+  };
 
   return (
     <div className="space-y-5">
@@ -51,8 +59,12 @@ export function FinalProjectStudentView({
               classDoc={classDoc}
               student={student}
               onUpdateStudent={onUpdateStudent}
+              onOpenGuide={openGuide}
               embedded
             />
+          )}
+          {activeTab === 'guide' && (
+            <ProjectSubmissionGuide initialSection={guideSection} embedded />
           )}
           {activeTab === 'history' && (
             <ProgressReportHistory studentId={student.id} embedded />

@@ -5,7 +5,7 @@ import {
   ShowdownQuestionMetaBar,
   ShowdownRoundIntroCards,
 } from '../../../ui/components/games/ShowdownSessionUi.jsx';
-import { assignParticipantRanks } from '../../../services/showdown.service.js';
+import { assignParticipantRanks, isShowdownTimerWaiting } from '../../../services/showdown.service.js';
 import { roundLabel } from '../../../lib/showdownConstants.js';
 
 function QuestionPanel({
@@ -24,6 +24,7 @@ function QuestionPanel({
   const isFinish = session.currentRound === 'finish';
   const finishChoosing = isFinish && session.finishStage === 'choosing';
   const finishChoice = session.finishChoice;
+  const timerWaiting = isShowdownTimerWaiting(session);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -49,7 +50,7 @@ function QuestionPanel({
             }`}
           >
             <Clock className={presenting ? 'h-6 w-6' : 'h-4 w-4'} />
-            {countdown}
+            {timerWaiting ? '--' : countdown}
           </span>
         )}
       </div>

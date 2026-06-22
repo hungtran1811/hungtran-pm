@@ -20,6 +20,8 @@ export function toClassModel(snapshot) {
     finalMode: data.finalMode === 'exam' ? 'exam' : 'project',
     studentCount: Number(data.studentCount ?? 0),
     activeShowdownSessionId: data.activeShowdownSessionId ?? null,
+    completedAt: toDate(data.completedAt),
+    codeSubmissionsPurgedAt: toDate(data.codeSubmissionsPurgedAt),
     createdAt: toDate(data.createdAt),
     updatedAt: toDate(data.updatedAt),
   };
@@ -78,6 +80,27 @@ export function toReportModel(snapshot) {
     submittedDateKey: data.submittedDateKey ?? '',
     source: data.source ?? 'student-form',
     createdAt: toDate(data.createdAt),
+  };
+}
+
+export function toCodeSubmissionModel(snapshot) {
+  const data = snapshot.data() || {};
+  return {
+    id: snapshot.id,
+    classCode: data.classCode ?? '',
+    studentId: data.studentId ?? '',
+    studentName: data.studentName ?? '',
+    sessionNumber: Number(data.sessionNumber ?? 0),
+    files: Array.isArray(data.files)
+      ? data.files.map((f) => ({
+          id: f.id ?? '',
+          name: f.name ?? '',
+          contentType: f.contentType ?? '',
+          sizeBytes: Number(f.sizeBytes ?? 0),
+          uploadedAt: f.uploadedAt ?? '',
+        }))
+      : [],
+    updatedAt: toDate(data.updatedAt),
   };
 }
 

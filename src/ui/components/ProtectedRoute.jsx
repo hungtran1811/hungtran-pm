@@ -1,10 +1,14 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../state/auth.store.jsx';
+import { useAdminCodeSubmissionPurge } from '../../hooks/useAdminCodeSubmissionPurge.js';
+import { useToast } from './Toast.jsx';
 import { FullPageLoader } from './Spinner.jsx';
 
 export function ProtectedRoute({ children }) {
   const { user, isAdmin, loading } = useAuth();
   const location = useLocation();
+  const toast = useToast();
+  useAdminCodeSubmissionPurge(isAdmin, toast);
 
   if (loading) {
     return <FullPageLoader label="Đang kiểm tra quyền truy cập..." />;

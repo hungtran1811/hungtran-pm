@@ -63,6 +63,12 @@ export function isShowdownStepReady(session) {
 export function getShowdownSyncMessage(session, prevSession) {
   if (!session) return 'Đang đồng bộ với lớp…';
   if (session.status === 'reveal') return 'Đang công bố đáp án…';
+  if (session.status === 'playing') {
+    const dur = Number(session.questionDurationSeconds) || 0;
+    if (dur > 0 && !toDate(session.serverStartedAt)) {
+      return 'Chờ giáo viên bắt đầu đếm giờ…';
+    }
+  }
   if (session.finishStage === 'answering') return 'Đang phát đề…';
   if (session.finishStage === 'choosing') return 'Đang chuyển lượt về đích…';
   if (prevSession?.activeStudentId !== session.activeStudentId && session.activeStudentId) {

@@ -20,6 +20,7 @@ import {
 import {
   assignParticipantRanks,
   getRoundProgress,
+  isShowdownTimerWaiting,
   joinShowdownSession,
   resolveQuestionDeadlineMs,
   submitShowdownResponse,
@@ -370,6 +371,7 @@ export function ShowdownStudentView({ sessionId, classCode, student, onExit }) {
   }
 
   const deadlineMsValue = resolveQuestionDeadlineMs(session);
+  const timerWaiting = isShowdownTimerWaiting(session);
   const timeExpired =
     session.status === 'playing' &&
     deadlineMsValue > 0 &&
@@ -388,7 +390,7 @@ export function ShowdownStudentView({ sessionId, classCode, student, onExit }) {
             {session.status === 'playing' && (
               <span className="flex items-center gap-1 font-mono text-lg font-bold tabular-nums">
                 <Clock className="h-4 w-4" />
-                {countdown}
+                {timerWaiting ? 'Chờ GV' : countdown}
               </span>
             )}
           </div>
@@ -539,6 +541,10 @@ export function ShowdownStudentView({ sessionId, classCode, student, onExit }) {
                         <p className="mt-1 text-xs text-slate-400">Chờ giáo viên công bố đáp án...</p>
                       )}
                     </div>
+                  ) : session.status === 'playing' && timerWaiting ? (
+                    <p className="rounded-xl bg-amber-50 px-4 py-6 text-center text-sm font-medium text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+                      Chờ giáo viên bắt đầu đếm giờ...
+                    </p>
                   ) : session.status === 'playing' && !timeExpired && isCode ? (
                     <div className="space-y-2">
                       <CodeQuestionPanel

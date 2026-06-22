@@ -180,18 +180,35 @@ function roundSeconds(session, roundId) {
 }
 
 /**
- * Resolve the question deadline (ms) for countdowns. Prefers the server-anchored
- * `serverStartedAt + questionDurationSeconds` so every screen (teacher / present /
- * student) shares the same reference and isn't biased by the teacher's local clock.
- * Falls back to the legacy `questionDeadlineAt` until the server timestamp resolves.
+ * Resolve the question deadline (ms) for countdowns. Uses server-anchored
+ * `serverStartedAt + questionDurationSeconds` only after admin starts the timer.
  */
 export function resolveQuestionDeadlineMs(session) {
   if (!session) return 0;
-  const start = toDate(session.serverStartedAt);
   const dur = Number(session.questionDurationSeconds) || 0;
+  const start = toDate(session.serverStartedAt);
+  if (session.status === 'playing' && dur > 0) {
+    if (!start) return 0;
+    return start.getTime() + dur * 1000;
+  }
   if (start && dur) return start.getTime() + dur * 1000;
   const fallback = toDate(session.questionDeadlineAt);
   return fallback ? fallback.getTime() : 0;
+}
+
+export function isShowdownTimerWaiting(session) {
+  if (!session || session.status !== 'playing') return false;
+  const dur = Number(session.questionDurationSeconds) || 0;
+  return dur > 0 && !toDate(session.serverStartedAt);
+}
+
+function pendingQuestionTimerFields(seconds) {
+  return {
+    questionDurationSeconds: seconds,
+    serverStartedAt: null,
+    questionDeadlineAt: null,
+    roundStartedAt: null,
+  };
 }
 
 /** Base points for a correct answer (speed bonus handled separately by rank). */
@@ -353,12 +370,26 @@ export async function startShowdownGame(sessionId) {
     startupQueue,
     startupQueueIndex: 0,
     'config.startupSets': startupSets,
-    roundStartedAt: now,
-    serverStartedAt: serverTimestamp(),
-    questionDurationSeconds: seconds,
-    questionDeadlineAt: Timestamp.fromMillis(now.toMillis() + seconds * 1000),
+    ...pendingQuestionTimerFields(seconds),
     revealedAnswer: null,
     startedAt: now,
+  }));
+}
+
+export async function startShowdownQuestionTimer(sessionId) {
+  const sessionSnap = await getDoc(sessionRef(sessionId));
+  if (!sessionSnap.exists()) throw new Error('Không tìm thấy phiên chơi.');
+  const session = normalizeSession(sessionSnap.id, sessionSnap.data());
+  if (session.status !== 'playing') throw new Error('Không trong thời gian trả lời.');
+  const seconds = Number(session.questionDurationSeconds) || 0;
+  if (seconds <= 0) throw new Error('Câu hỏi này không có thời gian.');
+  if (toDate(session.serverStartedAt)) throw new Error('Đồng hồ đã chạy.');
+
+  const now = Timestamp.now();
+  await updateDoc(sessionRef(sessionId), sessionBump({
+    serverStartedAt: serverTimestamp(),
+    roundStartedAt: now,
+    questionDeadlineAt: Timestamp.fromMillis(now.toMillis() + seconds * 1000),
   }));
 }
 
@@ -605,8 +636,6 @@ export async function advanceShowdownQuestion(sessionId) {
 
   if (session.status === 'finished') return;
 
-  const now = Timestamp.now();
-
   // Round 1: per-student oral queue (each student answers their own set).
   if (session.currentRound === 'startup') {
     const perStudentCount = startupPerStudentCount(session);
@@ -617,10 +646,7 @@ export async function advanceShowdownQuestion(sessionId) {
       await updateDoc(sessionRef(sessionId), sessionBump({
         status: 'playing',
         questionIndex: session.questionIndex + 1,
-        roundStartedAt: now,
-        serverStartedAt: serverTimestamp(),
-        questionDurationSeconds: seconds,
-        questionDeadlineAt: Timestamp.fromMillis(now.toMillis() + seconds * 1000),
+        ...pendingQuestionTimerFields(seconds),
         revealedAnswer: null,
       }));
       return;
@@ -637,10 +663,7 @@ export async function advanceShowdownQuestion(sessionId) {
         activeStudentId: nextId,
         activeStudentName: partSnap.exists() ? partSnap.data().studentName : '',
         questionIndex: 0,
-        roundStartedAt: now,
-        serverStartedAt: serverTimestamp(),
-        questionDurationSeconds: seconds,
-        questionDeadlineAt: Timestamp.fromMillis(now.toMillis() + seconds * 1000),
+        ...pendingQuestionTimerFields(seconds),
         revealedAnswer: null,
       }));
       return;
@@ -655,10 +678,7 @@ export async function advanceShowdownQuestion(sessionId) {
       roundMode: roundModeForRound('obstacle'),
       activeStudentId: null,
       activeStudentName: null,
-      roundStartedAt: now,
-      serverStartedAt: serverTimestamp(),
-      questionDurationSeconds: obstacleSeconds,
-      questionDeadlineAt: Timestamp.fromMillis(now.toMillis() + obstacleSeconds * 1000),
+      ...pendingQuestionTimerFields(obstacleSeconds),
       revealedAnswer: null,
     }));
     return;
@@ -690,10 +710,7 @@ export async function advanceShowdownQuestion(sessionId) {
     currentRound,
     questionIndex,
     roundMode: mode,
-    roundStartedAt: now,
-    serverStartedAt: serverTimestamp(),
-    questionDurationSeconds: seconds,
-    questionDeadlineAt: Timestamp.fromMillis(now.toMillis() + seconds * 1000),
+    ...pendingQuestionTimerFields(seconds),
     revealedAnswer: null,
   };
 
@@ -744,7 +761,6 @@ export async function dealFinishQuestion(sessionId, finishChoice) {
   if (!full) throw new Error('Không tìm thấy câu hỏi phù hợp cho gói điểm này.');
 
   const publicQuestion = stripQuestionForPublic(full);
-  const now = Timestamp.now();
   const seconds = full.timeLimitSeconds ?? roundSeconds(session, 'finish');
 
   // Store the reference solution in the (admin-only) answer key, not on the
@@ -758,10 +774,7 @@ export async function dealFinishQuestion(sessionId, finishChoice) {
     finishStage: 'answering',
     finishChoice: choice,
     finishQuestion: publicQuestion,
-    roundStartedAt: now,
-    serverStartedAt: serverTimestamp(),
-    questionDurationSeconds: seconds,
-    questionDeadlineAt: Timestamp.fromMillis(now.toMillis() + seconds * 1000),
+    ...pendingQuestionTimerFields(seconds),
     revealedAnswer: null,
   }));
 }
@@ -863,13 +876,18 @@ export async function submitShowdownResponse(
     throw new Error('Chưa đến lượt bạn.');
   }
 
-  const deadline = toDate(session.questionDeadlineAt);
-  if (deadline && Date.now() > deadline.getTime() + 2000) {
+  const dur = Number(session.questionDurationSeconds) || 0;
+  if (dur > 0 && !toDate(session.serverStartedAt)) {
+    throw new Error('Chưa bắt đầu đếm giờ.');
+  }
+
+  const deadlineMs = resolveQuestionDeadlineMs(session);
+  if (deadlineMs > 0 && Date.now() > deadlineMs + 2000) {
     throw new Error('Đã hết thời gian trả lời.');
   }
 
   const respId = responseDocId(studentId, round, questionIndex);
-  const started = toDate(roundStartedAt || session.roundStartedAt);
+  const started = toDate(session.roundStartedAt);
   const responseMs = started ? Math.max(0, Date.now() - started.getTime()) : 0;
 
   const payload = {

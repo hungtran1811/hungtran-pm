@@ -1,0 +1,9 @@
+rules_version = '2';
+// Code submissions use Firestore, not Storage. Deny all until Storage is intentionally enabled.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -34,6 +34,7 @@ import { averageUnderstanding } from '../../lib/classAnalytics.js';
 import { UnderstandingDots, understandingTone } from '../../ui/components/SubmissionDisplay.jsx';
 import { getErrorMessage } from '../../lib/firestore.js';
 import { filterClassesBySubject, subjectsWithClasses } from '../../lib/subjectGroups.js';
+import { CodeSubmissionsPurgePanel } from '../../ui/components/CodeSubmissionsPurgePanel.jsx';
 
 const STATUS_TONES = { active: 'green', completed: 'blue', archived: 'slate' };
 
@@ -116,7 +117,7 @@ export function ClassesPage() {
 
   const handleStatusChange = async (cls, status) => {
     try {
-      await setClassStatus(cls.classCode, status);
+      await setClassStatus(cls.classCode, status, cls.status);
       if (status === 'completed') {
         const count = await markAllStudentsCompletedForClass(cls.classCode);
         toast.success(
@@ -234,6 +235,8 @@ export function ClassesPage() {
           </div>
         )}
       </div>
+
+      {tab === 'archived' && <CodeSubmissionsPurgePanel classes={classes} />}
 
       {loading ? (
         <SkeletonRows count={4} />

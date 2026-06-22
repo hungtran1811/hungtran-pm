@@ -1,6 +1,7 @@
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -106,11 +107,27 @@ export async function createClass(classCode, payload) {
   });
 }
 
+function applyClassArchiveTimestamps(patch, previousStatus, nextStatus) {
+  const enteringArchive = isArchivedClassStatus(nextStatus) && !isArchivedClassStatus(previousStatus);
+  const leavingArchive = !isArchivedClassStatus(nextStatus) && isArchivedClassStatus(previousStatus);
+  if (enteringArchive) {
+    patch.completedAt = serverTimestamp();
+    patch.codeSubmissionsPurgedAt = deleteField();
+  }
+  if (leavingArchive) {
+    patch.completedAt = deleteField();
+    patch.codeSubmissionsPurgedAt = deleteField();
+  }
+}
+
 export async function updateClass(classCode, payload) {
   const ref = doc(db, 'classes', classCode);
-  await updateDoc(ref, {
+  const existing = await getDoc(ref);
+  const previousStatus = existing.data()?.status ?? 'active';
+  const nextStatus = payload.status ?? 'active';
+  const patch = {
     className: payload.className?.trim() ?? '',
-    status: payload.status ?? 'active',
+    status: nextStatus,
     hidden: Boolean(payload.hidden ?? false),
     startDate: payload.startDate ?? '',
     endDate: payload.endDate ?? '',
@@ -120,7 +137,9 @@ export async function updateClass(classCode, payload) {
     curriculumExerciseVisibleSessions: payload.curriculumExerciseVisibleSessions ?? [],
     finalMode: payload.finalMode === 'exam' ? 'exam' : 'project',
     updatedAt: serverTimestamp(),
-  });
+  };
+  applyClassArchiveTimestamps(patch, previousStatus, nextStatus);
+  await updateDoc(ref, patch);
 }
 
 export async function setClassCurrentSession(classCode, sessionNumber) {
@@ -130,11 +149,13 @@ export async function setClassCurrentSession(classCode, sessionNumber) {
   });
 }
 
-export async function setClassStatus(classCode, status) {
-  await updateDoc(doc(db, 'classes', classCode), {
+export async function setClassStatus(classCode, status, previousStatus = 'active') {
+  const patch = {
     status,
     updatedAt: serverTimestamp(),
-  });
+  };
+  applyClassArchiveTimestamps(patch, previousStatus, status);
+  await updateDoc(doc(db, 'classes', classCode), patch);
 }
 
 export async function deleteClass(classCode) {

@@ -15,7 +15,8 @@
     "migrate:feedback-index:dry": "node scripts/migrate-student-feedback-index.js --dry-run",
     "audit:curriculum": "node scripts/audit-curriculum-collections.js",
     "inspect:lessons": "node scripts/inspect-program-lessons.js",
-    "deploy:firestore": "firebase deploy --only firestore:rules,firestore:indexes"
+    "deploy:firestore": "firebase deploy --only firestore:rules,firestore:indexes",
+    "deploy:firebase": "firebase deploy --only firestore:rules,firestore:indexes,storage"
   },
   "dependencies": {
     "@codemirror/lang-python": "^6.2.1",

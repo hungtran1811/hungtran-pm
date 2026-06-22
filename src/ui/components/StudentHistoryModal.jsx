@@ -3,11 +3,13 @@ import { Modal } from './Modal.jsx';
 import { Badge } from './Badge.jsx';
 import { Spinner } from './Spinner.jsx';
 import { EmptyState } from './EmptyState.jsx';
+import { CodeSubmissionsPanel } from './CodeSubmissionsPanel.jsx';
 import { ProjectLinksReadonly } from '../../pages/student/ProjectProductLinks.jsx';
 import { useToast } from './Toast.jsx';
 import { STATUS_TONES, UNDERSTANDING_LEVELS } from '../../constants/index.js';
 import { listReportsByStudent } from '../../services/reports.service.js';
 import { listKnowledgeReportsByStudent } from '../../services/knowledgeReports.service.js';
+import { listCodeSubmissionsByStudent } from '../../services/codeSubmissions.service.js';
 import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
 
 const UNDERSTANDING_LABELS = UNDERSTANDING_LEVELS.reduce((acc, item) => {
@@ -20,17 +22,21 @@ export function StudentHistoryModal({ student, onClose, feedbackOnly = false }) 
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
+  const [codeSubmissions, setCodeSubmissions] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
       try {
+        const classCode = student.classId || student.classCode;
         const f = await listKnowledgeReportsByStudent(student.id);
         const r = feedbackOnly ? [] : await listReportsByStudent(student.id);
+        const code = feedbackOnly ? [] : await listCodeSubmissionsByStudent(classCode, student.id);
         if (!cancelled) {
           setReports(r);
           setFeedbacks(f);
+          setCodeSubmissions(code);
         }
       } catch (error) {
         if (!cancelled) toast.error(getErrorMessage(error));
@@ -42,7 +48,7 @@ export function StudentHistoryModal({ student, onClose, feedbackOnly = false }) 
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [student.id]);
+  }, [student.id, student.classId, student.classCode]);
 
   const timeline = useMemo(() => {
     const items = [
@@ -59,6 +65,13 @@ export function StudentHistoryModal({ student, onClose, feedbackOnly = false }) 
     )[0]?.id;
   }, [reports]);
 
+  const codeFileCount = useMemo(
+    () => codeSubmissions.reduce((sum, row) => sum + (row.files?.length ?? 0), 0),
+    [codeSubmissions],
+  );
+
+  const classCode = student.classId || student.classCode;
+
   return (
     <Modal
       open
@@ -67,7 +80,7 @@ export function StudentHistoryModal({ student, onClose, feedbackOnly = false }) 
       size="xl"
     >
       <div className="space-y-4">
-        <div className={`grid gap-3 ${feedbackOnly ? 'grid-cols-1' : 'grid-cols-3'}`}>
+        <div className={`grid gap-3 ${feedbackOnly ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-4'}`}>
           {!feedbackOnly && (
             <>
               <div className="rounded-xl bg-slate-50 p-3 text-center dark:bg-slate-800/50">
@@ -79,6 +92,10 @@ export function StudentHistoryModal({ student, onClose, feedbackOnly = false }) 
                 <p className="text-lg font-bold text-slate-800 dark:text-slate-100">
                   {student.currentProgressPercent ?? 0}%
                 </p>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3 text-center dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500">File code</p>
+                <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{codeFileCount}</p>
               </div>
             </>
           )}
@@ -96,6 +113,14 @@ export function StudentHistoryModal({ student, onClose, feedbackOnly = false }) 
               canvaUrl={student.projectCanvaUrl}
             />
           </div>
+        )}
+
+        {!feedbackOnly && (
+          <CodeSubmissionsPanel
+            submissions={codeSubmissions}
+            classCode={classCode}
+            studentId={student.id}
+          />
         )}
 
         {loading ? (

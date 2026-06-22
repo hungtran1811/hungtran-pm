@@ -64,6 +64,7 @@ export function normalizeKey(text = '') {
 
 export function getErrorMessage(error) {
   const code = error?.code || '';
+  const rawMessage = String(error?.message || '').toLowerCase();
   const map = {
     'auth/invalid-credential': 'Email hoặc mật khẩu không đúng.',
     'auth/invalid-email': 'Email không hợp lệ.',
@@ -76,5 +77,13 @@ export function getErrorMessage(error) {
     'permission-denied': 'Bạn không có quyền thực hiện thao tác này.',
     unavailable: 'Mất kết nối tới máy chủ. Vui lòng thử lại.',
   };
-  return map[code] || error?.message || 'Đã có lỗi xảy ra. Vui lòng thử lại.';
+  if (map[code]) return map[code];
+  if (
+    rawMessage.includes('network error') ||
+    rawMessage.includes('failed to fetch') ||
+    rawMessage.includes('err_failed')
+  ) {
+    return 'Mất kết nối hoặc máy chủ từ chối yêu cầu. Kiểm tra mạng và thử lại.';
+  }
+  return error?.message || 'Đã có lỗi xảy ra. Vui lòng thử lại.';
 }

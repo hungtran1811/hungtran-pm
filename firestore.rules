@@ -614,6 +614,79 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
     }
 
+    function isFinalProjectClass(classCode) {
+      return classCode is string
+        && exists(/databases/$(database)/documents/classes/$(classCode))
+        && classDoc(classCode).data.curriculumPhase == 'final'
+        && (!classDoc(classCode).data.keys().hasAny(['finalMode']) || classDoc(classCode).data.finalMode != 'exam');
+    }
+
+    function isCodeSubmissionDocId(docId, data) {
+      return docId is string
+        && data.classCode is string
+        && data.studentId is string
+        && data.sessionNumber is number
+        && docId == data.classCode + '__' + data.studentId + '__' + string(data.sessionNumber);
+    }
+
+    function isReadableCodeSubmission(docId, data) {
+      return data != null
+        && isCodeSubmissionDocId(docId, data)
+        && isOpenClass(data.classCode)
+        && isActiveStudentInClass(data.studentId, data.classCode);
+    }
+
+    function isValidCodeSubmissionFileMeta(entry) {
+      return entry is map
+        && entry.keys().hasOnly(['id', 'name', 'contentType', 'sizeBytes', 'uploadedAt'])
+        && entry.id is string
+        && entry.id.size() > 0
+        && entry.name is string
+        && entry.name.size() > 0
+        && entry.name.size() <= 120
+        && entry.contentType is string
+        && entry.sizeBytes is number
+        && entry.sizeBytes <= 524288
+        && entry.uploadedAt is string;
+    }
+
+    function isValidCodeSubmissionWrite(docId) {
+      return isCodeSubmissionDocId(docId, request.resource.data)
+        && isOpenClass(request.resource.data.classCode)
+        && isActiveStudentInClass(request.resource.data.studentId, request.resource.data.classCode)
+        && isFinalProjectClass(request.resource.data.classCode)
+        && studentDoc(request.resource.data.studentId).data.fullName == request.resource.data.studentName
+        && studentDoc(request.resource.data.studentId).data.projectNameStatus == 'approved'
+        && request.resource.data.sessionNumber >= 1
+        && request.resource.data.sessionNumber <= 50
+        && request.resource.data.files is list
+        && request.resource.data.files.size() <= 10
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function isValidCodeSubmissionContentWrite(docId, fileId) {
+      return fileId is string
+        && fileId.size() > 0
+        && request.resource.data.keys().hasOnly(['content'])
+        && request.resource.data.content is string
+        && request.resource.data.content.size() <= 524288
+        && exists(/databases/$(database)/documents/projectCodeSubmissions/$(docId))
+        && isCodeSubmissionDocId(docId, get(/databases/$(database)/documents/projectCodeSubmissions/$(docId)).data)
+        && isOpenClass(get(/databases/$(database)/documents/projectCodeSubmissions/$(docId)).data.classCode)
+        && isActiveStudentInClass(
+            get(/databases/$(database)/documents/projectCodeSubmissions/$(docId)).data.studentId,
+            get(/databases/$(database)/documents/projectCodeSubmissions/$(docId)).data.classCode
+          )
+        && isFinalProjectClass(get(/databases/$(database)/documents/projectCodeSubmissions/$(docId)).data.classCode)
+        && studentDoc(get(/databases/$(database)/documents/projectCodeSubmissions/$(docId)).data.studentId).data.projectNameStatus == 'approved';
+    }
+
+    function isValidCodeSubmissionContentDelete(docId, fileId) {
+      return fileId is string
+        && exists(/databases/$(database)/documents/projectCodeSubmissions/$(docId))
+        && isReadableCodeSubmission(docId, get(/databases/$(database)/documents/projectCodeSubmissions/$(docId)).data);
+    }
+
     function isValidPublicStudentSnapshotUpdate(studentId) {
       return request.resource.data.diff(resource.data).changedKeys().hasOnly([
           'currentProgressPercent', 'currentStage', 'currentStatus',
@@ -712,6 +785,23 @@ service cloud.firestore {
       allow list: if isAdmin() || isReadableStudentReport(resource.data);
       allow create: if isAdmin() || isValidPublicReportCreate();
       allow update, delete: if isAdmin();
+    }
+
+    match /projectCodeSubmissions/{docId} {
+      allow get: if isAdmin() || isReadableCodeSubmission(docId, resource.data);
+      allow list: if isAdmin() || isReadableCodeSubmission(docId, resource.data);
+      allow create, update: if isAdmin() || isValidCodeSubmissionWrite(docId);
+      allow delete: if isAdmin() || isReadableCodeSubmission(docId, resource.data);
+
+      match /files/{fileId} {
+        allow get: if isAdmin() || isReadableCodeSubmission(
+            docId,
+            get(/databases/$(database)/documents/projectCodeSubmissions/$(docId)).data
+          );
+        allow create: if isAdmin() || isValidCodeSubmissionContentWrite(docId, fileId);
+        allow delete: if isAdmin() || isValidCodeSubmissionContentDelete(docId, fileId);
+        allow update: if false;
+      }
     }
 
     match /knowledgeReportStudentSummaries/{summaryId} {
