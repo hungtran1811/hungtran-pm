@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { ArrowRight, Ban, Mountain, Swords, UserRound, Users } from 'lucide-react';
+import { ArrowRight, Ban, Mountain, Search, Swords, UserRound, Users } from 'lucide-react';
 import { StudentShell } from './StudentShell.jsx';
 import { Button } from '../../ui/components/Button.jsx';
 import { Input } from '../../ui/components/Field.jsx';
@@ -15,7 +15,6 @@ import {
 import { getCurriculumProgram } from '../../services/curriculum.service.js';
 import { getStudentFeedbackLessonIds } from '../../services/knowledgeReports.service.js';
 import { getErrorMessage } from '../../lib/firestore.js';
-import { FinalProjectStudentView } from './FinalProjectStudentView.jsx';
 import { LessonsView } from './LessonsView.jsx';
 import { StudentOverview } from './StudentOverview.jsx';
 import { StudentFeedbackHistory } from './StudentFeedbackHistory.jsx';
@@ -28,7 +27,7 @@ import {
   projectNameDisplay,
   resolveFinalMode,
 } from '../../lib/classFinalMode.js';
-import { FEATURE_CODING_SHOWDOWN_ENABLED, FEATURE_OLYMPIA_ENABLED } from '../../config/features.js';
+import { FEATURE_CODING_SHOWDOWN_ENABLED, FEATURE_OLYMPIA_ENABLED, FEATURE_SPY_GAME_ENABLED } from '../../config/features.js';
 
 const OlympiaStudentViewLazy = FEATURE_OLYMPIA_ENABLED
   ? lazy(() => import('./OlympiaStudentView.jsx').then((m) => ({ default: m.OlympiaStudentView })))
@@ -37,6 +36,14 @@ const OlympiaStudentViewLazy = FEATURE_OLYMPIA_ENABLED
 const ShowdownStudentViewLazy = FEATURE_CODING_SHOWDOWN_ENABLED
   ? lazy(() => import('./ShowdownStudentView.jsx').then((m) => ({ default: m.ShowdownStudentView })))
   : null;
+
+const SpyStudentViewLazy = FEATURE_SPY_GAME_ENABLED
+  ? lazy(() => import('./SpyStudentView.jsx').then((m) => ({ default: m.SpyStudentView })))
+  : null;
+
+const FinalProjectStudentViewLazy = lazy(() =>
+  import('./FinalProjectStudentView.jsx').then((m) => ({ default: m.FinalProjectStudentView })),
+);
 
 function storageKey(classCode) {
   return `student:${classCode}`;
@@ -48,6 +55,7 @@ export function StudentPortalPage() {
   const classCode = decodeURIComponent(rawCode || '');
   const olympiaParam = searchParams.get('olympia');
   const showdownParam = searchParams.get('showdown');
+  const spyParam = searchParams.get('spy');
   const toast = useToast();
 
   const [loading, setLoading] = useState(true);
@@ -68,6 +76,8 @@ export function StudentPortalPage() {
   const [olympiaSessionId, setOlympiaSessionId] = useState(() => olympiaParam || null);
   const [activeShowdown, setActiveShowdown] = useState(null);
   const [showdownSessionId, setShowdownSessionId] = useState(() => showdownParam || null);
+  const [activeSpy, setActiveSpy] = useState(null);
+  const [spySessionId, setSpySessionId] = useState(() => spyParam || null);
   const [quizFocus, setQuizFocus] = useState(false);
 
   useEffect(() => {
@@ -134,7 +144,9 @@ export function StudentPortalPage() {
       .then((lessonIds) => {
         if (!cancelled) setSubmittedLessonIds(lessonIds);
       })
-      .catch(() => {});
+      .catch((err) => {
+        if (!cancelled) toast.error(getErrorMessage(err));
+      });
     return () => {
       cancelled = true;
     };
@@ -251,6 +263,76 @@ export function StudentPortalPage() {
     };
   }, [activeShowdownPointer]);
 
+  useEffect(() => {
+    if (!FEATURE_SPY_GAME_ENABLED || !spyParam || !classCode) return;
+    let cancelled = false;
+    import('../../services/spy.service.js').then(({ fetchSpySession }) => {
+      fetchSpySession(spyParam).then((session) => {
+        if (cancelled) return;
+        if (!session) {
+          toast.error('Không tìm thấy phòng chơi.');
+          setSpySessionId(null);
+          const next = new URLSearchParams(searchParams);
+          next.delete('spy');
+          setSearchParams(next, { replace: true });
+          return;
+        }
+        if (session.classCode !== classCode) {
+          toast.error('Phòng chơi không thuộc lớp học này.');
+          setSpySessionId(null);
+          const next = new URLSearchParams(searchParams);
+          next.delete('spy');
+          setSearchParams(next, { replace: true });
+          return;
+        }
+        setSpySessionId(spyParam);
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [spyParam, classCode, toast, searchParams, setSearchParams]);
+
+  const activeSpyPointer = classDoc?.activeSpySessionId || null;
+  useEffect(() => {
+    if (!FEATURE_SPY_GAME_ENABLED || !activeSpyPointer) {
+      setActiveSpy(null);
+      return undefined;
+    }
+    let cancelled = false;
+    let unsubscribe = () => {};
+    import('../../services/spy.service.js').then(({ subscribeSpySession }) => {
+      if (cancelled) return;
+      unsubscribe = subscribeSpySession(
+        activeSpyPointer,
+        (data) => setActiveSpy(data),
+        () => setActiveSpy(null),
+      );
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [activeSpyPointer]);
+
+  const enterSpy = (sessionId) => {
+    if (activeSpy?.classCode && activeSpy.classCode !== classCode) {
+      toast.error('Phòng chơi không thuộc lớp học này.');
+      return;
+    }
+    setSpySessionId(sessionId);
+    const next = new URLSearchParams(searchParams);
+    next.set('spy', sessionId);
+    setSearchParams(next, { replace: true });
+  };
+
+  const exitSpy = () => {
+    setSpySessionId(null);
+    const next = new URLSearchParams(searchParams);
+    next.delete('spy');
+    setSearchParams(next, { replace: true });
+  };
+
   const enterShowdown = (sessionId) => {
     if (activeShowdown?.classCode && activeShowdown.classCode !== classCode) {
       toast.error('Phòng thi không thuộc lớp học này.');
@@ -299,6 +381,13 @@ export function StudentPortalPage() {
     selectedStudent &&
     ['lobby', 'playing', 'reveal'].includes(activeShowdown.status);
 
+  const showSpyBanner =
+    FEATURE_SPY_GAME_ENABLED &&
+    !spySessionId &&
+    activeSpy &&
+    selectedStudent &&
+    ['lobby', 'describe', 'vote', 'reveal'].includes(activeSpy.status);
+
   const chooseStudent = (student) => {
     setSelectedStudentId(student.id);
     setSelectedStudent(student);
@@ -338,6 +427,23 @@ export function StudentPortalPage() {
     || (isFinalPhase && showProjectSetup)
   );
   const displayProject = projectNameDisplay(selectedStudent);
+
+  if (FEATURE_SPY_GAME_ENABLED && spySessionId && selectedStudent && SpyStudentViewLazy) {
+    const SpyStudentView = SpyStudentViewLazy;
+    return (
+      <StudentShell subtitle={`${classDoc.className || classDoc.classCode} · Truy tìm gián điệp`}>
+        <Suspense fallback={<FullPageLoader label="Đang tải Truy tìm gián điệp..." />}>
+          <SpyStudentView
+            sessionId={spySessionId}
+            classCode={classCode}
+            student={selectedStudent}
+            classStudents={students}
+            onExit={exitSpy}
+          />
+        </Suspense>
+      </StudentShell>
+    );
+  }
 
   if (FEATURE_CODING_SHOWDOWN_ENABLED && showdownSessionId && selectedStudent && ShowdownStudentViewLazy) {
     const ShowdownStudentView = ShowdownStudentViewLazy;
@@ -422,6 +528,23 @@ export function StudentPortalPage() {
         </div>
       )}
 
+      {showSpyBanner && (
+        <div className="mb-5 flex flex-col gap-3 rounded-2xl border-2 border-violet-400/50 bg-gradient-to-r from-violet-500/10 to-purple-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <Search className="mt-0.5 h-6 w-6 shrink-0 text-violet-600 dark:text-violet-400" />
+            <div>
+              <p className="font-bold text-slate-800 dark:text-slate-100">Truy tìm gián điệp đang diễn ra!</p>
+              <p className="text-sm text-slate-600 dark:text-slate-300">
+                Giáo viên đã mở phòng — tham gia ngay để nhận từ khóa và tìm gián điệp.
+              </p>
+            </div>
+          </div>
+          <Button onClick={() => enterSpy(activeSpy.id)} className="min-h-12 shrink-0">
+            Tham gia
+          </Button>
+        </div>
+      )}
+
       {showShowdownBanner && (
         <div className="mb-5 flex flex-col gap-3 rounded-2xl border-2 border-cyan-400/50 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
@@ -462,16 +585,18 @@ export function StudentPortalPage() {
 
       {isFinalPhase && finalMode === 'project' && (
         <section id="student-report" className="mt-8 scroll-mt-[4.5rem]">
-          <FinalProjectStudentView
-            classDoc={classDoc}
-            program={program}
-            student={selectedStudent}
-            submittedLessonIds={submittedLessonIds}
-            onQuizFocusChange={setQuizFocus}
-            onFeedbackSubmitted={(lessonId) =>
-              setSubmittedLessonIds((prev) => (prev.includes(lessonId) ? prev : [...prev, lessonId]))
-            }
-          />
+          <Suspense fallback={<FullPageLoader label="Đang tải báo cáo dự án..." />}>
+            <FinalProjectStudentViewLazy
+              classDoc={classDoc}
+              program={program}
+              student={selectedStudent}
+              submittedLessonIds={submittedLessonIds}
+              onQuizFocusChange={setQuizFocus}
+              onFeedbackSubmitted={(lessonId) =>
+                setSubmittedLessonIds((prev) => (prev.includes(lessonId) ? prev : [...prev, lessonId]))
+              }
+            />
+          </Suspense>
         </section>
       )}
 

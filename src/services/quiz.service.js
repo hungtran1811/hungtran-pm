@@ -25,6 +25,9 @@ import {
   resolveProgramId,
 } from './curriculum.service.js';
 import { getFirstExistingDoc } from '../lib/firestoreCandidates.js';
+import { responsesToRawAnswers } from '../lib/quizResponses.js';
+
+export { responsesToRawAnswers };
 
 function normalizeCodeReferencesMap(raw) {
   if (!raw || typeof raw !== 'object') return {};
@@ -389,6 +392,58 @@ function normalizeCodeAnswer(rawValue, starterCode) {
   return text;
 }
 
+function buildPendingSubmissionResponses(quiz, rawAnswers) {
+  const responses = [];
+  let mcqTotal = 0;
+  let unansweredCount = 0;
+
+  for (const q of quiz.questions) {
+    const type = q.type === 'code' ? 'code' : 'mcq';
+    if (type === 'code') {
+      const codeAnswer = normalizeCodeAnswer(rawAnswers[q.id], q.starterCode);
+      if (!codeAnswer) unansweredCount += 1;
+      responses.push({
+        questionId: q.id,
+        questionType: 'code',
+        prompt: q.prompt,
+        codeAnswer: codeAnswer || '(chưa trả lời)',
+        isCorrect: null,
+        autoGraded: false,
+      });
+      continue;
+    }
+    mcqTotal += 1;
+    const hasAnswer = rawAnswers[q.id] !== undefined && rawAnswers[q.id] !== null;
+    if (!hasAnswer) unansweredCount += 1;
+    const selectedIndex = hasAnswer ? Number(rawAnswers[q.id]) : -1;
+    const selectedLabel = hasAnswer
+      ? (q.options?.[selectedIndex] ?? `Đáp án ${selectedIndex + 1}`)
+      : 'Chưa trả lời';
+    responses.push({
+      questionId: q.id,
+      questionType: 'mcq',
+      prompt: q.prompt,
+      selectedIndex,
+      selectedLabel,
+      isCorrect: null,
+    });
+  }
+
+  return {
+    responses,
+    mcqCorrect: 0,
+    mcqTotal,
+    mcqPercent: 0,
+    codeCorrect: 0,
+    codeGraded: 0,
+    gradedCorrect: 0,
+    gradedTotal: 0,
+    gradedPercent: 0,
+    unansweredCount,
+    gradingStatus: 'pending',
+  };
+}
+
 function buildSubmissionResponses(quiz, rawAnswers, answerKey) {
   const responses = [];
   let mcqCorrect = 0;
@@ -467,9 +522,8 @@ export async function submitQuizSubmission({
   durationSeconds,
   timedOut = false,
 }) {
-  const latestId = buildQuizAttemptId(classDoc.classCode, student.id, lesson.id);
   const resolvedProgramId = resolveProgramId(programId || classDoc.curriculumProgramId);
-  const answerKey = await getQuizAnswerKey(resolvedProgramId, lesson.id);
+  const pending = buildPendingSubmissionResponses(quiz, answers);
   const {
     responses,
     mcqCorrect,
@@ -481,12 +535,10 @@ export async function submitQuizSubmission({
     gradedTotal,
     gradedPercent,
     unansweredCount,
-  } = buildSubmissionResponses(
-    quiz,
-    answers,
-    answerKey,
-  );
+    gradingStatus,
+  } = pending;
 
+  const latestId = buildQuizAttemptId(classDoc.classCode, student.id, lesson.id);
   const latestSnap = await getDoc(doc(db, 'studentQuizLatest', latestId));
   const previousAttempts = Number(latestSnap.data()?.attemptNumber ?? 0);
   const attemptNumber = previousAttempts + 1;
@@ -525,6 +577,7 @@ export async function submitQuizSubmission({
     gradedTotal,
     gradedPercent,
     unansweredCount,
+    gradingStatus,
     timedOut: Boolean(timedOut),
     submitReason: timedOut ? 'timeout' : 'manual',
     source: 'student-quiz-v2',
@@ -659,12 +712,46 @@ function applyAutoCodeGrades(responses, codeReferences) {
 
 export async function saveQuizSubmissionGrades(submissionId, responses) {
   const scores = computeSubmissionScores(responses);
+  const gradingStatus = deriveGradingStatus(responses);
   await updateDoc(doc(db, 'studentQuizSubmissions', submissionId), {
     responses,
     ...scores,
+    gradingStatus,
     gradedAt: serverTimestamp(),
   });
-  return scores;
+  return { ...scores, gradingStatus };
+}
+
+export async function regradeQuizSubmissionFull(submission) {
+  const answerKey = await getQuizAnswerKey(submission.programId, submission.lessonId);
+  const quiz = await getPublicQuiz(submission.programId, submission.lessonId);
+  if (!quiz?.questions?.length) return submission;
+  const rawAnswers = responsesToRawAnswers(submission.responses);
+  const graded = buildSubmissionResponses(quiz, rawAnswers, answerKey);
+  const gradingStatus = deriveGradingStatus(graded.responses);
+  await updateDoc(doc(db, 'studentQuizSubmissions', submission.id), {
+    responses: graded.responses,
+    mcqCorrect: graded.mcqCorrect,
+    mcqTotal: graded.mcqTotal,
+    mcqPercent: graded.mcqPercent,
+    codeCorrect: graded.codeCorrect,
+    codeGraded: graded.codeGraded,
+    gradedCorrect: graded.gradedCorrect,
+    gradedTotal: graded.gradedTotal,
+    gradedPercent: graded.gradedPercent,
+    unansweredCount: graded.unansweredCount,
+    gradingStatus,
+    gradedAt: serverTimestamp(),
+  });
+  return { ...submission, ...graded, gradingStatus };
+}
+
+export async function regradePendingQuizSubmissions(submissions = []) {
+  const pending = submissions.filter((s) => s.gradingStatus === 'pending');
+  const results = await Promise.all(
+    pending.map((s) => regradeQuizSubmissionFull(s).catch(() => s)),
+  );
+  return results;
 }
 
 export async function reautoGradeQuizSubmission(submission) {

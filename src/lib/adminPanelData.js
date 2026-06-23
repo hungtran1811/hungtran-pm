@@ -1,8 +1,8 @@
 import { fetchAdminBaseData, invalidateAdminDataCache } from './adminDataCache.js';
 import { listKnowledgeReportsByClass } from '../services/knowledgeReports.service.js';
-import { listPracticeSubmissionsByClass } from '../services/practiceQuiz.service.js';
+import { listPracticeSubmissionsByClass, regradePendingPracticeSubmissions } from '../services/practiceQuiz.service.js';
 import { loadLatestReportsForStudents } from '../services/reports.service.js';
-import { listStudentQuizSubmissions } from '../services/quiz.service.js';
+import { listStudentQuizSubmissions, regradePendingQuizSubmissions } from '../services/quiz.service.js';
 import { listStudentsByClassCodes } from '../services/students.service.js';
 
 async function mergeByClass(classCodes, loadFn) {
@@ -67,7 +67,9 @@ export async function loadQuizPanelSnapshot(classCodes, { force = false } = {}) 
     fetchAdminBaseData({ force }),
     mergeByClass(classCodes, listStudentQuizSubmissions),
   ]);
-  return { classes: base.classes, submissions };
+  await regradePendingQuizSubmissions(submissions);
+  const refreshed = await mergeByClass(classCodes, listStudentQuizSubmissions);
+  return { classes: base.classes, submissions: refreshed };
 }
 
 export async function loadPracticePanelSnapshot(classCodes, { force = false } = {}) {
@@ -75,7 +77,9 @@ export async function loadPracticePanelSnapshot(classCodes, { force = false } = 
     fetchAdminBaseData({ force }),
     mergeByClass(classCodes, listPracticeSubmissionsByClass),
   ]);
-  return { classes: base.classes, submissions };
+  await regradePendingPracticeSubmissions(submissions);
+  const refreshed = await mergeByClass(classCodes, listPracticeSubmissionsByClass);
+  return { classes: base.classes, submissions: refreshed };
 }
 
 export async function loadDashboardOpsSnapshot({ force = false } = {}) {

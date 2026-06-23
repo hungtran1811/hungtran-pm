@@ -291,34 +291,69 @@ service cloud.firestore {
     }
 
     function isValidPublicPracticeScoreFields(data) {
-      return isValidBoundedPercent(data.mcqCorrect, data.mcqTotal, data.mcqPercent)
-        && data.responses.size() == data.mcqTotal;
+      return data.gradingStatus == 'pending'
+        ? (
+          data.mcqCorrect is int
+          && data.mcqCorrect == 0
+          && data.mcqTotal is int
+          && data.mcqTotal >= 1
+          && data.mcqPercent is int
+          && data.mcqPercent == 0
+          && data.responses.size() == data.mcqTotal
+        )
+        : (
+          isValidBoundedPercent(data.mcqCorrect, data.mcqTotal, data.mcqPercent)
+          && data.responses.size() == data.mcqTotal
+        );
     }
 
     function isValidPublicQuizScoreFields(data) {
-      return data.mcqTotal is int
-        && data.mcqTotal >= 0
-        && data.mcqCorrect is int
-        && data.mcqCorrect >= 0
-        && data.mcqCorrect <= data.mcqTotal
-        && data.mcqPercent is int
-        && data.mcqPercent >= 0
-        && data.mcqPercent <= 100
-        && data.codeGraded is int
-        && data.codeGraded >= 0
-        && data.codeCorrect is int
-        && data.codeCorrect >= 0
-        && data.codeCorrect <= data.codeGraded
-        && data.gradedTotal is int
-        && data.gradedTotal >= 0
-        && data.gradedCorrect is int
-        && data.gradedCorrect >= 0
-        && data.gradedCorrect <= data.gradedTotal
-        && data.gradedPercent is int
-        && data.gradedPercent >= 0
-        && data.gradedPercent <= 100
-        && data.unansweredCount is int
-        && data.unansweredCount >= 0;
+      return data.gradingStatus == 'pending'
+        ? (
+          data.mcqTotal is int
+          && data.mcqTotal >= 0
+          && data.mcqCorrect is int
+          && data.mcqCorrect == 0
+          && data.mcqPercent is int
+          && data.mcqPercent == 0
+          && data.codeGraded is int
+          && data.codeGraded == 0
+          && data.codeCorrect is int
+          && data.codeCorrect == 0
+          && data.gradedTotal is int
+          && data.gradedTotal == 0
+          && data.gradedCorrect is int
+          && data.gradedCorrect == 0
+          && data.gradedPercent is int
+          && data.gradedPercent == 0
+          && data.unansweredCount is int
+          && data.unansweredCount >= 0
+        )
+        : (
+          data.mcqTotal is int
+          && data.mcqTotal >= 0
+          && data.mcqCorrect is int
+          && data.mcqCorrect >= 0
+          && data.mcqCorrect <= data.mcqTotal
+          && data.mcqPercent is int
+          && data.mcqPercent >= 0
+          && data.mcqPercent <= 100
+          && data.codeGraded is int
+          && data.codeGraded >= 0
+          && data.codeCorrect is int
+          && data.codeCorrect >= 0
+          && data.codeCorrect <= data.codeGraded
+          && data.gradedTotal is int
+          && data.gradedTotal >= 0
+          && data.gradedCorrect is int
+          && data.gradedCorrect >= 0
+          && data.gradedCorrect <= data.gradedTotal
+          && data.gradedPercent is int
+          && data.gradedPercent >= 0
+          && data.gradedPercent <= 100
+          && data.unansweredCount is int
+          && data.unansweredCount >= 0
+        );
     }
 
     function isQuizEnabledForLesson(data) {
@@ -364,6 +399,7 @@ service cloud.firestore {
         && isOpenPracticeTarget(request.resource.data)
         && request.resource.data.responses is list
         && request.resource.data.responses.size() > 0
+        && request.resource.data.gradingStatus == 'pending'
         && isValidPublicPracticeScoreFields(request.resource.data)
         && request.resource.data.source == 'practice-quiz-v1'
         && request.resource.data.submittedAt == request.time
@@ -468,6 +504,7 @@ service cloud.firestore {
         && isOpenQuizTarget(request.resource.data)
         && request.resource.data.responses is list
         && request.resource.data.responses.size() > 0
+        && request.resource.data.gradingStatus == 'pending'
         && isValidPublicQuizScoreFields(request.resource.data)
         && isValidQuizAttemptNumber(request.resource.data)
         && request.resource.data.source == 'student-quiz-v2'
@@ -726,6 +763,10 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /minigameAttendance/{classCode} {
+      allow read, write: if isAdmin();
+    }
+
     match /curriculumPrograms/{programId} {
       allow read: if isAdmin() || resource.data.active == true;
       allow write: if isAdmin();
@@ -832,8 +873,7 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
     match /quizQuestionBanks/{bankId} {
-      allow get: if isAdmin() || isReadableQuizAnswerBank(bankId);
-      allow list: if isAdmin();
+      allow get, list: if isAdmin();
       allow write: if isAdmin();
     }
     match /quizPublicQuestionBanks/{bankId} {
@@ -878,8 +918,7 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     match /practiceQuizAnswerBanks/{bankId} {
-      allow get: if isAdmin() || isReadablePracticeAnswerBank(bankId);
-      allow list: if isAdmin();
+      allow get, list: if isAdmin();
       allow write: if isAdmin();
     }
     match /practiceQuizSubmissions/{submissionId} {
@@ -1122,6 +1161,78 @@ service cloud.firestore {
 
     match /showdownMatrices/{matrixId} {
       allow read, write: if isAdmin();
+    }
+
+    function spySessionDoc(sessionId) {
+      return get(/databases/$(database)/documents/spySessions/$(sessionId));
+    }
+
+    function isReadableSpySession(sessionId) {
+      return exists(/databases/$(database)/documents/spySessions/$(sessionId))
+        && isOpenClass(spySessionDoc(sessionId).data.classCode);
+    }
+
+    function isSpyLobby(sessionId) {
+      return spySessionDoc(sessionId).data.status == 'lobby';
+    }
+
+    function isSpyVotePhase(sessionId) {
+      return spySessionDoc(sessionId).data.status == 'vote';
+    }
+
+    function isSpyPresentStudent(sessionId, studentId) {
+      return studentId is string
+        && spySessionDoc(sessionId).data.presentStudentIds is list
+        && studentId in spySessionDoc(sessionId).data.presentStudentIds;
+    }
+
+    function isValidSpyParticipantCreate(sessionId, studentId) {
+      return isSpyLobby(sessionId)
+        && isOpenClass(spySessionDoc(sessionId).data.classCode)
+        && isActiveStudentInClass(studentId, spySessionDoc(sessionId).data.classCode)
+        && isSpyPresentStudent(sessionId, studentId)
+        && request.resource.data.keys().hasOnly([
+          'studentName', 'joinedAt', 'assignedWord', 'isSpy'
+        ])
+        && request.resource.data.studentName is string
+        && request.resource.data.studentName.size() > 0
+        && studentDoc(studentId).data.fullName == request.resource.data.studentName
+        && request.resource.data.assignedWord == ''
+        && request.resource.data.isSpy == false
+        && request.resource.data.joinedAt == request.time;
+    }
+
+    function isValidSpyVoteCreate(sessionId, voterId) {
+      return isSpyVotePhase(sessionId)
+        && isOpenClass(spySessionDoc(sessionId).data.classCode)
+        && isActiveStudentInClass(voterId, spySessionDoc(sessionId).data.classCode)
+        && isSpyPresentStudent(sessionId, voterId)
+        && request.resource.data.keys().hasOnly(['targetStudentId', 'votedAt'])
+        && request.resource.data.targetStudentId is string
+        && request.resource.data.targetStudentId.size() > 0
+        && request.resource.data.targetStudentId != voterId
+        && isSpyPresentStudent(sessionId, request.resource.data.targetStudentId)
+        && request.resource.data.votedAt == request.time
+        && !exists(/databases/$(database)/documents/spySessions/$(sessionId)/votes/$(voterId));
+    }
+
+    match /spySessions/{sessionId} {
+      allow read: if isAdmin() || isReadableSpySession(sessionId);
+      allow create, update, delete: if isAdmin();
+
+      match /participants/{studentId} {
+        allow get: if isAdmin() || isReadableSpySession(sessionId);
+        allow list: if isAdmin();
+        allow create: if isAdmin() || isValidSpyParticipantCreate(sessionId, studentId);
+        allow update, delete: if isAdmin();
+      }
+
+      match /votes/{voterId} {
+        allow get: if isAdmin();
+        allow list: if isAdmin();
+        allow create: if isAdmin() || isValidSpyVoteCreate(sessionId, voterId);
+        allow update, delete: if isAdmin();
+      }
     }
   }
 }

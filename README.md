@@ -15,8 +15,11 @@ Webapp quản lý lớp học lập trình (một giáo viên), xây dựng bằ
 | **Điểm số** | Tab *Quiz kiểm tra* + *Ôn tập* — xem bài nộp, chấm code, reset lượt làm, **Làm mới** |
 | **Thống kê** | Biểu đồ tiến độ, heatmap mức hiểu theo buổi, bảng so sánh lớp, **Làm mới** |
 | **Bài giảng** | CRUD chương trình & bài (Markdown + ảnh Cloudinary), soạn quiz (MCQ + code) & ôn tập MCQ |
+| **Mini game** | Quay tên, đoán số, lật bài, hộp bí ẩn; **Coding Showdown**, **Truy tìm gián điệp** (realtime Firestore); điểm danh có mặt |
 
 Đường dẫn cũ vẫn hoạt động: `/admin/feedback` → báo cáo HS; `/admin/quiz` → điểm số.
+
+**Màn chiếu Showdown:** `/present/:sessionId` (không cần đăng nhập admin shell).
 
 ### Khu học sinh (`/c/:classCode`, không đăng nhập)
 
@@ -24,7 +27,8 @@ Webapp quản lý lớp học lập trình (một giáo viên), xây dựng bằ
 - **Phase học:** danh sách bài giảng, đọc Markdown/ảnh, bài tập, **ôn tập** MCQ, **quiz** buổi 5 & 9 (MCQ + code, Pyodide), **phản hồi buổi học**
 - **Gửi & chờ duyệt tên dự án** (cuối khóa dạng project)
 - **Phase cuối khóa + project:** báo cáo tiến độ sản phẩm (giai đoạn, %, mục tiêu, khó khăn)
-- **Phase cuối khóa + exam:** vẫn xem bài giảng; chưa có form báo cáo tiến độ
+- **Phase cuối khóa + exam:** vẫn xem bài giảng; không có form báo cáo tiến độ dự án
+- **Mini game realtime:** banner tham gia Showdown / Spy trên cổng HS (`?showdown=`, `?spy=`)
 
 Giao diện responsive, **dark mode**.
 
@@ -40,7 +44,7 @@ Giao diện responsive, **dark mode**.
 ```
 src/
   App.jsx                 # routes
-  pages/admin/            # Dashboard, Classes, Students, ReportsHub, ScoresHub, Lessons, Analytics, Login
+  pages/admin/            # Dashboard, Classes, Students, ReportsHub, ScoresHub, Lessons, Analytics, MiniGames
   pages/student/          # StudentPortal, LessonsView, ProgressReportView, quiz/practice
   services/               # Firestore: classes, students, reports, knowledgeReports, curriculum, quiz, practiceQuiz
   lib/                    # adminDataCache, adminPanelData, analyticsData, …
@@ -91,8 +95,12 @@ Quên mật khẩu: nhập email ở trang login → «Quên mật khẩu?».
 
 ```bash
 firebase use hungtran-pm
-firebase deploy --only firestore:rules,firestore:indexes
+npm run deploy:firestore
 ```
+
+Hoặc: `firebase deploy --only firestore:rules,firestore:indexes`
+
+**Sau khi đổi rules/indexes** (quiz, spy, điểm danh mini game): luôn chạy lệnh trên trước khi smoke test production.
 
 ### 4. Migrate dữ liệu cũ (nếu DB đã có từ bản trước)
 
@@ -123,6 +131,9 @@ npm run migrate:feedback-index
 - [ ] Admin: Báo cáo HS, Điểm số, Thống kê — nút **Làm mới**
 - [ ] Upload ảnh bài giảng (Cloudinary)
 - [ ] Refresh sâu URL (SPA), dark mode
+- [ ] **Mini game:** điểm danh → Quay tên chỉ trong nhóm có mặt
+- [ ] **Spy / Showdown:** tạo phòng → HS join → vote / thi đấu → reveal
+- [ ] `npm run test` pass (Vitest — logic điểm danh, quiz responses)
 
 ## Mô hình dữ liệu (chính)
 
@@ -134,8 +145,9 @@ npm run migrate:feedback-index
 | `knowledgeReports` + `knowledgeReportReceipts` | Phản hồi buổi học |
 | `studentFeedbackIndex` | Index `lessonIds[]` theo lớp+HS (1 read cổng HS) |
 | `curriculumPrograms` + `…/lessons` | Chương trình; bài trong subcollection |
-| `quizPublicQuestionBanks`, `studentQuizSubmissions`, `studentQuizLatest` | Quiz HS |
+| `quizPublicQuestionBanks`, `studentQuizSubmissions`, `studentQuizLatest` | Quiz HS (đáp án chỉ admin; HS nộp pending, admin chấm) |
 | `practiceQuizPublicBanks`, `practiceQuizSubmissions` | Ôn tập |
+| `showdownSessions`, `spySessions`, `minigameAttendance` | Mini game realtime & điểm danh |
 | `admins` | Quyền admin (email → `active`) |
 
 Ghi từ cổng học sinh được kiểm soát bởi `firestore.rules` (batched write cho receipt/snapshot).
@@ -147,4 +159,6 @@ Ghi từ cổng học sinh được kiểm soát bởi `firestore.rules` (batche
 | `npm run dev` | Dev server |
 | `npm run build` | Build production |
 | `npm run preview` | Xem bản build local |
+| `npm run test` | Chạy Vitest (logic thuần) |
+| `npm run deploy:firestore` | Deploy rules + indexes |
 | `npm run migrate:*` | Xem bảng migrate ở trên |

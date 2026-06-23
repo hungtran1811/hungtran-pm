@@ -49,13 +49,19 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 top-4 z-[100] flex flex-col items-center gap-2 px-4">
+      <div
+        className="pointer-events-none fixed inset-x-0 top-4 z-[100] flex flex-col items-center gap-2 px-4"
+        aria-live="polite"
+        aria-relevant="additions"
+      >
         {toasts.map((toast) => {
           const Icon = TONE_ICONS[toast.tone] || Info;
+          const isError = toast.tone === 'error';
           return (
             <button
               type="button"
               key={toast.id}
+              role={isError ? 'alert' : 'status'}
               onClick={() => dismiss(toast.id)}
               className={`pointer-events-auto flex w-full max-w-md items-center gap-2.5 rounded-xl border px-4 py-3 text-left text-sm font-medium shadow-lg transition ${
                 TONE_STYLES[toast.tone] || TONE_STYLES.info

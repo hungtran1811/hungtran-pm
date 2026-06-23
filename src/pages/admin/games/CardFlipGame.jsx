@@ -3,9 +3,6 @@ import { Layers, RotateCcw, Shuffle, Sparkles, Users, Wand2 } from 'lucide-react
 import { Button } from '../../../ui/components/Button.jsx';
 import { EmptyState } from '../../../ui/components/EmptyState.jsx';
 import { SelectClassPrompt, LoadingCatState } from '../../../ui/components/WaitingCatIllustration.jsx';
-import { ClassFilterBar } from '../../../ui/components/ClassFilterBar.jsx';
-import { listActiveStudentsByClass } from '../../../services/students.service.js';
-import { getErrorMessage } from '../../../lib/firestore.js';
 import { GameConfetti } from './GameConfetti.jsx';
 import { GamePresentationShell, useGamePresentation } from './GamePresentationShell.jsx';
 
@@ -128,11 +125,14 @@ function StudentFlipCard({
   );
 }
 
-export function CardFlipGame({ classes, programs = [] }) {
-  const [selectedClass, setSelectedClass] = useState('');
-  const [students, setStudents] = useState([]);
-  const [loadingStudents, setLoadingStudents] = useState(false);
-  const [loadError, setLoadError] = useState('');
+export function CardFlipGame({
+  classes = [],
+  selectedClass = '',
+  students = [],
+  presentStudents = [],
+  loadingStudents = false,
+  loadError = '',
+}) {
   const [deck, setDeck] = useState([]);
   const [highlightKey, setHighlightKey] = useState(null);
   const [lastRevealedKey, setLastRevealedKey] = useState(null);
@@ -146,48 +146,11 @@ export function CardFlipGame({ classes, programs = [] }) {
   );
 
   useEffect(() => {
-    if (!activeClasses.length) {
-      setSelectedClass('');
-      return;
-    }
-    setSelectedClass((prev) => {
-      if (prev && activeClasses.some((c) => c.classCode === prev)) return prev;
-      return '';
-    });
-  }, [activeClasses]);
-
-  useEffect(() => {
-    if (!selectedClass) {
-      setStudents([]);
-      return undefined;
-    }
-
-    let cancelled = false;
-    setLoadingStudents(true);
-    setLoadError('');
-
-    listActiveStudentsByClass(selectedClass)
-      .then((list) => {
-        if (cancelled) return;
-        setStudents(list);
-        setDeck(buildDeck(list));
-        setHighlightKey(null);
-        setLastRevealedKey(null);
-        setPhase('idle');
-        setLoadingStudents(false);
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        setLoadError(getErrorMessage(error));
-        setStudents([]);
-        setDeck([]);
-        setLoadingStudents(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedClass]);
+    setDeck(buildDeck(presentStudents));
+    setHighlightKey(null);
+    setLastRevealedKey(null);
+    setPhase('idle');
+  }, [selectedClass, presentStudents]);
 
   useEffect(() => () => cancelPickRef.current?.(), []);
 
@@ -273,25 +236,12 @@ export function CardFlipGame({ classes, programs = [] }) {
   return (
     <div className="space-y-4">
       <div className="card overflow-visible p-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0 flex-1">
-            <ClassFilterBar
-              classes={activeClasses}
-              programs={programs}
-              value={selectedClass}
-              onChange={setSelectedClass}
-              compact
-              showStudentCount
-              autoSelectFirst={false}
-            />
-          </div>
-          <div className="text-sm text-slate-600 dark:text-slate-300">
-            <strong>{remaining.length}</strong>
-            /
-            {students.length}
-            {' '}
-            lá còn lại
-          </div>
+        <div className="text-sm text-slate-600 dark:text-slate-300">
+          <strong>{remaining.length}</strong>
+          /
+          {presentStudents.length}
+          {' '}
+          lá còn lại (có mặt)
         </div>
       </div>
 
@@ -314,6 +264,12 @@ export function CardFlipGame({ classes, programs = [] }) {
           icon={<Users className="h-7 w-7" />}
           title="Lớp chưa có học sinh"
           description="Thêm học sinh trong mục Học sinh trước khi chơi."
+        />
+      ) : presentStudents.length === 0 ? (
+        <EmptyState
+          icon={<Users className="h-7 w-7" />}
+          title="Chưa chọn học sinh có mặt"
+          description="Tick học sinh trong mục điểm danh phía trên."
         />
       ) : (
         <>

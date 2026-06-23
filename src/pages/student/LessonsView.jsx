@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -27,8 +27,13 @@ import {
 } from '../../services/knowledgeReports.service.js';
 import { recordLessonOpened } from '../../services/students.service.js';
 import { getErrorMessage } from '../../lib/firestore.js';
-import { StudentQuizExam } from './StudentQuizExam.jsx';
-import { LessonPracticeQuiz } from './LessonPracticeQuiz.jsx';
+
+const StudentQuizExam = lazy(() =>
+  import('./StudentQuizExam.jsx').then((m) => ({ default: m.StudentQuizExam })),
+);
+const LessonPracticeQuiz = lazy(() =>
+  import('./LessonPracticeQuiz.jsx').then((m) => ({ default: m.LessonPracticeQuiz })),
+);
 
 function readStorageKey(classCode, studentId) {
   return `lessonsRead:${classCode}:${studentId}`;
@@ -539,13 +544,15 @@ function LessonDetail({
           )}
 
           {contentTab === 'practice' && (
-            <LessonPracticeQuiz
-              lesson={displayLesson}
-              classDoc={classDoc}
-              student={student}
-              programId={programId}
-              embedded
-            />
+            <Suspense fallback={<Spinner label="Đang tải ôn tập..." className="py-8" />}>
+              <LessonPracticeQuiz
+                lesson={displayLesson}
+                classDoc={classDoc}
+                student={student}
+                programId={programId}
+                embedded
+              />
+            </Suspense>
           )}
         </div>
       </article>
@@ -568,12 +575,14 @@ function LessonDetail({
       </div>
       )}
 
-      <StudentQuizExam
-        lesson={displayLesson}
-        classDoc={classDoc}
-        student={student}
-        onPhaseChange={setQuizPhase}
-      />
+      <Suspense fallback={null}>
+        <StudentQuizExam
+          lesson={displayLesson}
+          classDoc={classDoc}
+          student={student}
+          onPhaseChange={setQuizPhase}
+        />
+      </Suspense>
 
       {!quizExamActive && !isFinalPhase && (
         <FeedbackForm

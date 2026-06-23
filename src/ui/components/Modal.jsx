@@ -1,17 +1,46 @@
-import { useEffect } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
 
+const FOCUSABLE =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export function Modal({ open, onClose, title, children, footer, size = 'md' }) {
+  const titleId = useId();
+  const panelRef = useRef(null);
+  const previousFocusRef = useRef(null);
+
   useEffect(() => {
     if (!open) return undefined;
+    previousFocusRef.current = document.activeElement;
     const onKey = (e) => {
-      if (e.key === 'Escape') onClose?.();
+      if (e.key === 'Escape') {
+        onClose?.();
+        return;
+      }
+      if (e.key !== 'Tab' || !panelRef.current) return;
+      const nodes = [...panelRef.current.querySelectorAll(FOCUSABLE)];
+      if (!nodes.length) return;
+      const first = nodes[0];
+      const last = nodes[nodes.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
+    const focusTimer = setTimeout(() => {
+      const first = panelRef.current?.querySelector(FOCUSABLE);
+      first?.focus?.();
+    }, 0);
     return () => {
+      clearTimeout(focusTimer);
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = '';
+      previousFocusRef.current?.focus?.();
     };
   }, [open, onClose]);
 
@@ -34,13 +63,17 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }) {
         aria-hidden="true"
       />
       <div
+        ref={panelRef}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={title ? titleId : undefined}
         className={`relative z-10 flex max-h-[95vh] w-full ${sizes[size] || sizes.md} flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl dark:bg-slate-900`}
       >
         {title && (
           <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-800">
-            <h3 className="text-lg font-medium text-slate-800 dark:text-slate-100">{title}</h3>
+            <h3 id={titleId} className="text-lg font-medium text-slate-800 dark:text-slate-100">
+              {title}
+            </h3>
             <button
               type="button"
               onClick={onClose}

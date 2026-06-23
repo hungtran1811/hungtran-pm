@@ -4,7 +4,6 @@ import { Button } from '../../../ui/components/Button.jsx';
 import { EmptyState } from '../../../ui/components/EmptyState.jsx';
 import { Field, Input, Select } from '../../../ui/components/Field.jsx';
 import { SelectClassPrompt, LoadingCatState } from '../../../ui/components/WaitingCatIllustration.jsx';
-import { ClassFilterBar } from '../../../ui/components/ClassFilterBar.jsx';
 import { GameResultBurst } from '../../../ui/components/games/GameResultBurst.jsx';
 import { GameSoundToggle } from '../../../ui/components/games/GameSoundToggle.jsx';
 import { GameSpotlightTitle } from '../../../ui/components/games/GameSpotlightTitle.jsx';
@@ -18,8 +17,6 @@ import {
 } from '../../../ui/components/games/MysteryBoxGrid.jsx';
 import { useGameSound } from '../../../hooks/useGameSound.js';
 import { buildShuffledBoxes, reshuffleRemainingBoxes } from '../../../lib/mysteryBoxShuffle.js';
-import { listActiveStudentsByClass } from '../../../services/students.service.js';
-import { getErrorMessage } from '../../../lib/firestore.js';
 import { GamePresentationShell, useGamePresentation } from './GamePresentationShell.jsx';
 
 const TYPE_OPTIONS = [
@@ -62,14 +59,14 @@ function runPickAnimation(pool, onTick, onDone) {
   };
 }
 
-export function MysteryBoxGame({ classes, programs = [] }) {
-  const sound = useGameSound();
-  const cancelSpinRef = useRef(null);
-  const openTimersRef = useRef([]);
-  const [selectedClass, setSelectedClass] = useState('');
-  const [students, setStudents] = useState([]);
-  const [loadingStudents, setLoadingStudents] = useState(false);
-  const [loadError, setLoadError] = useState('');
+export function MysteryBoxGame({
+  classes = [],
+  selectedClass = '',
+  students = [],
+  presentStudents = [],
+  loadingStudents = false,
+  loadError = '',
+}) {
   const [boxCountInput, setBoxCountInput] = useState('6');
   const [boxes, setBoxes] = useState(() => buildDefaultBoxes(6));
   const [configured, setConfigured] = useState(false);
@@ -95,13 +92,13 @@ export function MysteryBoxGame({ classes, programs = [] }) {
   );
 
   const activeStudent = useMemo(
-    () => students.find((s) => s.id === activeStudentId) || null,
-    [students, activeStudentId],
+    () => presentStudents.find((s) => s.id === activeStudentId) || null,
+    [presentStudents, activeStudentId],
   );
 
   const availableStudents = useMemo(
-    () => students.filter((s) => !pickedStudentIds.has(s.id)),
-    [students, pickedStudentIds],
+    () => presentStudents.filter((s) => !pickedStudentIds.has(s.id)),
+    [presentStudents, pickedStudentIds],
   );
 
   const remainingCount = useMemo(() => boxes.length, [boxes]);
@@ -117,39 +114,11 @@ export function MysteryBoxGame({ classes, programs = [] }) {
   };
 
   useEffect(() => {
-    if (!activeClasses.length) {
-      setSelectedClass('');
-      return;
-    }
-    setSelectedClass((prev) => {
-      if (prev && activeClasses.some((c) => c.classCode === prev)) return prev;
-      return '';
-    });
-  }, [activeClasses]);
-
-  useEffect(() => {
-    if (!selectedClass) {
-      setStudents([]);
-      return undefined;
-    }
-    let cancelled = false;
-    setLoadingStudents(true);
-    setLoadError('');
-    listActiveStudentsByClass(selectedClass)
-      .then((list) => {
-        if (cancelled) return;
-        setStudents(list);
-        setLoadingStudents(false);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setLoadError(getErrorMessage(err));
-        setLoadingStudents(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedClass]);
+    setPickedStudentIds(new Set());
+    setPickHistory([]);
+    setActiveStudentId('');
+    setDisplayName('');
+  }, [selectedClass, presentStudents]);
 
   useEffect(() => {
     return () => {
@@ -432,17 +401,8 @@ export function MysteryBoxGame({ classes, programs = [] }) {
   return (
     <div className="space-y-4" onPointerDown={() => interactSound()}>
       <div className="card overflow-visible p-3">
-        <ClassFilterBar
-          classes={activeClasses}
-          programs={programs}
-          value={selectedClass}
-          onChange={setSelectedClass}
-          compact
-          showStudentCount
-          autoSelectFirst={false}
-        />
         {!presenting && (
-          <div className="mt-3 flex flex-wrap items-end gap-3">
+          <div className="flex flex-wrap items-end gap-3">
             <Field label={`Số hộp (${MIN_BOX_COUNT}–${MAX_BOX_COUNT})`} className="w-40">
               <div className="flex items-center gap-1">
                 <Button
@@ -479,19 +439,19 @@ export function MysteryBoxGame({ classes, programs = [] }) {
                 applyBoxCount(parsedBoxCount);
                 shuffleBoxes();
               }}
-              disabled={!students.length}
+              disabled={!presentStudents.length}
             >
               <Shuffle className="h-4 w-4" />
               Xáo trộn & bắt đầu
             </Button>
-            {students.length > 0 && configured && (
+            {presentStudents.length > 0 && configured && (
               <>
                 <Field label="Học sinh lượt này" className="min-w-[180px] flex-1">
                   <Select
                     value={activeStudentId}
                     onChange={(e) => {
                       setActiveStudentId(e.target.value);
-                      const s = students.find((st) => st.id === e.target.value);
+                      const s = presentStudents.find((st) => st.id === e.target.value);
                       setDisplayName(s?.fullName || '');
                     }}
                     disabled={!configured || Boolean(openingPhase)}
@@ -516,7 +476,7 @@ export function MysteryBoxGame({ classes, programs = [] }) {
             )}
             {configured && (
               <p className="w-full text-xs text-slate-500">
-                Mỗi học sinh chỉ chọn 1 hộp · còn {availableStudents.length}/{students.length} em chưa chọn
+                Mỗi học sinh chỉ chọn 1 hộp · còn {availableStudents.length}/{presentStudents.length} em chưa chọn
               </p>
             )}
           </div>
@@ -536,6 +496,8 @@ export function MysteryBoxGame({ classes, programs = [] }) {
         )
       ) : students.length === 0 ? (
         <EmptyState icon={<Users className="h-7 w-7" />} title="Lớp chưa có học sinh" />
+      ) : presentStudents.length === 0 ? (
+        <EmptyState icon={<Users className="h-7 w-7" />} title="Chưa chọn học sinh có mặt" />
       ) : (
         <>
           {!presenting && !configured && (

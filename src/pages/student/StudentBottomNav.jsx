@@ -23,6 +23,7 @@ export function StudentBottomNav({ items, activeId, onSelect }) {
             <button
               key={item.id}
               type="button"
+              aria-current={active ? 'page' : undefined}
               onClick={() => onSelect(item.id)}
               className={`flex min-h-[3.25rem] flex-1 flex-col items-center justify-center gap-0.5 px-1 py-2 text-[10px] font-medium transition ${
                 active

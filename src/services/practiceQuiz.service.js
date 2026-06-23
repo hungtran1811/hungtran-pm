@@ -20,6 +20,9 @@ import {
   resolveProgramId,
 } from './curriculum.service.js';
 import { getFirstExistingDoc } from '../lib/firestoreCandidates.js';
+import { responsesToPracticeAnswers } from '../lib/quizResponses.js';
+
+export { responsesToPracticeAnswers };
 
 export function buildPracticeSubmissionId(classCode, studentId, lessonId) {
   return buildQuizAttemptId(classCode, studentId, lessonId);
@@ -170,6 +173,35 @@ export async function syncAllPracticeQuizBanks(programId, lessons) {
   await Promise.all(withQuiz.map((lesson) => savePracticeQuizBank(programId, lesson)));
 }
 
+function buildPendingPracticeResponses(quiz, rawAnswers) {
+  const responses = [];
+  const mcqTotal = quiz.questions.length;
+
+  for (const q of quiz.questions) {
+    const hasAnswer = rawAnswers[q.id] !== undefined && rawAnswers[q.id] !== null;
+    const selectedIndex = hasAnswer ? Number(rawAnswers[q.id]) : -1;
+    const selectedLabel = hasAnswer
+      ? (q.options?.[selectedIndex] ?? `Đáp án ${selectedIndex + 1}`)
+      : 'Chưa trả lời';
+    responses.push({
+      questionId: q.id,
+      questionType: 'mcq',
+      prompt: q.prompt,
+      selectedIndex,
+      selectedLabel,
+      isCorrect: null,
+    });
+  }
+
+  return {
+    responses,
+    mcqCorrect: 0,
+    mcqTotal,
+    mcqPercent: 0,
+    gradingStatus: 'pending',
+  };
+}
+
 function buildPracticeResponses(quiz, rawAnswers, answerKey) {
   const responses = [];
   let mcqCorrect = 0;
@@ -199,7 +231,34 @@ function buildPracticeResponses(quiz, rawAnswers, answerKey) {
     mcqCorrect,
     mcqTotal,
     mcqPercent: mcqTotal ? Math.round((mcqCorrect / mcqTotal) * 100) : 0,
+    gradingStatus: 'complete',
   };
+}
+
+export async function regradePracticeSubmission(submission) {
+  const answerKey = await getPracticeAnswerKey(submission.programId, submission.lessonId);
+  const quiz = await getPublicPracticeQuiz(submission.programId, submission.lessonId);
+  if (!quiz?.questions?.length) return submission;
+  const rawAnswers = responsesToPracticeAnswers(submission.responses);
+  const graded = buildPracticeResponses(quiz, rawAnswers, answerKey);
+  await setDoc(
+    doc(db, 'practiceQuizSubmissions', submission.submissionId || submission.id),
+    {
+      responses: graded.responses,
+      mcqCorrect: graded.mcqCorrect,
+      mcqTotal: graded.mcqTotal,
+      mcqPercent: graded.mcqPercent,
+      gradingStatus: 'complete',
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+  return { ...submission, ...graded };
+}
+
+export async function regradePendingPracticeSubmissions(submissions = []) {
+  const pending = submissions.filter((s) => s.gradingStatus === 'pending');
+  return Promise.all(pending.map((s) => regradePracticeSubmission(s).catch(() => s)));
 }
 
 export async function getPracticeSubmission(classCode, studentId, lessonId) {
@@ -225,11 +284,9 @@ export function subscribePracticeSubmission(classCode, studentId, lessonId, onDa
 export async function submitPracticeQuiz({ student, classDoc, lesson, programId, quiz, answers }) {
   const submissionId = buildPracticeSubmissionId(classDoc.classCode, student.id, lesson.id);
   const resolvedProgramId = resolveProgramId(programId || classDoc.curriculumProgramId);
-  const answerKey = await getPracticeAnswerKey(resolvedProgramId, lesson.id);
-  const { responses, mcqCorrect, mcqTotal, mcqPercent } = buildPracticeResponses(
+  const { responses, mcqCorrect, mcqTotal, mcqPercent, gradingStatus } = buildPendingPracticeResponses(
     quiz,
     answers,
-    answerKey,
   );
 
   const existing = await getPracticeSubmission(classDoc.classCode, student.id, lesson.id);
@@ -253,6 +310,7 @@ export async function submitPracticeQuiz({ student, classDoc, lesson, programId,
       mcqCorrect,
       mcqTotal,
       mcqPercent,
+      gradingStatus,
       source: 'practice-quiz-v1',
       submittedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),

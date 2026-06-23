@@ -3,9 +3,6 @@ import { Dices, RotateCcw, Sparkles, Users } from 'lucide-react';
 import { Button } from '../../../ui/components/Button.jsx';
 import { EmptyState } from '../../../ui/components/EmptyState.jsx';
 import { SelectClassPrompt, LoadingCatState } from '../../../ui/components/WaitingCatIllustration.jsx';
-import { ClassFilterBar } from '../../../ui/components/ClassFilterBar.jsx';
-import { listActiveStudentsByClass } from '../../../services/students.service.js';
-import { getErrorMessage } from '../../../lib/firestore.js';
 import { GameConfetti } from './GameConfetti.jsx';
 import { GamePresentationShell, useGamePresentation } from './GamePresentationShell.jsx';
 
@@ -40,11 +37,15 @@ function runPickAnimation(pool, onTick, onDone) {
   };
 }
 
-export function RandomStudentPicker({ classes, programs = [] }) {
-  const [selectedClass, setSelectedClass] = useState('');
-  const [students, setStudents] = useState([]);
-  const [loadingStudents, setLoadingStudents] = useState(false);
-  const [loadError, setLoadError] = useState('');
+export function RandomStudentPicker({
+  classes = [],
+  programs = [],
+  selectedClass = '',
+  students = [],
+  presentStudents = [],
+  loadingStudents = false,
+  loadError = '',
+}) {
   const [phase, setPhase] = useState('idle');
   const [displayName, setDisplayName] = useState('');
   const [winner, setWinner] = useState(null);
@@ -60,58 +61,22 @@ export function RandomStudentPicker({ classes, programs = [] }) {
   );
 
   useEffect(() => {
-    if (!activeClasses.length) {
-      setSelectedClass('');
-      return;
-    }
-    setSelectedClass((prev) => {
-      if (prev && activeClasses.some((c) => c.classCode === prev)) return prev;
-      return '';
-    });
-  }, [activeClasses]);
-
-  useEffect(() => {
-    if (!selectedClass) {
-      setStudents([]);
-      return undefined;
-    }
-
-    let cancelled = false;
-    setLoadingStudents(true);
-    setLoadError('');
     setPhase('idle');
     setDisplayName('');
     setWinner(null);
     setPickedIds([]);
     setHistory([]);
-
-    listActiveStudentsByClass(selectedClass)
-      .then((list) => {
-        if (cancelled) return;
-        setStudents(list);
-        setLoadingStudents(false);
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        setLoadError(getErrorMessage(error));
-        setStudents([]);
-        setLoadingStudents(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedClass]);
+  }, [selectedClass, presentStudents]);
 
   useEffect(() => () => cancelSpinRef.current?.(), []);
 
   const pickedSet = useMemo(() => new Set(pickedIds), [pickedIds]);
 
   const pool = useMemo(() => {
-    let list = students;
+    let list = presentStudents;
     if (excludePicked) list = list.filter((s) => !pickedSet.has(s.id));
     return list;
-  }, [students, excludePicked, pickedSet]);
+  }, [presentStudents, excludePicked, pickedSet]);
 
   const selectedClassDoc = useMemo(
     () => activeClasses.find((c) => c.classCode === selectedClass) || null,
@@ -165,37 +130,24 @@ export function RandomStudentPicker({ classes, programs = [] }) {
   return (
     <div className="space-y-4">
       <div className="card overflow-visible p-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0 flex-1">
-            <ClassFilterBar
-              classes={activeClasses}
-              programs={programs}
-              value={selectedClass}
-              onChange={setSelectedClass}
-              compact
-              showStudentCount
-              autoSelectFirst={false}
+        <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
+          <label className="inline-flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500/30"
+              checked={excludePicked}
+              onChange={(e) => setExcludePicked(e.target.checked)}
             />
-          </div>
-          <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
-            <label className="inline-flex cursor-pointer items-center gap-2">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500/30"
-                checked={excludePicked}
-                onChange={(e) => setExcludePicked(e.target.checked)}
-              />
-              Không lặp lại trong buổi
-            </label>
-            <span className="text-slate-400">·</span>
-            <span>
-              <strong>{pool.length}</strong>
-              /
-              {students.length}
-              {' '}
-              học sinh
-            </span>
-          </div>
+            Không lặp lại trong buổi
+          </label>
+          <span className="text-slate-400">·</span>
+          <span>
+            <strong>{pool.length}</strong>
+            /
+            {presentStudents.length}
+            {' '}
+            học sinh có mặt
+          </span>
         </div>
       </div>
 
@@ -218,6 +170,12 @@ export function RandomStudentPicker({ classes, programs = [] }) {
           icon={<Users className="h-7 w-7" />}
           title="Lớp chưa có học sinh"
           description="Thêm học sinh trong mục Học sinh trước khi quay tên."
+        />
+      ) : presentStudents.length === 0 ? (
+        <EmptyState
+          icon={<Users className="h-7 w-7" />}
+          title="Chưa chọn học sinh có mặt"
+          description="Tick ít nhất 2 học sinh trong mục điểm danh phía trên."
         />
       ) : pool.length === 0 ? (
         <EmptyState

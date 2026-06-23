@@ -4,9 +4,6 @@ import { Button } from '../../../ui/components/Button.jsx';
 import { EmptyState } from '../../../ui/components/EmptyState.jsx';
 import { Field, Input } from '../../../ui/components/Field.jsx';
 import { SelectClassPrompt, LoadingCatState } from '../../../ui/components/WaitingCatIllustration.jsx';
-import { ClassFilterBar } from '../../../ui/components/ClassFilterBar.jsx';
-import { listActiveStudentsByClass } from '../../../services/students.service.js';
-import { getErrorMessage } from '../../../lib/firestore.js';
 import { GameConfetti } from './GameConfetti.jsx';
 import { GamePresentationShell, useGamePresentation } from './GamePresentationShell.jsx';
 
@@ -28,11 +25,14 @@ function parseBound(value, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-export function NumberGuessGame({ classes, programs = [] }) {
-  const [selectedClass, setSelectedClass] = useState('');
-  const [students, setStudents] = useState([]);
-  const [loadingStudents, setLoadingStudents] = useState(false);
-  const [loadError, setLoadError] = useState('');
+export function NumberGuessGame({
+  classes = [],
+  selectedClass = '',
+  students = [],
+  presentStudents = [],
+  loadingStudents = false,
+  loadError = '',
+}) {
 
   const [rangeMin, setRangeMin] = useState('0');
   const [rangeMax, setRangeMax] = useState('100');
@@ -70,51 +70,6 @@ export function NumberGuessGame({ classes, programs = [] }) {
     });
   }, []);
 
-  useEffect(() => {
-    if (!activeClasses.length) {
-      setSelectedClass('');
-      return;
-    }
-    setSelectedClass((prev) => {
-      if (prev && activeClasses.some((c) => c.classCode === prev)) return prev;
-      return '';
-    });
-  }, [activeClasses]);
-
-  useEffect(() => {
-    if (!selectedClass) {
-      setStudents([]);
-      return undefined;
-    }
-
-    let cancelled = false;
-    setLoadingStudents(true);
-    setLoadError('');
-
-    listActiveStudentsByClass(selectedClass)
-      .then((list) => {
-        if (cancelled) return;
-        setStudents(list);
-        setLoadingStudents(false);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setLoadError(getErrorMessage(err));
-        setStudents([]);
-        setLoadingStudents(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedClass]);
-
-  const playing = secret !== null;
-  const activeStudent = students[turnIndex] || null;
-
-  const rangeSpan = Math.max(high - low, 0);
-  const totalSpan = Math.max(roundMax - roundMin, 1);
-
   const resetRoundState = () => {
     setSecret(null);
     setDraftByStudent({});
@@ -128,13 +83,23 @@ export function NumberGuessGame({ classes, programs = [] }) {
     setError('');
   };
 
+  useEffect(() => {
+    resetRoundState();
+  }, [selectedClass, presentStudents]);
+
+  const playing = secret !== null;
+  const activeStudent = presentStudents[turnIndex] || null;
+
+  const rangeSpan = Math.max(high - low, 0);
+  const totalSpan = Math.max(roundMax - roundMin, 1);
+
   const startRound = () => {
     if (!selectedClass) {
       setError('Chọn lớp trước khi bắt đầu.');
       return;
     }
-    if (!students.length) {
-      setError('Lớp chưa có học sinh.');
+    if (!presentStudents.length) {
+      setError('Chưa có học sinh có mặt.');
       return;
     }
 
@@ -165,7 +130,7 @@ export function NumberGuessGame({ classes, programs = [] }) {
     setHistory([]);
     setWon(false);
     setError('');
-    focusStudentInput(students[0]?.id);
+    focusStudentInput(presentStudents[0]?.id);
   };
 
   const resetAll = () => {
@@ -175,7 +140,7 @@ export function NumberGuessGame({ classes, programs = [] }) {
   const submitGuess = (studentId) => {
     if (!playing || won) return;
 
-    const student = students.find((s) => s.id === studentId);
+    const student = presentStudents.find((s) => s.id === studentId);
     if (!student) return;
 
     const guess = Number.parseInt(String(draftByStudent[studentId] ?? '').trim(), 10);
@@ -226,10 +191,10 @@ export function NumberGuessGame({ classes, programs = [] }) {
     setDraftByStudent((prev) => ({ ...prev, [student.id]: '' }));
     setHistory((prev) => [{ ...entry, result }, ...prev]);
 
-    const currentIdx = students.findIndex((s) => s.id === studentId);
-    const nextIdx = currentIdx >= 0 ? (currentIdx + 1) % students.length : 0;
+    const currentIdx = presentStudents.findIndex((s) => s.id === studentId);
+    const nextIdx = currentIdx >= 0 ? (currentIdx + 1) % presentStudents.length : 0;
     setTurnIndex(nextIdx);
-    focusStudentInput(students[nextIdx]?.id);
+    focusStudentInput(presentStudents[nextIdx]?.id);
   };
 
   const handleRowSubmit = (e, studentId) => {
@@ -240,7 +205,7 @@ export function NumberGuessGame({ classes, programs = [] }) {
   const selectTurn = (index) => {
     if (!playing || won) return;
     setTurnIndex(index);
-    focusStudentInput(students[index]?.id);
+    focusStudentInput(presentStudents[index]?.id);
   };
 
   const stageBorder = won
@@ -264,7 +229,7 @@ export function NumberGuessGame({ classes, programs = [] }) {
   const barLeft = playing ? ((low - roundMin) / totalSpan) * 100 : 0;
   const barWidth = playing ? (rangeSpan / totalSpan) * 100 : 100;
 
-  const canStart = selectedClass && students.length > 0 && (!playing || won);
+  const canStart = selectedClass && presentStudents.length > 0 && (!playing || won);
 
   const renderStudentTable = (dark = false) => (
     <div className={`overflow-x-auto ${dark ? 'max-h-[40vh]' : ''}`}>
@@ -284,7 +249,7 @@ export function NumberGuessGame({ classes, programs = [] }) {
           </tr>
         </thead>
         <tbody className={dark ? 'divide-y divide-slate-800' : 'divide-y divide-slate-100 dark:divide-slate-800'}>
-          {students.map((student, index) => {
+          {presentStudents.map((student, index) => {
             const isTurn = playing && !won && index === turnIndex;
             const lastResult = lastResultByStudent[student.id];
             const inputDisabled = !playing || won || !isTurn;
@@ -409,17 +374,6 @@ export function NumberGuessGame({ classes, programs = [] }) {
   return (
     <div className="space-y-4">
       <div className="card overflow-visible p-3">
-        <div className="mb-3 min-w-0">
-          <ClassFilterBar
-            classes={activeClasses}
-            programs={programs}
-            value={selectedClass}
-            onChange={setSelectedClass}
-            compact
-            showStudentCount
-            autoSelectFirst={false}
-          />
-        </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="grid flex-1 grid-cols-2 gap-3 sm:max-w-xs">
             <Field label="Từ">
@@ -474,6 +428,12 @@ export function NumberGuessGame({ classes, programs = [] }) {
           icon={<Users className="h-7 w-7" />}
           title="Lớp chưa có học sinh"
           description="Thêm học sinh trong mục Học sinh trước khi chơi."
+        />
+      ) : presentStudents.length === 0 ? (
+        <EmptyState
+          icon={<Users className="h-7 w-7" />}
+          title="Chưa chọn học sinh có mặt"
+          description="Tick học sinh trong mục điểm danh phía trên."
         />
       ) : (
         <>

@@ -1,16 +1,41 @@
-export function Field({ label, hint, error, required, children }) {
+import { cloneElement, isValidElement, useId } from 'react';
+
+export function Field({ label, hint, error, required, children, id: idProp, className }) {
+  const autoId = useId();
+  const fieldId = idProp || autoId;
+  const hintId = hint ? `${fieldId}-hint` : undefined;
+  const errorId = error ? `${fieldId}-error` : undefined;
+  const describedBy = [errorId, hintId].filter(Boolean).join(' ') || undefined;
+
+  const control = isValidElement(children)
+    ? cloneElement(children, {
+        ...children.props,
+        id: children.props.id || fieldId,
+        'aria-invalid': error ? true : children.props['aria-invalid'],
+        'aria-describedby': describedBy,
+      })
+    : children;
+
   return (
-    <label className="block">
+    <div className={className}>
       {label && (
-        <span className="label-base">
+        <label htmlFor={fieldId} className="label-base">
           {label}
           {required && <span className="ml-0.5 text-red-500">*</span>}
+        </label>
+      )}
+      {control}
+      {hint && !error && (
+        <span id={hintId} className="mt-1 block text-xs text-slate-500">
+          {hint}
         </span>
       )}
-      {children}
-      {hint && !error && <span className="mt-1 block text-xs text-slate-500">{hint}</span>}
-      {error && <span className="mt-1 block text-xs font-medium text-red-500">{error}</span>}
-    </label>
+      {error && (
+        <span id={errorId} className="mt-1 block text-xs font-medium text-red-500" role="alert">
+          {error}
+        </span>
+      )}
+    </div>
   );
 }
 
