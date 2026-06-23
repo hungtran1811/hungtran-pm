@@ -1,5 +1,5 @@
 import { Gift, Skull, Sparkles } from 'lucide-react';
-import { GameConfetti } from '../../../pages/admin/games/GameConfetti.jsx';
+import { GameConfetti } from './GameConfetti.jsx';
 
 const TYPE_META = {
   reward: {

@@ -3,7 +3,7 @@ import { Dices, RotateCcw, Sparkles, Users } from 'lucide-react';
 import { Button } from '../../../ui/components/Button.jsx';
 import { EmptyState } from '../../../ui/components/EmptyState.jsx';
 import { SelectClassPrompt, LoadingCatState } from '../../../ui/components/WaitingCatIllustration.jsx';
-import { GameConfetti } from './GameConfetti.jsx';
+import { GameConfetti } from '../../../ui/components/games/GameConfetti.jsx';
 import { GamePresentationShell, useGamePresentation } from './GamePresentationShell.jsx';
 
 function runPickAnimation(pool, onTick, onDone) {

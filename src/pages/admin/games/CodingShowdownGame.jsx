@@ -68,7 +68,7 @@ import {
   listShowdownMatrices,
   listShowdownQuestions,
 } from '../../../services/showdownBank.service.js';
-import { GameConfetti } from './GameConfetti.jsx';
+import { GameConfetti } from '../../../ui/components/games/GameConfetti.jsx';
 import { GamePresentationShell, useGamePresentation } from './GamePresentationShell.jsx';
 import { ShowdownStage } from './ShowdownStage.jsx';
 import { ShowdownBankManager } from './ShowdownBankManager.jsx';

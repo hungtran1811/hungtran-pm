@@ -4,7 +4,7 @@ import { Button } from '../../../ui/components/Button.jsx';
 import { EmptyState } from '../../../ui/components/EmptyState.jsx';
 import { Field, Input } from '../../../ui/components/Field.jsx';
 import { SelectClassPrompt, LoadingCatState } from '../../../ui/components/WaitingCatIllustration.jsx';
-import { GameConfetti } from './GameConfetti.jsx';
+import { GameConfetti } from '../../../ui/components/games/GameConfetti.jsx';
 import { GamePresentationShell, useGamePresentation } from './GamePresentationShell.jsx';
 
 const ABS_MIN = 0;

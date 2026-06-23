@@ -95,7 +95,16 @@ const hubGameProps = (ctx) => ({
 
 function GameSuspense({ label, children }) {
   return (
-    <Suspense fallback={<Spinner label={label} className="py-12" />}>{children}</Suspense>
+    <Suspense
+      fallback={
+        <div className="flex flex-col items-center justify-center gap-3 py-12 text-slate-500">
+          <Spinner className="h-8 w-8" />
+          {label ? <p className="text-sm">{label}</p> : null}
+        </div>
+      }
+    >
+      {children}
+    </Suspense>
   );
 }
 

@@ -43,7 +43,7 @@ import { OLYMPIA_PRESET_PACKS, suggestPackForSession } from '../../../data/olymp
 import { getSessionStatusLabel } from '../../../lib/olympiaRules.js';
 import { OlympiaRulesPanel, OlympiaRoundBanner } from '../../../ui/components/OlympiaRulesPanel.jsx';
 import { getErrorMessage, toDate } from '../../../lib/firestore.js';
-import { GameConfetti } from './GameConfetti.jsx';
+import { GameConfetti } from '../../../ui/components/games/GameConfetti.jsx';
 import { GamePresentationShell, useGamePresentation } from './GamePresentationShell.jsx';
 import { OlympiaMountainBoard, OlympiaPodium } from './OlympiaMountainBoard.jsx';
 
