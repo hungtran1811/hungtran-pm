@@ -180,7 +180,7 @@ export function SpyGame({
       return;
     }
     runAction(
-      () => startSpyGame(sessionId, validated),
+      () => startSpyGame(sessionId, { civilianWord: validated.civilian, spyWord: validated.spy }),
       'Đã bắt đầu — học sinh thấy cụm từ.',
     );
   };

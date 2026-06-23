@@ -81,6 +81,9 @@ export function MysteryBoxGame({
   const [pickHistory, setPickHistory] = useState([]);
   const [revealOverlay, setRevealOverlay] = useState(null);
   const { shellRef, presenting, togglePresentation } = useGamePresentation();
+  const sound = useGameSound();
+  const cancelSpinRef = useRef(null);
+  const openTimersRef = useRef([]);
 
   const interactSound = useCallback(async () => {
     await sound.unlock();
