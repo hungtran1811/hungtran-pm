@@ -1228,7 +1228,8 @@ service cloud.firestore {
       }
 
       match /votes/{voterId} {
-        allow get: if isAdmin();
+        allow get: if isAdmin()
+          || (isReadableSpySession(sessionId) && isSpyPresentStudent(sessionId, voterId));
         allow list: if isAdmin();
         allow create: if isAdmin() || isValidSpyVoteCreate(sessionId, voterId);
         allow update, delete: if isAdmin();

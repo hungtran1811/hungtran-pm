@@ -267,10 +267,17 @@ export async function submitSpyVote(sessionId, { voterId, targetStudentId }) {
   const existing = await getDoc(voteRef(sessionId, voterId));
   if (existing.exists()) throw new Error('Bạn đã bỏ phiếu.');
 
-  await setDoc(voteRef(sessionId, voterId), {
-    targetStudentId,
-    votedAt: serverTimestamp(),
-  });
+  try {
+    await setDoc(voteRef(sessionId, voterId), {
+      targetStudentId,
+      votedAt: serverTimestamp(),
+    });
+  } catch (err) {
+    if (err?.code === 'permission-denied') {
+      throw new Error('Bạn đã bỏ phiếu.');
+    }
+    throw err;
+  }
 }
 
 export async function revealSpyRound(sessionId, { civilianWord, spyWord }) {
