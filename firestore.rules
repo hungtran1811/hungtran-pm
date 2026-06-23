@@ -1221,8 +1221,7 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
 
       match /participants/{studentId} {
-        allow get: if isAdmin() || isReadableSpySession(sessionId);
-        allow list: if isAdmin();
+        allow read: if isAdmin() || isReadableSpySession(sessionId);
         allow create: if isAdmin() || isValidSpyParticipantCreate(sessionId, studentId);
         allow update, delete: if isAdmin();
       }
@@ -1230,7 +1229,7 @@ service cloud.firestore {
       match /votes/{voterId} {
         allow get: if isAdmin()
           || (isReadableSpySession(sessionId) && isSpyPresentStudent(sessionId, voterId));
-        allow list: if isAdmin();
+        allow list: if isAdmin() || isReadableSpySession(sessionId);
         allow create: if isAdmin() || isValidSpyVoteCreate(sessionId, voterId);
         allow update, delete: if isAdmin();
       }

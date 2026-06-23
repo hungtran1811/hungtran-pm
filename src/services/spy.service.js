@@ -306,6 +306,46 @@ export async function finishSpySession(sessionId) {
   }
 }
 
+/** Giữ nguyên phòng & học sinh đã vào; xóa phiếu và reset về lobby cho ván mới. */
+export async function restartSpyRound(sessionId) {
+  const snap = await getDoc(sessionRef(sessionId));
+  if (!snap.exists()) throw new Error('Không tìm thấy phòng.');
+  const session = snap.data();
+  if (session.status !== 'reveal' && session.status !== 'finished') {
+    throw new Error('Chỉ bắt đầu ván mới sau khi công bố kết quả.');
+  }
+
+  const [partsSnap, votesSnap] = await Promise.all([
+    getDocs(participantsRef(sessionId)),
+    getDocs(votesRef(sessionId)),
+  ]);
+
+  if (!partsSnap.docs.length) {
+    throw new Error('Chưa có học sinh trong phòng.');
+  }
+
+  const batch = writeBatch(db);
+  votesSnap.docs.forEach((voteDoc) => batch.delete(voteDoc.ref));
+  partsSnap.docs.forEach((partDoc) => {
+    batch.update(participantRef(sessionId, partDoc.id), {
+      assignedWord: '',
+      isSpy: false,
+    });
+  });
+  batch.update(sessionRef(sessionId), sessionBump({
+    status: 'lobby',
+    describeOrder: [],
+    describeIndex: 0,
+    civilianWord: '',
+    spyWord: '',
+    revealedSpyIds: [],
+    finishedAt: null,
+  }));
+  await batch.commit();
+
+  await setClassActiveSpyPointer(snap.data().classCode, sessionId);
+}
+
 export async function cancelSpySession(sessionId) {
   const snap = await getDoc(sessionRef(sessionId));
   await updateDoc(sessionRef(sessionId), sessionBump({
@@ -398,6 +438,10 @@ function publicBaseUrl() {
 
 export function getSpyPortalLink(classCode, sessionId) {
   return `${publicBaseUrl()}/c/${encodeURIComponent(classCode)}?spy=${sessionId}`;
+}
+
+export function getSpyPresentLink(sessionId) {
+  return `${publicBaseUrl()}/present/spy/${sessionId}`;
 }
 
 export async function getSpySessionResults(sessionId) {

@@ -12,6 +12,9 @@ import { ErrorBoundary } from './ui/components/ErrorBoundary.jsx';
 const ShowdownPresentationPage = lazy(() =>
   import('./pages/ShowdownPresentationPage.jsx').then((m) => ({ default: m.ShowdownPresentationPage })),
 );
+const SpyPresentationPage = lazy(() =>
+  import('./pages/SpyPresentationPage.jsx').then((m) => ({ default: m.SpyPresentationPage })),
+);
 
 const DashboardPage = lazy(() =>
   import('./pages/admin/Dashboard.jsx').then((m) => ({ default: m.DashboardPage })),
@@ -101,6 +104,17 @@ export default function App() {
           <ErrorBoundary title="Màn trình chiếu gặp sự cố" homeTo="/" variant="student">
             <Suspense fallback={<FullPageLoader label="Đang tải màn trình chiếu..." />}>
               <ShowdownPresentationPage />
+            </Suspense>
+          </ErrorBoundary>
+        }
+      />
+
+      <Route
+        path="/present/spy/:sessionId"
+        element={
+          <ErrorBoundary title="Màn trình chiếu gặp sự cố" homeTo="/" variant="student">
+            <Suspense fallback={<FullPageLoader label="Đang tải màn trình chiếu..." />}>
+              <SpyPresentationPage />
             </Suspense>
           </ErrorBoundary>
         }

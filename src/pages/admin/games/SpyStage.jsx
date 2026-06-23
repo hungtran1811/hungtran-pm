@@ -9,11 +9,16 @@ export function SpyStage({
   civilianWord = '',
   spyWord = '',
   presenting = false,
+  hideWords = false,
+  spyNames = [],
 }) {
   if (!session) return null;
 
   const voteCount = votes.length;
   const playerCount = participants.length;
+  const showWords = session.status === 'reveal' && !hideWords;
+  const revealCivilian = session.civilianWord || civilianWord;
+  const revealSpy = session.spyWord || spyWord;
   const titleClass = presenting
     ? 'text-4xl font-black text-white sm:text-5xl md:text-6xl'
     : 'text-2xl font-bold text-slate-900 dark:text-white';
@@ -60,16 +65,21 @@ export function SpyStage({
         </div>
       )}
 
-      {session.status === 'reveal' && (
+      {session.status === 'reveal' && showWords && (
         <div className="mx-auto max-w-xl space-y-4">
           <div className={`rounded-2xl border p-4 ${presenting ? 'border-emerald-500/40 bg-emerald-950/40' : 'border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10'}`}>
             <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">Dân thường</p>
-            <p className={`mt-1 font-bold ${presenting ? 'text-3xl text-white' : 'text-xl'}`}>{civilianWord || session.civilianWord}</p>
+            <p className={`mt-1 font-bold ${presenting ? 'text-3xl text-white' : 'text-xl'}`}>{revealCivilian}</p>
           </div>
           <div className={`rounded-2xl border p-4 ${presenting ? 'border-red-500/40 bg-red-950/40' : 'border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10'}`}>
             <p className="text-xs font-semibold uppercase tracking-wide text-red-600 dark:text-red-300">Gián điệp</p>
-            <p className={`mt-1 font-bold ${presenting ? 'text-3xl text-white' : 'text-xl'}`}>{spyWord || session.spyWord}</p>
+            <p className={`mt-1 font-bold ${presenting ? 'text-3xl text-white' : 'text-xl'}`}>{revealSpy}</p>
           </div>
+          {spyNames.length > 0 && (
+            <p className={`text-center font-semibold ${presenting ? 'text-xl text-red-300' : 'text-red-600 dark:text-red-400'}`}>
+              Gián điệp: {spyNames.join(', ')}
+            </p>
+          )}
           {tally.length > 0 && (
             <ul className="space-y-2 text-left">
               {tally.map((row) => (

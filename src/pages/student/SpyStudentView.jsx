@@ -45,6 +45,12 @@ export function SpyStudentView({ sessionId, classCode, student, classStudents = 
   }, [sessionId, student?.id]);
 
   useEffect(() => {
+    if (session?.status === 'lobby' || session?.status === 'describe') {
+      setVoted(false);
+    }
+  }, [session?.status]);
+
+  useEffect(() => {
     if (!sessionId || !student?.id || session?.status !== 'lobby') return;
     setJoining(true);
     joinSpySession(sessionId, { studentId: student.id, studentName: student.fullName })
@@ -104,9 +110,13 @@ export function SpyStudentView({ sessionId, classCode, student, classStudents = 
         <div className="card p-6 text-center">
           <Search className="mx-auto h-10 w-10 text-brand-500" />
           <p className="mt-3 font-medium text-slate-800 dark:text-slate-100">
-            {joining ? 'Đang vào phòng...' : 'Đã vào phòng chờ'}
+            {joining ? 'Đang vào phòng...' : self ? 'Đã trong phòng' : 'Đang chờ vào phòng...'}
           </p>
-          <p className="mt-1 text-sm text-slate-500">Chờ giáo viên bắt đầu ván chơi.</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {self
+              ? 'Chờ giáo viên bắt đầu ván — không cần thoát khi chơi ván tiếp theo.'
+              : 'Chờ giáo viên mở phòng.'}
+          </p>
         </div>
       )}
 
@@ -180,7 +190,7 @@ export function SpyStudentView({ sessionId, classCode, student, classStudents = 
 
       {session.status === 'finished' && (
         <div className="card p-5 text-center text-sm text-slate-600 dark:text-slate-300">
-          Ván chơi đã kết thúc.
+          Phòng đã đóng. Nhờ giáo viên mở phòng mới nếu muốn chơi tiếp.
         </div>
       )}
     </div>

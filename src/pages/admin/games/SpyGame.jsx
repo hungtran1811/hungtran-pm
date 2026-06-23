@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Copy,
+  ExternalLink,
+  Monitor,
   Play,
+  RotateCcw,
   Search,
   SkipForward,
   Square,
@@ -30,9 +33,11 @@ import {
   finishSpySession,
   getCurrentSpeaker,
   getSpyPortalLink,
+  getSpyPresentLink,
   getSpySessionResults,
   openSpyLobby,
   openSpyVote,
+  restartSpyRound,
   revealSpyRound,
   startSpyGame,
   subscribeSpyParticipants,
@@ -41,8 +46,81 @@ import {
   syncSpyClassPointer,
   tallySpyVotes,
 } from '../../../services/spy.service.js';
-import { GamePresentationShell, useGamePresentation } from './GamePresentationShell.jsx';
 import { SpyStage } from './SpyStage.jsx';
+
+function SpyWordPicker({
+  wordMode,
+  setWordMode,
+  categoryId,
+  setCategoryId,
+  pairIndex,
+  setPairIndex,
+  civilianWord,
+  setCivilianWord,
+  spyWord,
+  setSpyWord,
+  onRandomPair,
+  compact = false,
+}) {
+  const categoryPairs = useMemo(() => getCategoryPairs(categoryId), [categoryId]);
+
+  return (
+    <div className={`space-y-3 ${compact ? '' : 'card p-4'}`}>
+      {!compact && (
+        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+          Cặp từ (chỉ giáo viên thấy)
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" variant={wordMode === 'bank' ? 'primary' : 'secondary'} size="sm" onClick={() => setWordMode('bank')}>
+          Bộ từ sẵn
+        </Button>
+        <Button type="button" variant={wordMode === 'custom' ? 'primary' : 'secondary'} size="sm" onClick={() => setWordMode('custom')}>
+          Tuỳ chỉnh
+        </Button>
+      </div>
+
+      {wordMode === 'bank' ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Chủ đề">
+            <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+              {SPY_WORD_CATEGORIES.map((c) => (
+                <option key={c.id} value={c.id}>{c.label}</option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Cặp từ">
+            <Select value={pairIndex} onChange={(e) => setPairIndex(Number(e.target.value))}>
+              {categoryPairs.map((pair, index) => (
+                <option key={`${pair.civilian}-${pair.spy}`} value={index}>
+                  {pair.civilian} / {pair.spy}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <div className="sm:col-span-2">
+            <Button type="button" variant="secondary" size="sm" onClick={onRandomPair}>
+              Random cặp từ
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Từ dân thường">
+            <Input value={civilianWord} onChange={(e) => setCivilianWord(e.target.value)} />
+          </Field>
+          <Field label="Từ gián điệp">
+            <Input value={spyWord} onChange={(e) => setSpyWord(e.target.value)} />
+          </Field>
+        </div>
+      )}
+
+      <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+        GV xem: <strong>{civilianWord || '—'}</strong> · <strong>{spyWord || '—'}</strong>
+      </p>
+    </div>
+  );
+}
 
 export function SpyGame({
   selectedClass = '',
@@ -53,7 +131,6 @@ export function SpyGame({
   loadError = '',
 }) {
   const toast = useToast();
-  const { shellRef, presenting, togglePresentation } = useGamePresentation();
   const [sessionId, setSessionId] = useState(null);
   const [session, setSession] = useState(null);
   const [participants, setParticipants] = useState([]);
@@ -69,7 +146,6 @@ export function SpyGame({
 
   const presentIds = useMemo(() => [...(presentStudentIds || [])], [presentStudentIds]);
   const maxSpies = maxSpyCount(presentStudents.length);
-
   const categoryPairs = useMemo(() => getCategoryPairs(categoryId), [categoryId]);
 
   useEffect(() => {
@@ -131,6 +207,7 @@ export function SpyGame({
   const joinedIds = useMemo(() => new Set(participants.map((p) => p.id)), [participants]);
   const notJoined = presentStudents.filter((s) => !joinedIds.has(s.id));
   const portalLink = sessionId && selectedClass ? getSpyPortalLink(selectedClass, sessionId) : '';
+  const presentLink = sessionId ? getSpyPresentLink(sessionId) : '';
   const speakerId = getCurrentSpeaker(session);
   const speakerName = participants.find((p) => p.id === speakerId)?.studentName || '';
   const tally = useMemo(() => tallySpyVotes(votes, participants), [votes, participants]);
@@ -170,7 +247,7 @@ export function SpyGame({
       });
       await openSpyLobby(id);
       setSessionId(id);
-    }, 'Đã tạo phòng.');
+    }, 'Đã tạo phòng — học sinh vào một lần, chơi nhiều ván.');
   };
 
   const handleStart = () => {
@@ -181,17 +258,21 @@ export function SpyGame({
     }
     runAction(
       () => startSpyGame(sessionId, { civilianWord: validated.civilian, spyWord: validated.spy }),
-      'Đã bắt đầu — học sinh thấy cụm từ.',
+      'Đã bắt đầu — học sinh thấy cụm từ trên điện thoại.',
     );
   };
 
-  const copyLink = async () => {
+  const copyLink = async (link, label) => {
     try {
-      await navigator.clipboard.writeText(portalLink);
-      toast.success('Đã copy link.');
+      await navigator.clipboard.writeText(link);
+      toast.success(`Đã copy ${label}.`);
     } catch {
       toast.error('Không copy được link.');
     }
+  };
+
+  const openPresentation = () => {
+    if (presentLink) window.open(presentLink, '_blank', 'noopener');
   };
 
   const randomPair = () => {
@@ -204,10 +285,19 @@ export function SpyGame({
     if (idx >= 0) setPairIndex(idx);
   };
 
-  const stageBorder =
-    session?.status === 'reveal'
-      ? 'border-amber-400/80 shadow-[0_0_40px_rgba(251,191,36,0.35)]'
-      : 'border-slate-700/80';
+  const wordPickerProps = {
+    wordMode,
+    setWordMode,
+    categoryId,
+    setCategoryId,
+    pairIndex,
+    setPairIndex,
+    civilianWord,
+    setCivilianWord,
+    spyWord,
+    setSpyWord,
+    onRandomPair: randomPair,
+  };
 
   if (loadingStudents) return <LoadingCatState message="Đang tải học sinh..." />;
   if (!selectedClass) return <SelectClassPrompt title="Chọn lớp ở trên để chơi Truy tìm gián điệp" />;
@@ -226,7 +316,10 @@ export function SpyGame({
 
       {!sessionId && (
         <div className="card space-y-4 p-4">
-          <h3 className="font-semibold text-slate-800 dark:text-slate-100">Thiết lập ván chơi</h3>
+          <h3 className="font-semibold text-slate-800 dark:text-slate-100">Thiết lập phòng chơi</h3>
+          <p className="text-sm text-slate-500">
+            Học sinh vào phòng một lần qua link lớp. Sau mỗi ván bấm &quot;Ván tiếp theo&quot; — không cần vào lại.
+          </p>
           <Field label={`Số gián điệp (tối đa ${maxSpies || 1})`}>
             <Input
               type="number"
@@ -236,55 +329,7 @@ export function SpyGame({
               onChange={(e) => setImpostorCount(Number(e.target.value) || 1)}
             />
           </Field>
-
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant={wordMode === 'bank' ? 'primary' : 'secondary'} size="sm" onClick={() => setWordMode('bank')}>
-              Bộ từ sẵn
-            </Button>
-            <Button type="button" variant={wordMode === 'custom' ? 'primary' : 'secondary'} size="sm" onClick={() => setWordMode('custom')}>
-              Tuỳ chỉnh
-            </Button>
-          </div>
-
-          {wordMode === 'bank' ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Chủ đề">
-                <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-                  {SPY_WORD_CATEGORIES.map((c) => (
-                    <option key={c.id} value={c.id}>{c.label}</option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Cặp từ">
-                <Select value={pairIndex} onChange={(e) => setPairIndex(Number(e.target.value))}>
-                  {categoryPairs.map((pair, index) => (
-                    <option key={`${pair.civilian}-${pair.spy}`} value={index}>
-                      {pair.civilian} / {pair.spy}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <div className="sm:col-span-2">
-                <Button type="button" variant="secondary" size="sm" onClick={randomPair}>
-                  Random cặp từ
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Từ dân thường">
-                <Input value={civilianWord} onChange={(e) => setCivilianWord(e.target.value)} />
-              </Field>
-              <Field label="Từ gián điệp">
-                <Input value={spyWord} onChange={(e) => setSpyWord(e.target.value)} />
-              </Field>
-            </div>
-          )}
-
-          <p className="text-sm text-slate-500">
-            Xem trước: <strong>{civilianWord}</strong> · <strong>{spyWord}</strong>
-          </p>
-
+          <SpyWordPicker {...wordPickerProps} />
           <Button onClick={handleCreate} loading={busy}>
             <Search className="h-4 w-4" />
             Tạo phòng & mở lobby
@@ -294,23 +339,109 @@ export function SpyGame({
 
       {sessionId && session && (
         <>
-          <div className="card flex flex-wrap items-center gap-2 p-3">
-            <Badge tone="brand">{spyStatusLabel(session.status)}</Badge>
-            <span className="text-sm text-slate-600 dark:text-slate-300">
-              {participants.length} / {presentStudents.length} đã vào
-            </span>
-            {portalLink && (
-              <Button type="button" variant="secondary" size="sm" onClick={copyLink}>
-                <Copy className="h-4 w-4" />
-                Copy link HS
+          <div className="card space-y-3 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone="brand">{spyStatusLabel(session.status)}</Badge>
+              <span className="text-sm text-slate-600 dark:text-slate-300">
+                {participants.length} / {presentStudents.length} trong phòng
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {portalLink && (
+                <Button type="button" variant="secondary" size="sm" onClick={() => copyLink(portalLink, 'link học sinh')}>
+                  <Copy className="h-4 w-4" />
+                  Link HS
+                </Button>
+              )}
+              {presentLink && (
+                <>
+                  <Button type="button" variant="secondary" size="sm" onClick={openPresentation}>
+                    <Monitor className="h-4 w-4" />
+                    Màn trình chiếu
+                  </Button>
+                  <Button type="button" variant="secondary" size="sm" onClick={() => copyLink(presentLink, 'link trình chiếu')}>
+                    <ExternalLink className="h-4 w-4" />
+                    Copy trình chiếu
+                  </Button>
+                </>
+              )}
+            </div>
+
+            <p className="text-xs text-slate-500">
+              Mở <strong>Màn trình chiếu</strong> trên TV/máy chiếu — học sinh không thấy từ khóa. Điều khiển ván ở màn hình này.
+            </p>
+
+            <div className="flex flex-wrap gap-2 border-t border-slate-200 pt-3 dark:border-slate-700">
+              {session.status === 'describe' && (
+                <>
+                  <Button size="sm" onClick={() => runAction(() => advanceSpyDescribe(sessionId))} loading={busy}>
+                    <SkipForward className="h-4 w-4" />
+                    Người tiếp theo
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => runAction(() => openSpyVote(sessionId), 'Mở bỏ phiếu')}
+                    loading={busy}
+                  >
+                    <Vote className="h-4 w-4" />
+                    Bỏ phiếu ngay
+                  </Button>
+                </>
+              )}
+              {session.status === 'vote' && (
+                <Button
+                  size="sm"
+                  onClick={() => runAction(
+                    () => revealSpyRound(sessionId, { civilianWord, spyWord }),
+                    'Đã công bố trên màn trình chiếu',
+                  )}
+                  loading={busy}
+                >
+                  Công bố kết quả
+                </Button>
+              )}
+              {(session.status === 'reveal' || session.status === 'finished') && (
+                <>
+                  <Button
+                    size="sm"
+                    onClick={() => runAction(() => restartSpyRound(sessionId), 'Ván mới — học sinh chờ trong phòng')}
+                    loading={busy}
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Ván tiếp theo
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => runAction(() => finishSpySession(sessionId), 'Đã đóng phòng')}
+                    loading={busy}
+                  >
+                    Đóng phòng
+                  </Button>
+                </>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => runAction(() => cancelSpySession(sessionId)).then(() => setSessionId(null))}
+                loading={busy}
+              >
+                <Square className="h-4 w-4" />
+                Huỷ phòng
               </Button>
-            )}
+            </div>
           </div>
+
+          {(session.status === 'lobby' || session.status === 'reveal' || session.status === 'finished') && (
+            <SpyWordPicker {...wordPickerProps} compact />
+          )}
 
           {session.status === 'lobby' && (
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="card p-4">
-                <p className="mb-2 text-sm font-semibold">Đã vào ({participants.length})</p>
+                <p className="mb-2 text-sm font-semibold">Trong phòng ({participants.length})</p>
                 <ul className="space-y-1 text-sm">
                   {participants.map((p) => (
                     <li key={p.id}>{p.studentName}</li>
@@ -328,81 +459,27 @@ export function SpyGame({
               <div className="lg:col-span-2">
                 <Button onClick={handleStart} loading={busy} disabled={participants.length < impostorCount + 2}>
                   <Play className="h-4 w-4" />
-                  Bắt đầu — phát từ cho học sinh
+                  Bắt đầu ván — phát từ cho học sinh
                 </Button>
               </div>
             </div>
           )}
 
-          <GamePresentationShell
-            shellRef={shellRef}
-            presenting={presenting}
-            onTogglePresentation={togglePresentation}
-            stageBorder={stageBorder}
-            toolbar={(
-              <>
-                {session.status === 'describe' && (
-                  <>
-                    <Button size="lg" onClick={() => runAction(() => advanceSpyDescribe(sessionId))} loading={busy}>
-                      <SkipForward className="h-4 w-4" />
-                      {presenting ? 'Tiếp' : 'Người tiếp theo'}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="lg"
-                      onClick={() => runAction(() => openSpyVote(sessionId), 'Mở bỏ phiếu')}
-                      loading={busy}
-                    >
-                      <Vote className="h-4 w-4" />
-                      Bỏ phiếu ngay
-                    </Button>
-                  </>
-                )}
-                {session.status === 'vote' && (
-                  <Button
-                    size="lg"
-                    onClick={() => runAction(
-                      () => revealSpyRound(sessionId, { civilianWord, spyWord }),
-                      'Đã công bố',
-                    )}
-                    loading={busy}
-                  >
-                    Công bố kết quả
-                  </Button>
-                )}
-                {session.status === 'reveal' && (
-                  <Button size="lg" onClick={() => runAction(() => finishSpySession(sessionId), 'Đã kết thúc')} loading={busy}>
-                    Kết thúc ván
-                  </Button>
-                )}
-                <Button
-                  variant="ghost"
-                  size="lg"
-                  onClick={() => runAction(() => cancelSpySession(sessionId)).then(() => setSessionId(null))}
-                  loading={busy}
-                >
-                  <Square className="h-4 w-4" />
-                  Huỷ phòng
-                </Button>
-              </>
-            )}
-          >
+          <div className="card border border-slate-200 p-4 dark:border-slate-700">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Xem trước màn trình chiếu (không hiện từ khóa)
+            </p>
             <SpyStage
               session={session}
               participants={participants}
               votes={votes}
               tally={tally}
               speakerName={speakerName}
-              civilianWord={civilianWord}
-              spyWord={spyWord}
-              presenting={presenting}
+              presenting={false}
+              hideWords
+              spyNames={spyNames}
             />
-            {session.status === 'reveal' && spyNames.length > 0 && (
-              <p className={`mt-4 text-center ${presenting ? 'text-xl text-red-300' : 'text-red-600'}`}>
-                Gián điệp: {spyNames.join(', ')}
-              </p>
-            )}
-          </GamePresentationShell>
+          </div>
         </>
       )}
     </div>
