@@ -20,6 +20,10 @@ function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+function shuffleStudents(students) {
+  return [...students].sort(() => Math.random() - 0.5);
+}
+
 function parseBound(value, fallback) {
   const n = Number.parseInt(String(value).trim(), 10);
   return Number.isFinite(n) ? n : fallback;
@@ -42,6 +46,7 @@ export function NumberGuessGame({
   const [low, setLow] = useState(0);
   const [high, setHigh] = useState(100);
   const [turnIndex, setTurnIndex] = useState(0);
+  const [turnOrder, setTurnOrder] = useState([]);
   const [draftByStudent, setDraftByStudent] = useState({});
   const [lastResultByStudent, setLastResultByStudent] = useState({});
   const [feedback, setFeedback] = useState('');
@@ -75,6 +80,7 @@ export function NumberGuessGame({
     setDraftByStudent({});
     setLastResultByStudent({});
     setTurnIndex(0);
+    setTurnOrder([]);
     setFeedback('');
     setLastGuesser(null);
     setWinner(null);
@@ -88,7 +94,8 @@ export function NumberGuessGame({
   }, [selectedClass, presentStudents]);
 
   const playing = secret !== null;
-  const activeStudent = presentStudents[turnIndex] || null;
+  const roundStudents = playing && turnOrder.length ? turnOrder : presentStudents;
+  const activeStudent = roundStudents[turnIndex] || null;
 
   const rangeSpan = Math.max(high - low, 0);
   const totalSpan = Math.max(roundMax - roundMin, 1);
@@ -116,6 +123,7 @@ export function NumberGuessGame({
     }
 
     const picked = randomInt(min, max);
+    const shuffled = shuffleStudents(presentStudents);
     setSecret(picked);
     setRoundMin(min);
     setRoundMax(max);
@@ -123,6 +131,7 @@ export function NumberGuessGame({
     setHigh(max);
     setDraftByStudent({});
     setLastResultByStudent({});
+    setTurnOrder(shuffled);
     setTurnIndex(0);
     setFeedback('');
     setLastGuesser(null);
@@ -130,7 +139,7 @@ export function NumberGuessGame({
     setHistory([]);
     setWon(false);
     setError('');
-    focusStudentInput(presentStudents[0]?.id);
+    focusStudentInput(shuffled[0]?.id);
   };
 
   const resetAll = () => {
@@ -191,21 +200,15 @@ export function NumberGuessGame({
     setDraftByStudent((prev) => ({ ...prev, [student.id]: '' }));
     setHistory((prev) => [{ ...entry, result }, ...prev]);
 
-    const currentIdx = presentStudents.findIndex((s) => s.id === studentId);
-    const nextIdx = currentIdx >= 0 ? (currentIdx + 1) % presentStudents.length : 0;
+    const nextIdx = (turnIndex + 1) % roundStudents.length;
     setTurnIndex(nextIdx);
-    focusStudentInput(presentStudents[nextIdx]?.id);
+    focusStudentInput(roundStudents[nextIdx]?.id);
   };
 
   const handleRowSubmit = (e, studentId) => {
     e.preventDefault();
+    if (activeStudent?.id !== studentId) return;
     submitGuess(studentId);
-  };
-
-  const selectTurn = (index) => {
-    if (!playing || won) return;
-    setTurnIndex(index);
-    focusStudentInput(presentStudents[index]?.id);
   };
 
   const stageBorder = won
@@ -249,7 +252,7 @@ export function NumberGuessGame({
           </tr>
         </thead>
         <tbody className={dark ? 'divide-y divide-slate-800' : 'divide-y divide-slate-100 dark:divide-slate-800'}>
-          {presentStudents.map((student, index) => {
+          {roundStudents.map((student, index) => {
             const isTurn = playing && !won && index === turnIndex;
             const lastResult = lastResultByStudent[student.id];
             const inputDisabled = !playing || won || !isTurn;
@@ -257,17 +260,12 @@ export function NumberGuessGame({
             return (
               <tr
                 key={student.id}
-                onClick={() => selectTurn(index)}
                 className={`transition ${
                   isTurn
                     ? dark
                       ? 'bg-brand-500/15'
                       : 'bg-brand-50 dark:bg-brand-500/10'
-                    : playing && !won
-                      ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40'
-                      : dark
-                        ? 'hover:bg-slate-800/40'
-                        : ''
+                    : ''
                 }`}
               >
                 <td className={`px-3 py-2 ${dark ? 'text-slate-500' : 'text-slate-400'}`}>{index + 1}</td>
@@ -293,9 +291,6 @@ export function NumberGuessGame({
                           [student.id]: e.target.value,
                         }));
                         if (error) setError('');
-                      }}
-                      onFocus={() => {
-                        if (playing && !won) setTurnIndex(index);
                       }}
                       placeholder={playing && !won ? `${low}–${high}` : '—'}
                       disabled={inputDisabled}
@@ -551,7 +546,7 @@ export function NumberGuessGame({
 
           {!presenting && playing && !won && (
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              Nhập số ở bảng bên dưới — Enter để kiểm tra.
+              Thứ tự lượt đoán được xáo ngẫu nhiên mỗi vòng — nhập số ở bảng bên dưới, Enter để kiểm tra.
             </p>
           )}
 

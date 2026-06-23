@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { CircleDot, Dices, Gift, Hash, Layers, Mountain, Search, Swords } from 'lucide-react';
+import { CircleDot, Gift, Hash, Layers, Mountain, Search, Swords } from 'lucide-react';
 import { AppShell } from '../../ui/components/AppShell.jsx';
 import { SkeletonRows } from '../../ui/components/Skeleton.jsx';
 import { Spinner } from '../../ui/components/Spinner.jsx';
@@ -28,9 +28,6 @@ import {
   FEATURE_WHEEL_OF_FORTUNE_ENABLED,
 } from '../../config/features.js';
 
-const RandomStudentPicker = lazy(() =>
-  import('./games/RandomStudentPicker.jsx').then((m) => ({ default: m.RandomStudentPicker })),
-);
 const NumberGuessGame = lazy(() =>
   import('./games/NumberGuessGame.jsx').then((m) => ({ default: m.NumberGuessGame })),
 );
@@ -52,7 +49,6 @@ const OlympiaGame = lazy(() =>
 );
 
 const BASE_GAMES = [
-  { id: 'random-student', title: 'Quay tên', icon: Dices },
   { id: 'number-guess', title: 'Đoán số', icon: Hash },
   { id: 'card-flip', title: 'Lật bài', icon: Layers },
   { id: 'mystery-box', title: 'Hộp bí ẩn', icon: Gift },
@@ -72,7 +68,6 @@ const OLYMPIA_GAME = { id: 'olympia', title: 'Olympia Python', icon: Mountain };
 const GAMES = FEATURE_OLYMPIA_ENABLED ? [...BASE_GAMES, OLYMPIA_GAME] : BASE_GAMES;
 
 const GAMES_WITH_ATTENDANCE = new Set([
-  'random-student',
   'number-guess',
   'card-flip',
   'mystery-box',
@@ -113,7 +108,7 @@ export function MiniGamesPage() {
   const [classes, setClasses] = useState([]);
   const [programs, setPrograms] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeGame, setActiveGame] = useState('random-student');
+  const [activeGame, setActiveGame] = useState('number-guess');
   const [selectedClass, setSelectedClass] = useState('');
   const [students, setStudents] = useState([]);
   const [presentStudentIds, setPresentStudentIds] = useState(() => new Set());
@@ -306,11 +301,6 @@ export function MiniGamesPage() {
             </>
           )}
 
-          {activeGame === 'random-student' && (
-            <GameSuspense label="Đang tải Quay tên...">
-              <RandomStudentPicker {...gameProps} />
-            </GameSuspense>
-          )}
           {activeGame === 'number-guess' && (
             <GameSuspense label="Đang tải Đoán số...">
               <NumberGuessGame {...gameProps} />
