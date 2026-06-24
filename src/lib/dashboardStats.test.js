@@ -26,6 +26,7 @@ describe('computeDashboardStats', () => {
     expect(stats.activeClasses).toBe(1);
     expect(stats.activeStudents).toBe(2);
     expect(stats.needsHelp).toBe(1);
+    expect(stats.completedCourse).toBe(1);
     expect(stats.alumniStudents).toBe(1);
   });
 });

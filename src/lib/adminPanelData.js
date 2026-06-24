@@ -84,16 +84,8 @@ export async function loadPracticePanelSnapshot(classCodes, { force = false } = 
 
 export async function loadDashboardOpsSnapshot({ force = false } = {}) {
   const base = await fetchAdminBaseData({ force });
-  const activeClasses = base.classes.filter((c) => c.status === 'active');
-  const classCodes = activeClasses.map((c) => c.classCode);
-  const [quizSubmissions, feedbackByClass] = await Promise.all([
-    mergeByClass(classCodes, listStudentQuizSubmissions),
-    loadFeedbackByClassCodes(classCodes, { force }),
-  ]);
   return {
     classes: base.classes,
     students: base.students,
-    quizSubmissions,
-    feedbackByClass,
   };
 }

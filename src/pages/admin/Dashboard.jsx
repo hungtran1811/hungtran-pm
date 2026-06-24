@@ -4,7 +4,6 @@ import {
   School,
   Users,
   AlertTriangle,
-  Target,
   BarChart3,
   ClipboardList,
   ChevronRight,
@@ -22,19 +21,12 @@ import { Button } from '../../ui/components/Button.jsx';
 import { Badge } from '../../ui/components/Badge.jsx';
 import { Field, Input, Select } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
-import { setClassCurrentSession } from '../../services/classes.service.js';
+import { CURRICULUM_PHASES, CURRICULUM_PHASE_LABELS } from '../../constants/index.js';
+import { setClassCurriculumQuick } from '../../services/classes.service.js';
 import { invalidateAdminDataCache } from '../../lib/adminDataCache.js';
 import { loadDashboardOpsSnapshot } from '../../lib/adminPanelData.js';
-import { buildDashboardTodayItems } from '../../lib/adminDashboardOps.js';
 import { computeDashboardStats } from '../../lib/dashboardStats.js';
-import { QuizClassReport } from '../../ui/components/QuizClassReport.jsx';
 import { getErrorMessage } from '../../lib/firestore.js';
-
-const TONE_BADGE = {
-  amber: 'amber',
-  red: 'red',
-  brand: 'brand',
-};
 
 function formatLoadedAt(date) {
   if (!date) return '';
@@ -80,12 +72,14 @@ function SessionQuickSet({ classes, onUpdated }) {
   );
   const [classCode, setClassCode] = useState('');
   const [session, setSession] = useState('0');
+  const [phase, setPhase] = useState('learning');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!activeClasses.length) {
       setClassCode('');
       setSession('0');
+      setPhase('learning');
       return;
     }
     const current = activeClasses.find((c) => c.classCode === classCode);
@@ -93,6 +87,7 @@ function SessionQuickSet({ classes, onUpdated }) {
       const first = activeClasses[0];
       setClassCode(first.classCode);
       setSession(String(first.curriculumCurrentSession ?? 0));
+      setPhase(first.curriculumPhase === 'final' ? 'final' : 'learning');
     }
   }, [activeClasses, classCode]);
 
@@ -102,6 +97,7 @@ function SessionQuickSet({ classes, onUpdated }) {
     setClassCode(code);
     const cls = activeClasses.find((c) => c.classCode === code);
     setSession(String(cls?.curriculumCurrentSession ?? 0));
+    setPhase(cls?.curriculumPhase === 'final' ? 'final' : 'learning');
   };
 
   const handleSave = async () => {
@@ -109,9 +105,12 @@ function SessionQuickSet({ classes, onUpdated }) {
     setSaving(true);
     try {
       const num = Number(session);
-      await setClassCurrentSession(classCode, num);
-      onUpdated(classCode, num);
-      toast.success(`Đã mở buổi ${num} cho lớp ${classCode}.`);
+      await setClassCurriculumQuick(classCode, {
+        sessionNumber: num,
+        curriculumPhase: phase,
+      });
+      onUpdated(classCode, { session: num, phase });
+      toast.success(`Đã cập nhật lớp ${classCode}: buổi ${num}, ${CURRICULUM_PHASE_LABELS[phase]}.`);
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -129,17 +128,20 @@ function SessionQuickSet({ classes, onUpdated }) {
             <CalendarDays className="h-5 w-5" />
           </span>
           <div>
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Mở buổi học</h2>
-            <p className="text-sm text-slate-500">Cập nhật buổi hiện tại để HS thấy bài & quiz đúng phiên.</p>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Buổi & giai đoạn lớp</h2>
+            <p className="text-sm text-slate-500">Chỉnh nhanh buổi hiện tại và giai đoạn học / cuối khóa.</p>
           </div>
         </div>
         {selected && (
-          <Badge tone="brand">
-            Đang mở: buổi {selected.curriculumCurrentSession ?? 0}
-          </Badge>
+          <div className="flex flex-wrap gap-2">
+            <Badge tone="brand">Buổi {selected.curriculumCurrentSession ?? 0}</Badge>
+            <Badge tone="slate">
+              {CURRICULUM_PHASE_LABELS[selected.curriculumPhase] || selected.curriculumPhase}
+            </Badge>
+          </div>
         )}
       </div>
-      <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto] sm:items-end">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_auto_auto_auto] lg:items-end">
         <Field label="Lớp">
           <Select value={classCode} onChange={(e) => handleClassChange(e.target.value)}>
             {activeClasses.map((c) => (
@@ -147,6 +149,13 @@ function SessionQuickSet({ classes, onUpdated }) {
                 {c.classCode}
                 {c.className ? ` · ${c.className}` : ''}
               </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Giai đoạn">
+          <Select value={phase} onChange={(e) => setPhase(e.target.value)}>
+            {CURRICULUM_PHASES.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
             ))}
           </Select>
         </Field>
@@ -160,8 +169,8 @@ function SessionQuickSet({ classes, onUpdated }) {
             className="w-28"
           />
         </Field>
-        <Button onClick={handleSave} loading={saving} className="sm:mb-0.5">
-          Lưu buổi
+        <Button onClick={handleSave} loading={saving} className="lg:mb-0.5">
+          Lưu
         </Button>
       </div>
     </section>
@@ -172,20 +181,15 @@ export function DashboardPage() {
   const toast = useToast();
   const [classes, setClasses] = useState([]);
   const [students, setStudents] = useState([]);
-  const [quizSubmissions, setQuizSubmissions] = useState([]);
-  const [feedbackByClass, setFeedbackByClass] = useState({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadedAt, setLoadedAt] = useState(null);
-  const [quizReportClass, setQuizReportClass] = useState('');
 
   const loadDashboard = useCallback(async (force = false) => {
     try {
       const ops = await loadDashboardOpsSnapshot({ force });
       setClasses(ops.classes);
       setStudents(ops.students);
-      setQuizSubmissions(ops.quizSubmissions);
-      setFeedbackByClass(ops.feedbackByClass || {});
       setLoadedAt(new Date());
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -199,30 +203,9 @@ export function DashboardPage() {
     loadDashboard();
   }, [loadDashboard]);
 
-  useEffect(() => {
-    const active = classes.filter((c) => c.status === 'active');
-    if (!active.length) {
-      setQuizReportClass('');
-      return;
-    }
-    setQuizReportClass((prev) =>
-      prev && active.some((c) => c.classCode === prev) ? prev : active[0].classCode,
-    );
-  }, [classes]);
-
   const stats = useMemo(
     () => computeDashboardStats(classes, students),
     [classes, students],
-  );
-
-  const todayItems = useMemo(
-    () => buildDashboardTodayItems({ classes, students, feedbackByClass, quizSubmissions }),
-    [classes, students, feedbackByClass, quizSubmissions],
-  );
-
-  const activeClasses = useMemo(
-    () => classes.filter((c) => c.status === 'active'),
-    [classes],
   );
 
   const studentHint = stats.enrolledOnClassDocs !== stats.activeStudents
@@ -245,12 +228,10 @@ export function DashboardPage() {
       ) : (
         <div className="space-y-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                Số liệu theo lớp đang vận hành
-                {loadedAt ? ` · Cập nhật ${formatLoadedAt(loadedAt)}` : ''}
-              </p>
-            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Số liệu theo lớp đang vận hành
+              {loadedAt ? ` · Cập nhật ${formatLoadedAt(loadedAt)}` : ''}
+            </p>
             <Button variant="secondary" size="sm" onClick={handleRefresh} loading={refreshing}>
               <RefreshCw className="h-4 w-4" />
               Làm mới
@@ -279,128 +260,78 @@ export function DashboardPage() {
               icon={<AlertTriangle className="h-5 w-5" />}
             />
             <StatCard
-              label="Gần hoàn thành"
-              value={stats.nearlyDone}
-              hint={`${stats.completedInActive} đã hoàn thành SP · ${stats.alumniStudents} HS lớp cũ`}
-              tone="amber"
-              icon={<Target className="h-5 w-5" />}
+              label="Đã hoàn thành khóa"
+              value={stats.completedCourse}
+              hint={`${stats.alumniStudents} HS thuộc lớp đã kết thúc`}
+              tone="green"
+              icon={<GraduationCap className="h-5 w-5" />}
             />
           </div>
 
           <SessionQuickSet
             classes={classes}
-            onUpdated={(code, session) => {
+            onUpdated={(code, { session, phase }) => {
               invalidateAdminDataCache();
               setClasses((prev) =>
                 prev.map((c) =>
-                  c.classCode === code ? { ...c, curriculumCurrentSession: session } : c,
+                  c.classCode === code
+                    ? { ...c, curriculumCurrentSession: session, curriculumPhase: phase }
+                    : c,
                 ),
               );
             }}
           />
 
-          <div className="grid gap-6 lg:grid-cols-5">
-            <section className="lg:col-span-2">
-              <h2 className="mb-3 text-lg font-semibold text-slate-800 dark:text-slate-100">
-                Việc cần chú ý
-              </h2>
-              <div className="card divide-y divide-slate-100 dark:divide-slate-800">
-                {todayItems.length === 0 ? (
-                  <p className="p-4 text-sm text-slate-500">
-                    Không có việc gấp — phản hồi buổi học và quiz đều ổn.
-                  </p>
-                ) : (
-                  todayItems.map((item) => (
-                    <Link
-                      key={item.id}
-                      to={item.to}
-                      className="flex items-center gap-3 p-4 transition hover:bg-slate-50 dark:hover:bg-slate-800/50"
-                    >
-                      <Badge tone={TONE_BADGE[item.tone] || 'slate'} className="shrink-0">
-                        {item.tone === 'red' ? '!' : item.tone === 'amber' ? '?' : '✓'}
-                      </Badge>
-                      <span className="min-w-0 flex-1 text-sm font-medium text-slate-700 dark:text-slate-200">
-                        {item.label}
-                      </span>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" />
-                    </Link>
-                  ))
-                )}
-              </div>
-            </section>
-
-            <section className="lg:col-span-3">
-              <h2 className="mb-3 text-lg font-semibold text-slate-800 dark:text-slate-100">
-                Thao tác nhanh
-              </h2>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <QuickAction
-                  to="/admin/classes"
-                  icon={<School className="h-6 w-6" />}
-                  title="Quản lý lớp"
-                  description="Danh sách lớp, chương trình, trạng thái buổi học."
-                  emphasis
-                />
-                <QuickAction
-                  to="/admin/reports"
-                  icon={<ClipboardList className="h-6 w-6" />}
-                  title="Báo cáo học sinh"
-                  description="Phản hồi buổi học, tiến độ cuối khóa, HS chưa nộp."
-                />
-                <QuickAction
-                  to="/admin/scores"
-                  icon={<GraduationCap className="h-6 w-6" />}
-                  title="Chấm điểm"
-                  description="Quiz, ôn tập, Olympia — xem điểm theo lớp & buổi."
-                />
-                <QuickAction
-                  to="/admin/games"
-                  icon={<Gamepad2 className="h-6 w-6" />}
-                  title="Mini game"
-                  description="Điểm danh có mặt, đoán số, gián điệp, showdown."
-                />
-                <QuickAction
-                  to="/admin/students"
-                  icon={<UserRound className="h-6 w-6" />}
-                  title="Học sinh"
-                  description="Thêm, sửa hồ sơ và trạng thái dự án."
-                />
-                <QuickAction
-                  to="/admin/lessons"
-                  icon={<BookOpen className="h-6 w-6" />}
-                  title="Bài giảng"
-                  description="Nội dung buổi, quiz và bài tập thực hành."
-                />
-                <QuickAction
-                  to="/admin/analytics"
-                  icon={<BarChart3 className="h-6 w-6" />}
-                  title="Thống kê"
-                  description="Biểu đồ tiến độ, hiểu bài và so sánh lớp."
-                />
-              </div>
-            </section>
-          </div>
-
-          {activeClasses.length > 0 && (
-            <section>
-              <div className="mb-3">
-                <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
-                  Báo cáo quiz
-                </h2>
-                <p className="mt-0.5 text-sm text-slate-500">
-                  Điểm trung bình lớp, câu làm đúng nhiều và câu sai nhiều (buổi hiện tại).
-                </p>
-              </div>
-              <div className="card p-4 sm:p-5">
-                <QuizClassReport
-                  submissions={quizSubmissions}
-                  classes={activeClasses}
-                  classCode={quizReportClass}
-                  onClassChange={setQuizReportClass}
-                />
-              </div>
-            </section>
-          )}
+          <section>
+            <h2 className="mb-3 text-lg font-semibold text-slate-800 dark:text-slate-100">
+              Thao tác nhanh
+            </h2>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <QuickAction
+                to="/admin/classes"
+                icon={<School className="h-6 w-6" />}
+                title="Quản lý lớp"
+                description="Danh sách lớp, chương trình, trạng thái buổi học."
+                emphasis
+              />
+              <QuickAction
+                to="/admin/reports"
+                icon={<ClipboardList className="h-6 w-6" />}
+                title="Báo cáo học sinh"
+                description="Phản hồi buổi học, tiến độ cuối khóa, HS chưa nộp."
+              />
+              <QuickAction
+                to="/admin/scores"
+                icon={<GraduationCap className="h-6 w-6" />}
+                title="Chấm điểm"
+                description="Quiz, ôn tập, Olympia — xem điểm theo lớp & buổi."
+              />
+              <QuickAction
+                to="/admin/games"
+                icon={<Gamepad2 className="h-6 w-6" />}
+                title="Mini game"
+                description="Điểm danh có mặt, đoán số, gián điệp, showdown."
+              />
+              <QuickAction
+                to="/admin/students"
+                icon={<UserRound className="h-6 w-6" />}
+                title="Học sinh"
+                description="Thêm, sửa hồ sơ và trạng thái dự án."
+              />
+              <QuickAction
+                to="/admin/lessons"
+                icon={<BookOpen className="h-6 w-6" />}
+                title="Bài giảng"
+                description="Nội dung buổi, quiz và bài tập thực hành."
+              />
+              <QuickAction
+                to="/admin/analytics"
+                icon={<BarChart3 className="h-6 w-6" />}
+                title="Thống kê"
+                description="Biểu đồ tiến độ, hiểu bài và so sánh lớp."
+              />
+            </div>
+          </section>
         </div>
       )}
     </AppShell>

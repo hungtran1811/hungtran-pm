@@ -149,6 +149,17 @@ export async function setClassCurrentSession(classCode, sessionNumber) {
   });
 }
 
+export async function setClassCurriculumQuick(classCode, { sessionNumber, curriculumPhase }) {
+  const patch = { updatedAt: serverTimestamp() };
+  if (sessionNumber !== undefined && sessionNumber !== null) {
+    patch.curriculumCurrentSession = Number(sessionNumber);
+  }
+  if (curriculumPhase === 'learning' || curriculumPhase === 'final') {
+    patch.curriculumPhase = curriculumPhase;
+  }
+  await updateDoc(doc(db, 'classes', classCode), patch);
+}
+
 export async function setClassStatus(classCode, status, previousStatus = 'active') {
   const patch = {
     status,

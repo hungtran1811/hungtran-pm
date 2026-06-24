@@ -21,6 +21,14 @@ export function computeDashboardStats(classes = [], students = []) {
     (s) => s.active && archivedCodes.has(studentClassCode(s)),
   ).length;
 
+  const finishedClassCodes = archivedCodes;
+
+  const completedCourse = students.filter(
+    (s) =>
+      s.active &&
+      (s.currentStatus === 'Hoàn thành' || finishedClassCodes.has(studentClassCode(s))),
+  ).length;
+
   const enrolledOnClassDocs = activeClasses.reduce(
     (sum, c) => sum + Number(c.studentCount || 0),
     0,
@@ -32,9 +40,8 @@ export function computeDashboardStats(classes = [], students = []) {
     archivedClasses: archivedCodes.size,
     activeStudents: activeStudents.length,
     enrolledOnClassDocs,
-    nearlyDone: activeStudents.filter((s) => s.currentStatus === 'Gần hoàn thành').length,
     needsHelp: activeStudents.filter((s) => s.currentStatus === 'Cần hỗ trợ').length,
-    completedInActive: activeStudents.filter((s) => s.currentStatus === 'Hoàn thành').length,
+    completedCourse,
     alumniStudents,
   };
 }
