@@ -6,7 +6,6 @@ import { EmptyState } from '../../ui/components/EmptyState.jsx';
 import { SelectClassPrompt, LoadingCatState } from '../../ui/components/WaitingCatIllustration.jsx';
 import { ClassFilterBar } from '../../ui/components/ClassFilterBar.jsx';
 import { Select, Input } from '../../ui/components/Field.jsx';
-import { QuizClassReport } from '../../ui/components/QuizClassReport.jsx';
 import { QuizClassScoreboard } from '../../ui/components/QuizClassScoreboard.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { ALL_CLASSES_VALUE, buildClassesByCode, resolveScopedClasses } from '../../lib/classFilterScope.js';
@@ -76,9 +75,6 @@ export function QuizPanel({
         : sessionNumbersUpToCurrent(selectedClassDoc),
     [isAllClasses, scopedClasses, selectedClassDoc],
   );
-
-  const reportSessionNum =
-    sessionFilter && sessionFilter !== ALL_SESSIONS_VALUE ? Number(sessionFilter) : null;
 
   const sessionLabel =
     sessionFilter && sessionFilter !== ALL_SESSIONS_VALUE ? `buổi ${sessionFilter}` : null;
@@ -257,23 +253,13 @@ export function QuizPanel({
           ) : loading ? (
             <LoadingCatState message="Đang tải điểm quiz..." />
           ) : (
-            <div className="space-y-6">
-              <QuizClassReport
-                submissions={submissions}
-                classes={poolClasses}
-                classCode={selectedClass}
-                sessionNumber={reportSessionNum}
-                showClassPicker={false}
-                linkToScores={false}
-              />
-              <QuizClassScoreboard
-                rows={scoreRows}
-                classCode={selectedClass}
-                sessionLabel={sessionLabel}
-                onResetRow={openResetDialog}
-                resettingId={resettingId}
-              />
-            </div>
+            <QuizClassScoreboard
+              rows={scoreRows}
+              classCode={selectedClass}
+              sessionLabel={sessionLabel}
+              onResetRow={openResetDialog}
+              resettingId={resettingId}
+            />
           )}
         </>
       )}

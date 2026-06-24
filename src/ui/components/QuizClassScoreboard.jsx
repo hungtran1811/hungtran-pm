@@ -3,8 +3,6 @@ import { RotateCcw } from 'lucide-react';
 import { Badge } from './Badge.jsx';
 import { Button } from './Button.jsx';
 import { EmptyState } from './EmptyState.jsx';
-import { ProgressMiniBar } from './SubmissionDisplay.jsx';
-import { formatDateTime } from '../../lib/firestore.js';
 import { scoreTone } from '../../lib/quizAdminScores.js';
 
 export function QuizClassScoreboard({
@@ -73,10 +71,7 @@ export function QuizClassScoreboard({
         <h3 className="font-semibold text-slate-800 dark:text-slate-100">
           Bảng điểm quiz {classCode ? `· ${classCode}` : ''}
         </h3>
-        <p className="mt-0.5 text-xs text-slate-500">
-          Tự chấm: trắc nghiệm + code khớp đáp án mẫu trong đề.
-          {onResetRow && ' · Reset để học sinh làm lại khi có lỗi.'}
-        </p>
+        {sessionLabel && <p className="mt-0.5 text-xs text-slate-500">{sessionLabel}</p>}
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
@@ -85,9 +80,6 @@ export function QuizClassScoreboard({
               <th className="px-4 py-2.5">Học sinh</th>
               <th className="px-4 py-2.5">Buổi</th>
               <th className="px-4 py-2.5">Điểm</th>
-              <th className="hidden px-4 py-2.5 sm:table-cell">Tiến độ</th>
-              <th className="hidden px-4 py-2.5 md:table-cell">Nộp lúc</th>
-              <th className="px-4 py-2.5">Ghi chú</th>
               {onResetRow && <th className="px-4 py-2.5 text-right">Thao tác</th>}
             </tr>
           </thead>
@@ -100,16 +92,9 @@ export function QuizClassScoreboard({
                 <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{row.sessionNumber}</td>
                 <td className="px-4 py-3">
                   <Badge tone={scoreTone(row.score.percent)}>
-                    {row.score.correct}/{row.score.total} ({row.score.percent}%)
+                    {row.score.correct}/{row.score.total}
                   </Badge>
                 </td>
-                <td className="hidden px-4 py-3 sm:table-cell">
-                  <ProgressMiniBar percent={row.score.percent} className="max-w-[8rem]" />
-                </td>
-                <td className="hidden px-4 py-3 text-xs text-slate-500 md:table-cell">
-                  {row.submittedAt ? formatDateTime(row.submittedAt) : '—'}
-                </td>
-                <td className="px-4 py-3 text-xs text-slate-500">Lần {row.attemptNumber}</td>
                 {onResetRow && (
                   <td className="px-4 py-3 text-right">
                     <Button

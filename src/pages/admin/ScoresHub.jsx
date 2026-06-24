@@ -98,7 +98,15 @@ export function ScoresHubPage() {
             onSessionFilterChange={handleSessionChange}
           />
         )}
-        {tab === 'practice' && <PracticePanel activeOnly />}
+        {tab === 'practice' && (
+          <PracticePanel
+            activeOnly
+            selectedClass={selectedClass}
+            onSelectedClassChange={handleClassChange}
+            sessionFilter={sessionFilter}
+            onSessionFilterChange={handleSessionChange}
+          />
+        )}
       </div>
     </AppShell>
   );
