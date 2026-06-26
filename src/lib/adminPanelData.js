@@ -12,7 +12,7 @@ async function mergeByClass(classCodes, loadFn) {
 }
 
 let feedbackCache = null;
-const FEEDBACK_CACHE_TTL_MS = 90_000;
+export const FEEDBACK_CACHE_TTL_MS = 90_000;
 
 export function invalidateAdminSnapshots() {
   invalidateAdminDataCache();

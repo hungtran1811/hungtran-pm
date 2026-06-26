@@ -4,6 +4,8 @@ import { Button } from '../../../ui/components/Button.jsx';
 import { EmptyState } from '../../../ui/components/EmptyState.jsx';
 import { SelectClassPrompt, LoadingCatState } from '../../../ui/components/WaitingCatIllustration.jsx';
 import { GameConfetti } from '../../../ui/components/games/GameConfetti.jsx';
+import { GameSoundToggle } from '../../../ui/components/games/GameSoundToggle.jsx';
+import { useGameSound } from '../../../hooks/useGameSound.js';
 import { GamePresentationShell, useGamePresentation } from './GamePresentationShell.jsx';
 
 function shuffleArray(items) {
@@ -139,6 +141,7 @@ export function CardFlipGame({
   const [phase, setPhase] = useState('idle');
   const cancelPickRef = useRef(null);
   const { shellRef, presenting, togglePresentation } = useGamePresentation();
+  const sound = useGameSound();
 
   const activeClasses = useMemo(
     () => classes.filter((c) => c.status === 'active'),
@@ -152,7 +155,10 @@ export function CardFlipGame({
     setPhase('idle');
   }, [selectedClass, presentStudents]);
 
-  useEffect(() => () => cancelPickRef.current?.(), []);
+  useEffect(() => () => {
+    cancelPickRef.current?.();
+    sound.stop('spin');
+  }, [sound]);
 
   const remaining = useMemo(() => deck.filter((c) => !c.flipped), [deck]);
   const flippedCount = deck.length - remaining.length;
@@ -173,6 +179,7 @@ export function CardFlipGame({
 
   const flipCard = useCallback((key, { force = false } = {}) => {
     if (!force && phase === 'picking') return;
+    if (!force) sound.play('reveal');
     const flippedAt = Date.now();
     setDeck((prev) => {
       const card = prev.find((c) => c.key === key);
@@ -183,7 +190,7 @@ export function CardFlipGame({
     });
     setLastRevealedKey(key);
     setHighlightKey(null);
-  }, [phase]);
+  }, [phase, sound]);
 
   const shuffleDeck = () => {
     if (phase === 'picking') return;
@@ -212,14 +219,18 @@ export function CardFlipGame({
     const pool = remaining.map((c) => c.key);
     setPhase('picking');
     setLastRevealedKey(null);
+    sound.enableSound();
+    sound.playLoop('spin');
 
     cancelPickRef.current = runFlipPickAnimation(
       pool,
       (key) => setHighlightKey(key),
       (winnerKey) => {
         setHighlightKey(winnerKey);
+        sound.stop('spin');
         setTimeout(() => {
           flipCard(winnerKey, { force: true });
+          sound.play('win');
           setPhase('idle');
           cancelPickRef.current = null;
         }, 420);
@@ -281,6 +292,13 @@ export function CardFlipGame({
             stageMinHeight="min-h-[360px]"
             toolbar={(
               <>
+                <GameSoundToggle
+                  muted={sound.muted}
+                  onToggle={sound.toggleMuted}
+                  onUnlock={sound.unlock}
+                  onTestSound={() => sound.play('tap')}
+                  presenting={presenting}
+                />
                 <Button
                   size={presenting ? 'lg' : 'default'}
                   onClick={flipRandom}

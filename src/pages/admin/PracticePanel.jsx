@@ -20,8 +20,11 @@ import {
   sessionNumbersUpToCurrent,
 } from '../../lib/sessionScope.js';
 
+import { useSettings } from '../../state/settings.store.jsx';
+
 function PracticeSubmissionCard({ sub, expanded, onToggle, onReset }) {
-  const scoreTone = sub.mcqPercent >= 80 ? 'green' : sub.mcqPercent >= 50 ? 'amber' : 'red';
+  const { scoreTone } = useSettings();
+  const tone = scoreTone(sub.mcqPercent);
 
   return (
     <div className="card overflow-hidden">
@@ -47,7 +50,7 @@ function PracticeSubmissionCard({ sub, expanded, onToggle, onReset }) {
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
           <Badge tone="blue">Lần {sub.attemptCount}</Badge>
           {sub.mcqTotal > 0 && (
-            <Badge tone={scoreTone}>
+            <Badge tone={tone}>
               {sub.mcqCorrect}/{sub.mcqTotal}
             </Badge>
           )}

@@ -6,8 +6,8 @@ import { PanelSummaryGrid, PanelSummaryStat, ProgressMiniBar } from './Submissio
 import {
   buildClassQuizQuestionStats,
   buildClassQuizScoreRows,
-  scoreTone,
 } from '../../lib/quizAdminScores.js';
+import { useSettings } from '../../state/settings.store.jsx';
 
 function QuestionStatList({ title, items, tone = 'slate', emptyText }) {
   return (
@@ -48,6 +48,7 @@ export function QuizClassReport({
   showScoreTable = false,
   linkToScores = true,
 }) {
+  const { scoreTone } = useSettings();
   const selectedClass = classes.find((c) => c.classCode === classCode);
   const session =
     sessionNumber != null && sessionNumber !== ''

@@ -31,7 +31,8 @@ import { markAllStudentsCompletedForClass } from '../../services/students.servic
 import { listCurriculumPrograms } from '../../services/curriculum.service.js';
 import { loadFeedbackByClassCodes } from '../../lib/adminPanelData.js';
 import { averageUnderstanding } from '../../lib/classAnalytics.js';
-import { UnderstandingDots, understandingTone } from '../../ui/components/SubmissionDisplay.jsx';
+import { UnderstandingDots } from '../../ui/components/SubmissionDisplay.jsx';
+import { useSettings } from '../../state/settings.store.jsx';
 import { getErrorMessage } from '../../lib/firestore.js';
 import { filterClassesBySubject, subjectsWithClasses } from '../../lib/subjectGroups.js';
 import { CodeSubmissionsPurgePanel } from '../../ui/components/CodeSubmissionsPurgePanel.jsx';
@@ -324,6 +325,7 @@ function ClassCard({
 }) {
   const archived = cls.status !== 'active';
   const toast = useToast();
+  const { understandingTone } = useSettings();
   const program = programs.find((p) => p.id === cls.curriculumProgramId);
   const studentLink = `${window.location.origin}/c/${encodeURIComponent(cls.classCode)}`;
 
@@ -373,13 +375,13 @@ function ClassCard({
               <>
                 <span
                   className={`text-sm font-semibold tabular-nums ${
-                    understandingTone(Math.round(avgUnderstanding)) === 'green'
-                      ? 'text-emerald-600 dark:text-emerald-400'
-                      : understandingTone(Math.round(avgUnderstanding)) === 'amber'
-                        ? 'text-amber-600 dark:text-amber-400'
-                        : understandingTone(Math.round(avgUnderstanding)) === 'red'
-                          ? 'text-red-600 dark:text-red-400'
-                          : 'text-slate-700 dark:text-slate-200'
+                    (() => {
+                      const tone = understandingTone(Math.round(avgUnderstanding));
+                      if (tone === 'green') return 'text-emerald-600 dark:text-emerald-400';
+                      if (tone === 'amber') return 'text-amber-600 dark:text-amber-400';
+                      if (tone === 'red') return 'text-red-600 dark:text-red-400';
+                      return 'text-slate-700 dark:text-slate-200';
+                    })()
                   }`}
                 >
                   {avgUnderstanding}/5

@@ -31,6 +31,7 @@ import {
   formatKnowledgeFeedback,
 } from '../../utils/exportText.js';
 import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
+import { useSettings } from '../../state/settings.store.jsx';
 import {
   ALL_SESSIONS_VALUE,
   filterBySessionScope,
@@ -39,13 +40,6 @@ import {
   sessionNumbersUpToCurrent,
   sessionNumbersUpToCurrentMulti,
 } from '../../lib/sessionScope.js';
-
-function summaryToneForAvg(avg) {
-  if (avg == null) return 'slate';
-  if (avg >= 4) return 'green';
-  if (avg >= 3) return 'amber';
-  return 'red';
-}
 
 export function FeedbackPanel({
   selectedClass: selectedClassProp,
@@ -56,6 +50,7 @@ export function FeedbackPanel({
   onSessionFilterChange,
 }) {
   const toast = useToast();
+  const { understandingTone } = useSettings();
   const [searchParams] = useSearchParams();
   const [classes, setClasses] = useState([]);
   const [students, setStudents] = useState([]);
@@ -345,7 +340,7 @@ export function FeedbackPanel({
                 <PanelSummaryStat
                   label="Mức hiểu trung bình"
                   value={`${avgLevel}/5`}
-                  tone={summaryToneForAvg(Number(avgLevel))}
+                  tone={understandingTone(Number(avgLevel))}
                 />
               )}
               {missingCount > 0 && (

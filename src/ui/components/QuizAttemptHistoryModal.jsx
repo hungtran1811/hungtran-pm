@@ -5,6 +5,7 @@ import { Button } from './Button.jsx';
 import { EmptyState } from './EmptyState.jsx';
 import { countPendingCodeGrades } from '../../services/quiz.service.js';
 import { formatDateTime } from '../../lib/firestore.js';
+import { useSettings } from '../../state/settings.store.jsx';
 
 function formatDuration(seconds) {
   const m = Math.floor(seconds / 60);
@@ -93,6 +94,7 @@ export function QuizAttemptHistoryModal({
   actionLoading,
   onClose,
 }) {
+  const { scoreTone } = useSettings();
   const sorted = [...attempts].sort((a, b) => (b.attemptNumber ?? 0) - (a.attemptNumber ?? 0));
   const maxAttempts = sorted[0]?.maxAttempts || sorted.length;
 
@@ -143,23 +145,11 @@ export function QuizAttemptHistoryModal({
                     {sub.timedOut && <Badge tone="amber">Hết giờ</Badge>}
                     {pending > 0 && <Badge tone="amber">{pending} code chờ</Badge>}
                     {sub.gradedTotal > 0 ? (
-                      <Badge
-                        tone={
-                          sub.gradedPercent >= 80
-                            ? 'green'
-                            : sub.gradedPercent >= 50
-                              ? 'amber'
-                              : 'red'
-                        }
-                      >
+                      <Badge tone={scoreTone(sub.gradedPercent)}>
                         {sub.gradedCorrect}/{sub.gradedTotal} ({sub.gradedPercent}%)
                       </Badge>
                     ) : sub.mcqTotal > 0 ? (
-                      <Badge
-                        tone={
-                          sub.mcqPercent >= 80 ? 'green' : sub.mcqPercent >= 50 ? 'amber' : 'red'
-                        }
-                      >
+                      <Badge tone={scoreTone(sub.mcqPercent)}>
                         TN: {sub.mcqCorrect}/{sub.mcqTotal} ({sub.mcqPercent}%)
                       </Badge>
                     ) : null}

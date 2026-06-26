@@ -2,16 +2,16 @@ import { Copy, History, RotateCcw } from 'lucide-react';
 import { Badge } from './Badge.jsx';
 import { Button } from './Button.jsx';
 import { UNDERSTANDING_LEVELS } from '../../constants/index.js';
+import { computeUnderstandingTone, DEFAULT_SCORING } from '../../lib/scoringThresholds.js';
+import { useSettings } from '../../state/settings.store.jsx';
 
 const UNDERSTANDING_LABELS = UNDERSTANDING_LEVELS.reduce((acc, item) => {
   acc[item.value] = item.label;
   return acc;
 }, {});
 
-const LEVEL_TONES = { 1: 'red', 2: 'red', 3: 'amber', 4: 'green', 5: 'green' };
-
 export function understandingTone(level) {
-  return LEVEL_TONES[level] || 'slate';
+  return computeUnderstandingTone(level, DEFAULT_SCORING);
 }
 
 export function PanelSummaryGrid({ children, className = '' }) {
@@ -50,7 +50,8 @@ export function PanelSummaryStat({ label, value, hint, tone = 'slate' }) {
 }
 
 export function UnderstandingBadge({ level, compact = false }) {
-  const tone = understandingTone(level);
+  const { understandingTone: toneForLevel } = useSettings();
+  const tone = toneForLevel(level);
   if (compact) {
     return (
       <Badge tone={tone}>
@@ -67,20 +68,14 @@ export function UnderstandingBadge({ level, compact = false }) {
 }
 
 export function UnderstandingDots({ level, className = '' }) {
+  const { understandingDotClass } = useSettings();
+
   return (
     <div className={`flex gap-0.5 ${className}`} aria-hidden>
       {[1, 2, 3, 4, 5].map((n) => (
         <span
           key={n}
-          className={`h-1.5 w-3 rounded-full ${
-            n <= level
-              ? n >= 4
-                ? 'bg-emerald-500'
-                : n >= 3
-                  ? 'bg-amber-400'
-                  : 'bg-red-400'
-              : 'bg-slate-200 dark:bg-slate-700'
-          }`}
+          className={`h-1.5 w-3 rounded-full ${understandingDotClass(n, level)}`}
         />
       ))}
     </div>

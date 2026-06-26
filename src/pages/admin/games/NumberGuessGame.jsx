@@ -5,6 +5,8 @@ import { EmptyState } from '../../../ui/components/EmptyState.jsx';
 import { Field, Input } from '../../../ui/components/Field.jsx';
 import { SelectClassPrompt, LoadingCatState } from '../../../ui/components/WaitingCatIllustration.jsx';
 import { GameConfetti } from '../../../ui/components/games/GameConfetti.jsx';
+import { GameSoundToggle } from '../../../ui/components/games/GameSoundToggle.jsx';
+import { useGameSound } from '../../../hooks/useGameSound.js';
 import { GamePresentationShell, useGamePresentation } from './GamePresentationShell.jsx';
 
 const ABS_MIN = 0;
@@ -57,6 +59,7 @@ export function NumberGuessGame({
   const [error, setError] = useState('');
   const inputRefs = useRef({});
   const { shellRef, presenting, togglePresentation } = useGamePresentation();
+  const sound = useGameSound();
 
   const activeClasses = useMemo(
     () => classes.filter((c) => c.status === 'active'),
@@ -122,6 +125,7 @@ export function NumberGuessGame({
       return;
     }
 
+    sound.enableSound();
     const picked = randomInt(min, max);
     const shuffled = shuffleStudents(presentStudents);
     setSecret(picked);
@@ -155,11 +159,13 @@ export function NumberGuessGame({
     const guess = Number.parseInt(String(draftByStudent[studentId] ?? '').trim(), 10);
     if (!Number.isFinite(guess)) {
       setError('Nhập một số nguyên hợp lệ.');
+      sound.play('buzz');
       focusStudentInput(studentId);
       return;
     }
     if (guess < low || guess > high) {
       setError(`Số phải nằm trong phạm vi ${low} – ${high}.`);
+      sound.play('buzz');
       focusStudentInput(studentId);
       return;
     }
@@ -174,6 +180,7 @@ export function NumberGuessGame({
 
     if (guess === secret) {
       const result = 'Chính xác!';
+      sound.play('cheer');
       setFeedback(result);
       setWon(true);
       setWinner(student);
@@ -188,6 +195,7 @@ export function NumberGuessGame({
     }
 
     const result = guess < secret ? 'Cao hơn!' : 'Thấp hơn!';
+    sound.play('tap');
     if (guess < secret) setLow(guess);
     else setHigh(guess);
 
@@ -321,6 +329,13 @@ export function NumberGuessGame({
 
   const presentationToolbar = (
     <>
+      <GameSoundToggle
+        muted={sound.muted}
+        onToggle={sound.toggleMuted}
+        onUnlock={sound.unlock}
+        onTestSound={() => sound.play('tap')}
+        presenting={presenting}
+      />
       {playing && !won && activeStudent && (
         <form
           onSubmit={(e) => handleRowSubmit(e, activeStudent.id)}

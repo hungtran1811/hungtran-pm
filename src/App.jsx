@@ -37,6 +37,9 @@ const AnalyticsPage = lazy(() =>
 const ScoresHubPage = lazy(() =>
   import('./pages/admin/ScoresHub.jsx').then((m) => ({ default: m.ScoresHubPage })),
 );
+const SettingsPage = lazy(() =>
+  import('./pages/admin/Settings.jsx').then((m) => ({ default: m.SettingsPage })),
+);
 const MiniGamesPage = lazy(() =>
   import('./pages/admin/MiniGames.jsx').then((m) => ({ default: m.MiniGamesPage })),
 );
@@ -178,6 +181,14 @@ export default function App() {
         element={
           <AdminSuspense>
             <ScoresHubPage />
+          </AdminSuspense>
+        }
+      />
+      <Route
+        path="/admin/settings"
+        element={
+          <AdminSuspense>
+            <SettingsPage />
           </AdminSuspense>
         }
       />

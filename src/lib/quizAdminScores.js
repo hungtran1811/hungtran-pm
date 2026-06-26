@@ -1,4 +1,5 @@
 /** Điểm quiz = trắc nghiệm + code khớp đáp án mẫu (tự chấm khi nộp). */
+import { computeScoreTone, DEFAULT_SCORING } from './scoringThresholds.js';
 export function computeAdminQuizScore(submission) {
   const gradedCorrect = Number(submission?.gradedCorrect ?? 0);
   const gradedTotal = Number(submission?.gradedTotal ?? 0);
@@ -15,9 +16,7 @@ export function computeAdminQuizScore(submission) {
 }
 
 export function scoreTone(percent) {
-  if (percent >= 80) return 'green';
-  if (percent >= 50) return 'amber';
-  return 'red';
+  return computeScoreTone(percent, DEFAULT_SCORING);
 }
 
 export function groupLatestQuizSubmissions(submissions) {

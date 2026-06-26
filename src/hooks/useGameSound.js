@@ -1,7 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-
-const STORAGE_KEY = 'hungtran-pm-game-sound-muted';
-const STORAGE_VOLUME = 'hungtran-pm-game-sound-volume';
+import { useSettings } from '../state/settings.store.jsx';
 
 /** Optional MP3 paths — falls back to Web Audio synthesis if load fails. */
 export const GAME_SOUND_FILES = {
@@ -15,23 +13,6 @@ export const GAME_SOUND_FILES = {
   spin: '/sounds/games/spin.mp3',
   'spin-stop': '/sounds/games/spin-stop.mp3',
 };
-
-function readMuted() {
-  try {
-    return localStorage.getItem(STORAGE_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function readVolume() {
-  try {
-    const v = Number(localStorage.getItem(STORAGE_VOLUME));
-    return Number.isFinite(v) && v >= 0 && v <= 1 ? v : 0.85;
-  } catch {
-    return 0.85;
-  }
-}
 
 function synthTone(ctx, dest, { freq = 440, duration = 0.08, type = 'sine', gain = 0.35, when = 0 }) {
   const osc = ctx.createOscillator();
@@ -111,12 +92,11 @@ const SYNTH_MAP = {
 };
 
 export function useGameSound() {
+  const { muted, volume, setMuted, setVolume, toggleMuted } = useSettings();
   const ctxRef = useRef(null);
   const masterGainRef = useRef(null);
   const buffersRef = useRef({});
   const loopsRef = useRef({});
-  const [muted, setMutedState] = useState(readMuted);
-  const [volume, setVolumeState] = useState(readVolume);
   const [ready, setReady] = useState(false);
   const unlockedRef = useRef(false);
 
@@ -205,6 +185,11 @@ export function useGameSound() {
     delete loopsRef.current[id];
   }, []);
 
+  useEffect(() => {
+    if (!muted) return;
+    Object.keys(loopsRef.current).forEach((sid) => stop(sid));
+  }, [muted, stop]);
+
   const playBuffer = useCallback(
     (id, { loop = false } = {}) => {
       if (muted) return;
@@ -276,35 +261,6 @@ export function useGameSound() {
     },
     [muted, unlock, playBuffer],
   );
-
-  const setMuted = useCallback(
-    (value) => {
-      setMutedState(value);
-      try {
-        localStorage.setItem(STORAGE_KEY, value ? '1' : '0');
-      } catch {
-        /* ignore */
-      }
-      if (value) {
-        Object.keys(loopsRef.current).forEach((sid) => stop(sid));
-      }
-    },
-    [stop],
-  );
-
-  const setVolume = useCallback((value) => {
-    const v = Math.max(0, Math.min(1, value));
-    setVolumeState(v);
-    try {
-      localStorage.setItem(STORAGE_VOLUME, String(v));
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
-  const toggleMuted = useCallback(() => {
-    setMuted(!muted);
-  }, [muted, setMuted]);
 
   const enableSound = useCallback(async () => {
     if (muted) setMuted(false);

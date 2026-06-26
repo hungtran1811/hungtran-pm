@@ -3,7 +3,7 @@ import { RotateCcw } from 'lucide-react';
 import { Badge } from './Badge.jsx';
 import { Button } from './Button.jsx';
 import { EmptyState } from './EmptyState.jsx';
-import { scoreTone } from '../../lib/quizAdminScores.js';
+import { useSettings } from '../../state/settings.store.jsx';
 
 export function QuizClassScoreboard({
   rows,
@@ -13,6 +13,8 @@ export function QuizClassScoreboard({
   onResetRow,
   resettingId = null,
 }) {
+  const { scoreTone } = useSettings();
+
   if (!rows.length) {
     return (
       <EmptyState

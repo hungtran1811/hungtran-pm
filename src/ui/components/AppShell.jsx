@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Gamepad2,
   Menu,
+  Settings,
   X,
   LogOut,
 } from 'lucide-react';
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
   { to: '/admin/analytics', label: 'Thống kê', icon: BarChart3 },
   { to: '/admin/lessons', label: 'Bài giảng', icon: BookOpen },
   { to: '/admin/games', label: 'Mini game', icon: Gamepad2 },
+  { to: '/admin/settings', label: 'Cài đặt', icon: Settings },
 ];
 
 function navLinkClass(isActive) {
