@@ -284,10 +284,11 @@ export function subscribePracticeSubmission(classCode, studentId, lessonId, onDa
 export async function submitPracticeQuiz({ student, classDoc, lesson, programId, quiz, answers }) {
   const submissionId = buildPracticeSubmissionId(classDoc.classCode, student.id, lesson.id);
   const resolvedProgramId = resolveProgramId(programId || classDoc.curriculumProgramId);
-  const { responses, mcqCorrect, mcqTotal, mcqPercent, gradingStatus } = buildPendingPracticeResponses(
-    quiz,
-    answers,
-  );
+  const answerKey = await getPracticeAnswerKey(resolvedProgramId, lesson.id);
+  const graded = answerKey?.answers && Object.keys(answerKey.answers).length
+    ? buildPracticeResponses(quiz, answers, answerKey)
+    : buildPendingPracticeResponses(quiz, answers);
+  const { responses, mcqCorrect, mcqTotal, mcqPercent, gradingStatus } = graded;
 
   const existing = await getPracticeSubmission(classDoc.classCode, student.id, lesson.id);
   const attemptCount = Number(existing?.attemptCount ?? 0) + 1;

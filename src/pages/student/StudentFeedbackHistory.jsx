@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronUp, MessageSquare } from 'lucide-react';
 import { Badge } from '../../ui/components/Badge.jsx';
-import { Spinner } from '../../ui/components/Spinner.jsx';
 import { UNDERSTANDING_LEVELS } from '../../constants/index.js';
 import { formatDateTime } from '../../lib/firestore.js';
 import { subscribeFeedbackSummariesForStudent } from '../../services/knowledgeReports.service.js';
@@ -100,54 +99,44 @@ export function StudentFeedbackHistory({ classCode, studentId, program, isFinalP
 
   if (isFinalPhase) return null;
 
-  if (loading) {
-    return (
-      <div className="card mb-5 flex justify-center p-6">
-        <Spinner />
-      </div>
-    );
-  }
+  if (loading) return null;
 
   if (!summaries.length) return null;
 
-  const visible = expanded ? summaries : summaries.slice(0, 3);
-
   return (
-    <div className="card mb-5 p-4">
+    <div className="mb-5">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center justify-between gap-2 text-left"
+        className="flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-left transition hover:border-brand-300 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-brand-500/50"
       >
         <div className="flex items-center gap-2">
-          <MessageSquare className="h-5 w-5 text-brand-600 dark:text-brand-400" />
-          <h3 className="font-semibold text-slate-800 dark:text-slate-100">
-            Phản hồi đã gửi ({summaries.length})
-          </h3>
+          <MessageSquare className="h-4 w-4 text-brand-600 dark:text-brand-400" />
+          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+            Phản hồi đã gửi
+          </span>
+          <Badge tone="slate">{summaries.length}</Badge>
         </div>
-        <span className="text-xs font-medium text-brand-600 dark:text-brand-400">
-          {expanded ? 'Thu gọn' : summaries.length > 3 ? 'Xem tất cả' : ''}
+        <span className="flex items-center gap-1 text-xs font-medium text-brand-600 dark:text-brand-400">
+          {expanded ? 'Thu gọn' : 'Xem lại'}
+          {expanded ? (
+            <ChevronUp className="h-4 w-4" />
+          ) : (
+            <ChevronDown className="h-4 w-4" />
+          )}
         </span>
       </button>
 
-      <div className="mt-3 space-y-2">
-        {visible.map((summary) => (
-          <FeedbackSummaryCard
-            key={summary.id}
-            summary={summary}
-            lessonTitle={lessonTitleById[summary.lessonId]}
-          />
-        ))}
-      </div>
-
-      {!expanded && summaries.length > 3 && (
-        <button
-          type="button"
-          onClick={() => setExpanded(true)}
-          className="mt-3 w-full text-center text-sm font-medium text-brand-600 hover:underline dark:text-brand-400"
-        >
-          Xem thêm {summaries.length - 3} phản hồi
-        </button>
+      {expanded && (
+        <div className="mt-2 space-y-2">
+          {summaries.map((summary) => (
+            <FeedbackSummaryCard
+              key={summary.id}
+              summary={summary}
+              lessonTitle={lessonTitleById[summary.lessonId]}
+            />
+          ))}
+        </div>
       )}
     </div>
   );

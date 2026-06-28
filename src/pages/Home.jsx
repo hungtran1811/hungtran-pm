@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '../ui/components/Button.jsx';
 import { Field, Input } from '../ui/components/Field.jsx';
 import { ThemeToggle } from '../ui/components/ThemeToggle.jsx';
@@ -7,7 +7,16 @@ import { BrandLogo } from '../ui/components/BrandLogo.jsx';
 
 export function HomePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [classCode, setClassCode] = useState('');
+  const [portalHint, setPortalHint] = useState(false);
+
+  useEffect(() => {
+    if (location.state?.studentPortalHint) {
+      setPortalHint(true);
+      navigate('/', { replace: true, state: {} });
+    }
+  }, [location.state, navigate]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -31,6 +40,11 @@ export function HomePage() {
         </div>
 
         <form onSubmit={handleSubmit} className="card space-y-4 p-6">
+          {portalHint && (
+            <p className="rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm text-brand-800 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-100">
+              Đây là cổng học sinh. Nhập mã lớp bên dưới để vào bài học.
+            </p>
+          )}
           <Field label="Mã lớp">
             <Input
               value={classCode}

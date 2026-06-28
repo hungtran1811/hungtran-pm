@@ -399,7 +399,7 @@ service cloud.firestore {
         && isOpenPracticeTarget(request.resource.data)
         && request.resource.data.responses is list
         && request.resource.data.responses.size() > 0
-        && request.resource.data.gradingStatus == 'pending'
+        && request.resource.data.gradingStatus in ['pending', 'complete']
         && isValidPublicPracticeScoreFields(request.resource.data)
         && request.resource.data.source == 'practice-quiz-v1'
         && request.resource.data.submittedAt == request.time
@@ -918,7 +918,8 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     match /practiceQuizAnswerBanks/{bankId} {
-      allow get, list: if isAdmin();
+      allow get: if isAdmin() || isReadablePracticeAnswerBank(bankId);
+      allow list: if isAdmin();
       allow write: if isAdmin();
     }
     match /practiceQuizSubmissions/{submissionId} {

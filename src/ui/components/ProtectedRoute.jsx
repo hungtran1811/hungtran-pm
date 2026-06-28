@@ -19,7 +19,7 @@ export function ProtectedRoute({ children }) {
   }
 
   if (!isAdmin) {
-    return <Navigate to="/admin/forbidden" replace />;
+    return <Navigate to="/" replace state={{ studentPortalHint: true }} />;
   }
 
   return children;

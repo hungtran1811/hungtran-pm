@@ -10,6 +10,7 @@ import {
   validateCodeSubmissionFile,
 } from '../../lib/codeSubmissionLimits.js';
 import { getErrorMessage } from '../../lib/firestore.js';
+import { isProjectNameApproved } from '../../lib/classFinalMode.js';
 import { downloadCodeSubmissionFile } from '../../lib/codeSubmissionDownload.js';
 import { sessionNumbersUpToCurrent } from '../../lib/sessionScope.js';
 import {
@@ -73,6 +74,15 @@ export function SessionCodeUpload({ classDoc, student, compact = false }) {
     const picked = Array.from(event.target.files || []);
     event.target.value = '';
     if (!picked.length) return;
+
+    if (classDoc?.curriculumPhase !== 'final') {
+      toast.error('Lớp chưa vào giai đoạn sản phẩm cuối khóa — chưa thể nộp file.');
+      return;
+    }
+    if (!isProjectNameApproved(student)) {
+      toast.error('Tên dự án chưa được duyệt — chưa thể nộp file code.');
+      return;
+    }
 
     const remaining = CODE_SUBMISSION_MAX_FILES_PER_SESSION - files.length;
     if (remaining <= 0) {

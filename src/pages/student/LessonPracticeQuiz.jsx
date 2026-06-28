@@ -31,18 +31,22 @@ function PracticeBreakdown({ quiz, responses }) {
     <div className="space-y-3">
       {quiz.questions.map((q, qi) => {
         const response = byQuestion[q.id];
+        const isPending = response?.isCorrect == null;
         const isCorrect = response?.isCorrect === true;
+        const toneClass = isPending
+          ? 'border-slate-200 bg-slate-50/50 dark:border-slate-700 dark:bg-slate-800/40'
+          : isCorrect
+            ? 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-500/30 dark:bg-emerald-500/5'
+            : 'border-red-200 bg-red-50/50 dark:border-red-500/30 dark:bg-red-500/5';
         return (
           <div
             key={q.id}
-            className={`rounded-xl border p-4 ${
-              isCorrect
-                ? 'border-emerald-200 bg-emerald-50/50 dark:border-emerald-500/30 dark:bg-emerald-500/5'
-                : 'border-red-200 bg-red-50/50 dark:border-red-500/30 dark:bg-red-500/5'
-            }`}
+            className={`rounded-xl border p-4 ${toneClass}`}
           >
             <div className="mb-2 flex items-start gap-2">
-              {isCorrect ? (
+              {isPending ? (
+                <span className="mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 border-slate-300 dark:border-slate-600" />
+              ) : isCorrect ? (
                 <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
               ) : (
                 <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
@@ -57,7 +61,10 @@ function PracticeBreakdown({ quiz, responses }) {
                 Bạn chọn: <span className="font-medium">{response.selectedLabel}</span>
               </p>
             )}
-            {!isCorrect && (
+            {isPending && (
+              <p className="ml-6 mt-1 text-sm text-slate-500 dark:text-slate-400">Đang chấm điểm...</p>
+            )}
+            {!isPending && !isCorrect && (
               <p className="ml-6 mt-1 text-sm text-red-700 dark:text-red-300">Chưa đúng — xem lại bài giảng nhé.</p>
             )}
           </div>

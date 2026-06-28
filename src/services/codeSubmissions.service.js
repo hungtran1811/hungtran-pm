@@ -132,25 +132,26 @@ export async function uploadCodeFile({ classCode, studentId, studentName, sessio
     uploadedAt: new Date().toISOString(),
   };
 
-  const batch = writeBatch(db);
-  batch.set(fileContentRef(classCode, studentId, sessionNumber, fileId), { content });
-
-  if (docSnap.exists()) {
-    batch.update(parentRef, {
-      files: [...currentFiles, entry],
-      updatedAt: serverTimestamp(),
-    });
-  } else {
-    batch.set(parentRef, {
+  // Firestore rules for file content require the parent doc to already exist
+  // (batch writes cannot see sibling ops in the same commit).
+  if (!docSnap.exists()) {
+    await setDoc(parentRef, {
       classCode,
       studentId,
       studentName,
       sessionNumber: Number(sessionNumber),
-      files: [entry],
+      files: [],
       updatedAt: serverTimestamp(),
     });
+    currentFiles = [];
   }
 
+  const batch = writeBatch(db);
+  batch.set(fileContentRef(classCode, studentId, sessionNumber, fileId), { content });
+  batch.update(parentRef, {
+    files: [...currentFiles, entry],
+    updatedAt: serverTimestamp(),
+  });
   await batch.commit();
   return entry;
 }

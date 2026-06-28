@@ -25,8 +25,8 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!loading && user && isAdmin) {
-      navigate('/admin', { replace: true });
+    if (!loading && user) {
+      navigate(isAdmin ? '/admin' : '/', { replace: true });
     }
   }, [loading, user, isAdmin, navigate]);
 

@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { ShieldAlert } from 'lucide-react';
 import { Button } from '../../ui/components/Button.jsx';
 import { useAuth } from '../../state/auth.store.jsx';
@@ -21,9 +21,17 @@ export function ForbiddenPage() {
       <p className="mt-2 max-w-sm text-sm text-slate-500">
         Tài khoản {user?.email ? <strong>{user.email}</strong> : 'này'} chưa được cấp quyền quản trị.
       </p>
-      <Button variant="secondary" className="mt-6" onClick={handleLogout}>
-        Đăng nhập tài khoản khác
-      </Button>
+      <div className="mt-6 flex flex-wrap justify-center gap-3">
+        <Link
+          to="/"
+          className="inline-flex items-center justify-center rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-brand-700"
+        >
+          Về cổng học sinh
+        </Link>
+        <Button variant="secondary" onClick={handleLogout}>
+          Đăng nhập tài khoản khác
+        </Button>
+      </div>
     </div>
   );
 }
