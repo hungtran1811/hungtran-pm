@@ -9,7 +9,7 @@ Ghi kết quả smoke test thủ công trước khi merge hoặc deploy. Checkli
 - Commit: `e5a9b52` plus uncommitted maintenance changes
 - Environment: Windows local workspace
 - Tester: Codex
-- Node: `v24.14.0` (allowed by `>=22 <25`; CI uses Node 22)
+- Node: `v24.14.0` (allowed by `>=22.12.0 <25`; CI uses Node 22)
 - Java/JDK: `21.0.10`
 - Browser: Not run
 
@@ -54,7 +54,7 @@ Ghi kết quả smoke test thủ công trước khi merge hoặc deploy. Checkli
 - Commit: `e5a9b52`
 - Environment: Windows local workspace
 - Tester: Codex
-- Node: `v24.14.0` (allowed by `>=22 <25`; CI uses Node 22)
+- Node: `v24.14.0` (allowed by `>=22.12.0 <25`; CI uses Node 22)
 - Browser: Not run
 
 ### Commands
