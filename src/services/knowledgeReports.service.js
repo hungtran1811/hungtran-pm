@@ -95,7 +95,8 @@ export async function hasSubmittedFeedback(classCode, studentId, lessonId) {
   try {
     const snapshot = await getDoc(doc(db, 'knowledgeReportReceipts', feedbackId));
     return snapshot.exists();
-  } catch {
+  } catch (error) {
+    console.warn('[knowledgeReports.service] Failed to load feedback receipt', error);
     return false;
   }
 }

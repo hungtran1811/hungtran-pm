@@ -110,7 +110,7 @@ export async function uploadCodeFile({ classCode, studentId, studentName, sessio
 
   const parentRef = submissionDocRef(classCode, studentId, sessionNumber);
   const docSnap = await getDoc(parentRef);
-  const currentFiles = docSnap.exists() ? docSnap.data().files || [] : [];
+  let currentFiles = docSnap.exists() ? docSnap.data().files || [] : [];
   if (currentFiles.length >= CODE_SUBMISSION_MAX_FILES_PER_SESSION) {
     throw new Error(`Tối đa ${CODE_SUBMISSION_MAX_FILES_PER_SESSION} file mỗi buổi.`);
   }

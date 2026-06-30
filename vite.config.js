@@ -21,6 +21,22 @@ function isVendorDep(id) {
   );
 }
 
+function isFirebaseAuthDep(id) {
+  return id.includes('@firebase/auth') || id.includes('/firebase/auth');
+}
+
+function isFirebaseFirestoreDep(id) {
+  return (
+    id.includes('@firebase/firestore')
+    || id.includes('/firebase/firestore')
+    || id.includes('@firebase/webchannel-wrapper')
+  );
+}
+
+function isFirebaseDep(id) {
+  return id.includes('@firebase/') || id.includes('/firebase/');
+}
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
@@ -34,7 +50,9 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined;
-          if (id.includes('firebase')) return 'firebase';
+          if (isFirebaseFirestoreDep(id)) return 'firebase-firestore';
+          if (isFirebaseAuthDep(id)) return 'firebase-auth';
+          if (isFirebaseDep(id)) return 'firebase-core';
           if (id.includes('recharts')) return 'charts';
           if (isEditorDep(id)) return 'editor';
           if (isVendorDep(id)) return 'vendor';

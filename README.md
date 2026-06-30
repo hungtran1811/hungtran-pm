@@ -160,5 +160,19 @@ Ghi từ cổng học sinh được kiểm soát bởi `firestore.rules` (batche
 | `npm run build` | Build production |
 | `npm run preview` | Xem bản build local |
 | `npm run test` | Chạy Vitest (logic thuần) |
+| `npm run test:rules` | Chạy Firestore Rules tests qua emulator (cần Java/JDK) |
+| `npm run verify` | Chạy test rồi build production |
+| `npm run ci` | Chạy unit tests, rules tests, build và audit gate |
+| `npm run audit:security` | Alias audit đầy đủ |
+| `npm run audit:security:gate` | Audit chỉ fail khi có high/critical |
+| `npm run audit:security:full` | Audit đầy đủ, có thể fail vì moderate tooling đã ghi chú |
 | `npm run deploy:firestore` | Deploy rules + indexes |
 | `npm run migrate:*` | Xem bảng migrate ở trên |
+
+## Bảo trì & nâng cấp
+
+- Ghi chú bảo trì: [`docs/MAINTENANCE.md`](docs/MAINTENANCE.md)
+- Ghi chú audit bảo mật: [`docs/SECURITY_AUDIT_NOTES.md`](docs/SECURITY_AUDIT_NOTES.md)
+- Checklist smoke test: [`docs/SMOKE_TEST_CHECKLIST.md`](docs/SMOKE_TEST_CHECKLIST.md)
+- Hướng dẫn restore backup thủ công: [`docs/RESTORE_BACKUP.md`](docs/RESTORE_BACKUP.md)
+- Trang **Admin → Cài đặt** có Health panel và nút tải backup JSON cho lớp/học sinh/chương trình.

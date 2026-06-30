@@ -479,9 +479,9 @@ service cloud.firestore {
 
     function currentQuizAttemptCount(classCode, studentId, lessonId) {
       let latestId = classCode + '__' + studentId + '__' + lessonId;
-      let latestDoc = get(/databases/$(database)/documents/studentQuizLatest/$(latestId));
-      return latestDoc.data != null && latestDoc.data.attemptNumber is int
-        ? latestDoc.data.attemptNumber
+      let latestPath = /databases/$(database)/documents/studentQuizLatest/$(latestId);
+      return exists(latestPath) && get(latestPath).data.attemptNumber is int
+        ? get(latestPath).data.attemptNumber
         : 0;
     }
 
@@ -558,7 +558,7 @@ service cloud.firestore {
     }
 
     function isValidPublicProjectNameSubmit(studentId) {
-      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'projectNameSubmission', 'projectNameStatus', 'projectNameReviewNote',
           'projectNameSubmittedAt', 'updatedAt'
         ])
@@ -579,7 +579,7 @@ service cloud.firestore {
     }
 
     function isValidPublicLessonProgressUpdate(studentId) {
-      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'lastOpenedLessonId', 'lastOpenedSessionNumber', 'lastOpenedAt',
           'openedLessonIds', 'updatedAt'
         ])
@@ -641,7 +641,7 @@ service cloud.firestore {
     }
 
     function isValidPublicProjectLinksUpdate(studentId) {
-      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'projectGithubUrl', 'projectCanvaUrl', 'updatedAt'
         ])
         && resource.data.active == true
@@ -725,7 +725,7 @@ service cloud.firestore {
     }
 
     function isValidPublicStudentSnapshotUpdate(studentId) {
-      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'currentProgressPercent', 'currentStage', 'currentStatus',
           'currentDifficulties', 'lastReportedAt', 'latestReportId',
           'progressStalledCount', 'projectGithubUrl', 'projectCanvaUrl',
@@ -743,7 +743,7 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time
         && request.resource.data.latestReportId is string
         && request.resource.data.latestReportId.size() > 0
-        && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data != null
+        && existsAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId))
         && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.studentId == studentId
         && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.classCode == resource.data.classId
         && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.status == request.resource.data.currentStatus
