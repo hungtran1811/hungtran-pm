@@ -100,8 +100,8 @@ async function setClassActiveSpyPointer(classCode, sessionId) {
   if (!classCode) return;
   try {
     await updateDoc(classDocRef(classCode), { activeSpySessionId: sessionId });
-  } catch {
-    // non-fatal
+  } catch (error) {
+    console.warn('[spy.service] Failed to set class active session pointer', error);
   }
 }
 
@@ -112,8 +112,8 @@ async function clearClassActiveSpyPointer(classCode, sessionId) {
     if (snap.exists() && snap.data().activeSpySessionId === sessionId) {
       await updateDoc(classDocRef(classCode), { activeSpySessionId: null });
     }
-  } catch {
-    // non-fatal
+  } catch (error) {
+    console.warn('[spy.service] Failed to clear class active session pointer', error);
   }
 }
 

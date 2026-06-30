@@ -26,8 +26,16 @@ import {
 } from './curriculum.service.js';
 import { getFirstExistingDoc } from '../lib/firestoreCandidates.js';
 import { responsesToRawAnswers } from '../lib/quizResponses.js';
+import {
+  buildPendingQuizSubmissionResponses,
+  buildQuizLatestGradeFields,
+  countPendingCodeGrades,
+  deriveGradingStatus,
+  normalizeQuizCodeAnswer,
+} from '../lib/quizSubmissionContract.js';
 
 export { responsesToRawAnswers };
+export { buildQuizLatestGradeFields, countPendingCodeGrades, deriveGradingStatus };
 
 function normalizeCodeReferencesMap(raw) {
   if (!raw || typeof raw !== 'object') return {};
@@ -325,40 +333,13 @@ function mapQuizLatestSnapshot(snapshot) {
   };
 }
 
-export function deriveGradingStatus(responses = []) {
-  const codeResponses = responses.filter((r) => r.questionType === 'code');
-  if (!codeResponses.length) return 'complete';
-  const pending = codeResponses.filter(
-    (r) => r.isCorrect !== true && r.isCorrect !== false,
-  ).length;
-  if (pending === 0) return 'complete';
-  const graded = codeResponses.length - pending;
-  if (graded > 0) return 'partial';
-  return 'pending';
-}
-
-export function buildQuizLatestGradeFields(scores, responses) {
-  const pendingCodeCount = countPendingCodeGrades(responses);
-  return {
-    mcqCorrect: scores.mcqCorrect,
-    mcqTotal: scores.mcqTotal,
-    mcqPercent: scores.mcqPercent,
-    codeCorrect: scores.codeCorrect,
-    codeGraded: scores.codeGraded,
-    gradedCorrect: scores.gradedCorrect,
-    gradedTotal: scores.gradedTotal,
-    gradedPercent: scores.gradedPercent,
-    pendingCodeCount,
-    gradingStatus: deriveGradingStatus(responses),
-  };
-}
-
 export async function getQuizLatestStatus(classCode, studentId, lessonId) {
   const latestId = buildQuizAttemptId(classCode, studentId, lessonId);
   try {
     const snapshot = await getDoc(doc(db, 'studentQuizLatest', latestId));
     return mapQuizLatestSnapshot(snapshot);
-  } catch {
+  } catch (error) {
+    console.warn('[quiz.service] Failed to load quiz latest status', error);
     return null;
   }
 }
@@ -379,17 +360,10 @@ export async function hasSubmittedQuiz(classCode, studentId, lessonId) {
   try {
     const snapshot = await getDoc(doc(db, 'quizAttemptReceipts', attemptId));
     return snapshot.exists();
-  } catch {
+  } catch (error) {
+    console.warn('[quiz.service] Failed to load quiz receipt fallback', error);
     return false;
   }
-}
-
-function normalizeCodeAnswer(rawValue, starterCode) {
-  const text = String(rawValue ?? '').trim();
-  const starter = String(starterCode ?? '').trim();
-  if (!text) return '';
-  if (starter && text === starter) return '';
-  return text;
 }
 
 function buildPendingSubmissionResponses(quiz, rawAnswers) {
@@ -400,7 +374,7 @@ function buildPendingSubmissionResponses(quiz, rawAnswers) {
   for (const q of quiz.questions) {
     const type = q.type === 'code' ? 'code' : 'mcq';
     if (type === 'code') {
-      const codeAnswer = normalizeCodeAnswer(rawAnswers[q.id], q.starterCode);
+      const codeAnswer = normalizeQuizCodeAnswer(rawAnswers[q.id], q.starterCode);
       if (!codeAnswer) unansweredCount += 1;
       responses.push({
         questionId: q.id,
@@ -456,7 +430,7 @@ function buildSubmissionResponses(quiz, rawAnswers, answerKey) {
   for (const q of quiz.questions) {
     const type = q.type === 'code' ? 'code' : 'mcq';
     if (type === 'code') {
-      const codeAnswer = normalizeCodeAnswer(rawAnswers[q.id], q.starterCode);
+      const codeAnswer = normalizeQuizCodeAnswer(rawAnswers[q.id], q.starterCode);
       if (!codeAnswer) unansweredCount += 1;
       const refs = codeRefs[q.id] ?? [];
       const hasAutoGrade = refs.length > 0;
@@ -523,7 +497,7 @@ export async function submitQuizSubmission({
   timedOut = false,
 }) {
   const resolvedProgramId = resolveProgramId(programId || classDoc.curriculumProgramId);
-  const pending = buildPendingSubmissionResponses(quiz, answers);
+  const pending = buildPendingQuizSubmissionResponses(quiz, answers);
   const {
     responses,
     mcqCorrect,
@@ -686,12 +660,6 @@ export function computeSubmissionScores(responses = []) {
     gradedTotal,
     gradedPercent: gradedTotal ? Math.round((gradedCorrect / gradedTotal) * 100) : 0,
   };
-}
-
-export function countPendingCodeGrades(responses = []) {
-  return responses.filter(
-    (r) => r.questionType === 'code' && r.isCorrect !== true && r.isCorrect !== false,
-  ).length;
 }
 
 function applyAutoCodeGrades(responses, codeReferences) {

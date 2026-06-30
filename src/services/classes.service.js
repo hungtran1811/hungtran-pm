@@ -15,17 +15,12 @@ import {
   where,
 } from 'firebase/firestore';
 import { db } from '../config/firebase.js';
+import { isArchivedClassStatus, isOperationalClassStatus } from '../lib/classStatus.js';
 import { toClassModel } from '../models/index.js';
 
-export function isArchivedClassStatus(status) {
-  return status === 'completed' || status === 'archived';
-}
+export { isArchivedClassStatus, isOperationalClassStatus };
 
 /** Lớp đang vận hành hoặc đã hoàn thành (dùng cho thống kê). */
-export function isOperationalClassStatus(status) {
-  return status === 'active' || status === 'completed';
-}
-
 export function filterClassesForAnalytics(classes, showArchived = false) {
   return classes.filter((c) => {
     if (isOperationalClassStatus(c.status)) return true;

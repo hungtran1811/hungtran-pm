@@ -258,7 +258,12 @@ export async function regradePracticeSubmission(submission) {
 
 export async function regradePendingPracticeSubmissions(submissions = []) {
   const pending = submissions.filter((s) => s.gradingStatus === 'pending');
-  return Promise.all(pending.map((s) => regradePracticeSubmission(s).catch(() => s)));
+  return Promise.all(
+    pending.map((s) => regradePracticeSubmission(s).catch((error) => {
+      console.warn('[practiceQuiz.service] Failed to regrade pending submission', error);
+      return s;
+    })),
+  );
 }
 
 export async function getPracticeSubmission(classCode, studentId, lessonId) {
@@ -267,7 +272,8 @@ export async function getPracticeSubmission(classCode, studentId, lessonId) {
     const snapshot = await getDoc(doc(db, 'practiceQuizSubmissions', submissionId));
     if (!snapshot.exists()) return null;
     return toPracticeQuizSubmissionModel(snapshot);
-  } catch {
+  } catch (error) {
+    console.warn('[practiceQuiz.service] Failed to load practice submission', error);
     return null;
   }
 }

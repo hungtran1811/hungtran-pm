@@ -1,18 +1,13 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { marked } from 'marked';
-import DOMPurify from 'dompurify';
+import { renderSafeMarkdown } from '../../lib/markdown.js';
 import { ImageLightbox, useImageLightbox } from './ImageLightbox.jsx';
-
-marked.setOptions({ breaks: true, gfm: true });
 
 export function Markdown({ content = '', className = '' }) {
   const containerRef = useRef(null);
   const { open, images, index, openLightbox, closeLightbox } = useImageLightbox();
 
   const html = useMemo(() => {
-    if (!content) return '';
-    const raw = marked.parse(content);
-    return DOMPurify.sanitize(raw);
+    return renderSafeMarkdown(content);
   }, [content]);
 
   useEffect(() => {
