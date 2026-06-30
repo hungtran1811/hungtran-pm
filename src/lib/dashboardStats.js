@@ -1,4 +1,4 @@
-import { isArchivedClassStatus } from '../services/classes.service.js';
+import { isArchivedClassStatus } from './classStatus.js';
 
 export function studentClassCode(student) {
   return student?.classCode || student?.classId || '';
