@@ -10,13 +10,13 @@ Chạy sau khi update dependency, sửa rules/indexes, hoặc refactor service/p
 - Mở `Lớp học`, tạo/sửa lớp test, copy link lớp.
 - Mở `Học sinh`, tạo/sửa học sinh test, duyệt hoặc từ chối tên dự án.
 - Mở `Bài giảng`, tạo/sửa bài, preview Markdown, upload ảnh Cloudinary nếu có env.
-- Mở `Cài đặt`, kiểm tra Health panel và tải backup JSON.
+- Mở `Cài đặt`, tải backup JSON và kiểm tra thao tác cache/bản nháp.
 
 ## Student Portal
 
 - Vào `/c/{classCode}`, chọn học sinh.
 - Mở bài học hiện tại, xem Markdown/ảnh/lightbox.
-- Gửi phản hồi buổi học, reload trang và xác nhận trạng thái đã gửi.
+- Gửi phản hồi buổi học, reload trang, xác nhận checklist báo đã gửi và mở xem lại nội dung phản hồi.
 - Làm ôn tập MCQ nếu bài có practice quiz.
 - Làm quiz kiểm tra nếu bài có exam quiz; thử nộp, reload, kiểm tra trạng thái đã nộp.
 - Với lớp final/project: gửi tên dự án, admin duyệt, học sinh gửi báo cáo tiến độ và link sản phẩm.

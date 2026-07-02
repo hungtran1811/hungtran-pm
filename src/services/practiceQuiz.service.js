@@ -17,6 +17,7 @@ import { buildQuizId, buildQuizAttemptId } from './quiz.service.js';
 import {
   quizBankIdCandidates,
   quizBankStoragePrefix,
+  programDocIdCandidates,
   resolveProgramId,
 } from './curriculum.service.js';
 import { getFirstExistingDoc } from '../lib/firestoreCandidates.js';
@@ -82,6 +83,52 @@ export async function getPublicPracticeQuiz(programId, lessonId) {
       options: Array.isArray(q.options) ? q.options : [],
     })),
   };
+}
+
+function mapPublicPracticeBank(snapshot) {
+  const data = snapshot.data() || {};
+  return {
+    id: snapshot.id,
+    programId: data.programId ?? '',
+    lessonId: data.lessonId ?? '',
+    sessionNumber: Number(data.sessionNumber ?? 0),
+    title: data.title ?? '',
+    enabled: Boolean(data.enabled ?? false),
+    questionCount: Array.isArray(data.questions) ? data.questions.length : 0,
+  };
+}
+
+export async function listPublicPracticeQuizBanksForProgram(
+  programId,
+  { lessonIds = [], enabledOnly = true } = {},
+) {
+  if (!programId) return [];
+  const lessonSet = new Set(lessonIds.filter(Boolean));
+  const snapshots = await Promise.all(
+    programDocIdCandidates(programId).map((candidateId) =>
+      getDocs(
+        query(
+          collection(db, 'practiceQuizPublicBanks'),
+          where('programId', '==', candidateId),
+          limit(200),
+        ),
+      ),
+    ),
+  );
+
+  const byLesson = new Map();
+  snapshots.flatMap((snapshot) => snapshot.docs).forEach((docSnap) => {
+    const bank = mapPublicPracticeBank(docSnap);
+    if (!bank.lessonId) return;
+    if (lessonSet.size && !lessonSet.has(bank.lessonId)) return;
+    if (enabledOnly && (!bank.enabled || bank.questionCount <= 0)) return;
+    const existing = byLesson.get(bank.lessonId);
+    if (!existing || bank.enabled) byLesson.set(bank.lessonId, bank);
+  });
+
+  return [...byLesson.values()].sort(
+    (a, b) => Number(a.sessionNumber) - Number(b.sessionNumber),
+  );
 }
 
 export async function getPracticeAnswerKey(programId, lessonId) {

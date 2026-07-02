@@ -17,7 +17,6 @@ import { getStudentFeedbackLessonIds } from '../../services/knowledgeReports.ser
 import { getErrorMessage } from '../../lib/firestore.js';
 import { LessonsView } from './LessonsView.jsx';
 import { StudentOverview } from './StudentOverview.jsx';
-import { StudentFeedbackHistory } from './StudentFeedbackHistory.jsx';
 import { ProjectNamePendingBanner, ProjectNameSetup } from './ProjectNameSetup.jsx';
 import {
   classUsesProjectNames,
@@ -360,9 +359,6 @@ export function StudentPortalPage() {
       items.push({ id: 'report', label: 'Dự án', sectionId: 'student-report' });
     } else {
       items.push({ id: 'lessons', label: 'Bài giảng', sectionId: 'student-lessons' });
-      if (!isFinalPhase) {
-        items.push({ id: 'feedback', label: 'Phản hồi', sectionId: 'student-feedback' });
-      }
     }
     return items;
   }, [isFinalPhase, finalMode]);
@@ -571,17 +567,6 @@ export function StudentPortalPage() {
           submittedLessonIds={submittedLessonIds}
         />
       </section>
-
-      {!isFinalPhase && (
-        <section id="student-feedback" className="mt-8 scroll-mt-[4.5rem]">
-          <StudentFeedbackHistory
-            classCode={classDoc.classCode}
-            studentId={selectedStudent.id}
-            program={program}
-            isFinalPhase={isFinalPhase}
-          />
-        </section>
-      )}
 
       {isFinalPhase && finalMode === 'project' && (
         <section id="student-report" className="mt-8 scroll-mt-[4.5rem]">

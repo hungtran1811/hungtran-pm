@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Activity, Database, Download, Music, Play, Trash2, Volume2 } from 'lucide-react';
+import { Database, Download, Music, Play, Trash2, Volume2 } from 'lucide-react';
 import { AppShell } from '../../ui/components/AppShell.jsx';
 import { Button } from '../../ui/components/Button.jsx';
 import { Field } from '../../ui/components/Field.jsx';
@@ -61,7 +61,7 @@ function SoundSettings() {
             type="checkbox"
             className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
             checked={!muted}
-            onChange={(e) => setMuted(!e.target.checked)}
+            onChange={(event) => setMuted(!event.target.checked)}
           />
         </label>
 
@@ -72,7 +72,7 @@ function SoundSettings() {
             max={100}
             value={Math.round(volume * 100)}
             disabled={muted}
-            onChange={(e) => setVolume(Number(e.target.value) / 100)}
+            onChange={(event) => setVolume(Number(event.target.value) / 100)}
             className="w-full accent-brand-600 disabled:opacity-40"
           />
         </Field>
@@ -123,70 +123,6 @@ function SoundLibrary() {
             </Button>
           </div>
         ))}
-      </div>
-    </SettingsSection>
-  );
-}
-
-function HealthItem({ label, value, ok = Boolean(value), hint }) {
-  return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50/60 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/40">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-slate-700 dark:text-slate-200">{label}</p>
-          <p className="mt-1 break-words text-sm text-slate-500 dark:text-slate-400">
-            {value || 'Chưa cấu hình'}
-          </p>
-        </div>
-        <span
-          className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
-            ok
-              ? 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300'
-              : 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300'
-          }`}
-        >
-          {ok ? 'OK' : 'Thiếu'}
-        </span>
-      </div>
-      {hint && <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">{hint}</p>}
-    </div>
-  );
-}
-
-function AdminHealthSettings() {
-  return (
-    <SettingsSection
-      icon={Activity}
-      title="Health vận hành"
-      description="Các tín hiệu cấu hình tối thiểu trước khi smoke test hoặc deploy production."
-    >
-      <div className="grid gap-3 lg:grid-cols-2">
-        <HealthItem label="App version" value={buildInfo.appVersion} />
-        <HealthItem label="Build mode" value={buildInfo.mode} />
-        <HealthItem label="Firebase project" value={buildInfo.firebaseProjectId} />
-        <HealthItem
-          label="Public base URL"
-          value={buildInfo.publicBaseUrl || 'Tự dùng origin hiện tại'}
-          ok
-          hint="Dùng để tạo link cổng học sinh và màn trình chiếu."
-        />
-        <HealthItem label="Cloudinary cloud" value={buildInfo.cloudinaryCloudName} />
-        <HealthItem
-          label="Cloudinary upload preset"
-          value={buildInfo.cloudinaryUploadPresetConfigured ? 'Đã cấu hình' : ''}
-          ok={buildInfo.cloudinaryUploadPresetConfigured}
-        />
-        <HealthItem
-          label="Thư mục ảnh bài giảng"
-          value={buildInfo.cloudinaryCurriculumFolder || 'Không đặt thư mục riêng'}
-          ok
-        />
-        <HealthItem
-          label="Lần deploy Firestore rules"
-          value={buildInfo.firestoreRulesDeployedAt}
-          ok={Boolean(buildInfo.firestoreRulesDeployedAt)}
-          hint="Đặt VITE_FIREBASE_RULES_DEPLOYED_AT khi deploy để admin biết rules/indexes đã được cập nhật."
-        />
       </div>
     </SettingsSection>
   );
@@ -281,7 +217,6 @@ export function SettingsPage() {
   return (
     <AppShell title="Cài đặt">
       <div className="space-y-6">
-        <AdminHealthSettings />
         <SoundSettings />
         <SoundLibrary />
         <DataSettings />

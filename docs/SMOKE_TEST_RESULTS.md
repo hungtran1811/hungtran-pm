@@ -32,7 +32,7 @@ Ghi kết quả smoke test thủ công trước khi merge hoặc deploy. Checkli
 |------|--------|-------|
 | Admin login | Not run | Needs browser smoke test with real/staging credentials |
 | Dashboard refresh | Not run | Needs browser smoke test |
-| Settings health + backup JSON | Not run | Needs browser smoke test |
+| Settings backup JSON | Not run | Needs browser smoke test |
 | Student portal + lesson Markdown/lightbox | Not run | Needs browser smoke test |
 | Feedback submit + reload | Not run | Needs browser smoke test |
 | Practice quiz submit/reload | Not run | Needs browser smoke test |
@@ -74,7 +74,7 @@ Ghi kết quả smoke test thủ công trước khi merge hoặc deploy. Checkli
 |------|--------|-------|
 | Admin login | Not run | Needs browser smoke test |
 | Dashboard refresh | Not run | Needs browser smoke test |
-| Settings health + backup JSON | Not run | Needs browser smoke test |
+| Settings backup JSON | Not run | Needs browser smoke test |
 | Student portal + lesson Markdown/lightbox | Not run | Needs browser smoke test |
 | Feedback submit + reload | Not run | Needs browser smoke test |
 | Practice quiz submit/reload | Not run | Needs browser smoke test |
@@ -114,7 +114,7 @@ Ghi kết quả smoke test thủ công trước khi merge hoặc deploy. Checkli
 |------|--------|-------|
 | Admin login | Not run | |
 | Dashboard refresh | Not run | |
-| Settings health + backup JSON | Not run | |
+| Settings backup JSON | Not run | |
 | Student portal + lesson Markdown/lightbox | Not run | |
 | Feedback submit + reload | Not run | |
 | Practice quiz submit/reload | Not run | |
