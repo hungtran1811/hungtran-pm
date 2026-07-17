@@ -8,6 +8,7 @@ import { HomePage } from './pages/Home.jsx';
 import { StudentPortalPage } from './pages/student/StudentPortal.jsx';
 import { NotFoundPage } from './pages/NotFound.jsx';
 import { ErrorBoundary } from './ui/components/ErrorBoundary.jsx';
+import { FEATURE_PROGRESS_REPORTS_ENABLED } from './config/features.js';
 
 const ShowdownPresentationPage = lazy(() =>
   import('./pages/ShowdownPresentationPage.jsx').then((m) => ({ default: m.ShowdownPresentationPage })),
@@ -47,8 +48,12 @@ const MiniGamesPage = lazy(() =>
 function LegacyFeedbackRedirect() {
   const { search } = useLocation();
   const params = new URLSearchParams(search);
-  params.set('tab', 'feedback');
+  params.set('tab', 'progress');
   return <Navigate to={`/admin/reports?${params.toString()}`} replace />;
+}
+
+function LegacyReportsRedirect() {
+  return <Navigate to="/admin/analytics" replace />;
 }
 
 function LegacyQuizRedirect() {
@@ -153,9 +158,13 @@ export default function App() {
       <Route
         path="/admin/reports"
         element={
-          <AdminSuspense>
-            <ReportsHubPage />
-          </AdminSuspense>
+          FEATURE_PROGRESS_REPORTS_ENABLED ? (
+            <AdminSuspense>
+              <ReportsHubPage />
+            </AdminSuspense>
+          ) : (
+            <LegacyReportsRedirect />
+          )
         }
       />
       <Route path="/admin/feedback" element={<LegacyFeedbackRedirect />} />

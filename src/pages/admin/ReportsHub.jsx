@@ -3,13 +3,16 @@ import { useSearchParams } from 'react-router-dom';
 import { AppShell } from '../../ui/components/AppShell.jsx';
 import { ALL_CLASSES_VALUE } from '../../lib/classFilterScope.js';
 import { ALL_SESSIONS_VALUE } from '../../lib/sessionScope.js';
+import { FEATURE_KNOWLEDGE_FEEDBACK_ENABLED } from '../../config/features.js';
 import { ReportsPanel } from './Reports.jsx';
 import { FeedbackPanel } from './Feedback.jsx';
 
-const TABS = [
-  { id: 'progress', label: 'Báo cáo tiến độ' },
-  { id: 'feedback', label: 'Phản hồi buổi học' },
-];
+const TABS = FEATURE_KNOWLEDGE_FEEDBACK_ENABLED
+  ? [
+      { id: 'progress', label: 'Báo cáo tiến độ' },
+      { id: 'feedback', label: 'Phản hồi buổi học' },
+    ]
+  : [{ id: 'progress', label: 'Báo cáo tiến độ' }];
 
 function readClassFromParams(params) {
   const value = params.get('class') || '';
@@ -90,25 +93,27 @@ export function ReportsHubPage() {
   return (
     <AppShell title="Báo cáo học sinh">
       <div className="space-y-6">
-        <div className="flex flex-wrap gap-2">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-                tab === t.id
-                  ? 'bg-brand-600 text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+        {FEATURE_KNOWLEDGE_FEEDBACK_ENABLED && (
+          <div className="flex flex-wrap gap-2">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTab(t.id)}
+                className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+                  tab === t.id
+                    ? 'bg-brand-600 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {tab === 'progress' && <ReportsPanel {...sharedFilterProps} />}
-        {tab === 'feedback' && (
+        {FEATURE_KNOWLEDGE_FEEDBACK_ENABLED && tab === 'feedback' && (
           <FeedbackPanel
             {...sharedFilterProps}
             sessionFilter={sessionFilter}

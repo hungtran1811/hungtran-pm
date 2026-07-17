@@ -7,7 +7,6 @@ import {
   RotateCcw,
   Search,
   SkipForward,
-  Square,
   Users,
   Vote,
 } from 'lucide-react';
@@ -18,7 +17,7 @@ import { Field, Input, Select } from '../../../ui/components/Field.jsx';
 import { SelectClassPrompt, LoadingCatState } from '../../../ui/components/WaitingCatIllustration.jsx';
 import { useToast } from '../../../ui/components/Toast.jsx';
 import { maxSpyCount } from '../../../lib/minigameAttendance.js';
-import { spyStatusLabel } from '../../../lib/spyConstants.js';
+import { SPY_MODES, spyStatusLabel, spyOutcomeLabel } from '../../../lib/spyConstants.js';
 import {
   getCategoryPairs,
   pickRandomPair,
@@ -26,27 +25,29 @@ import {
   validateWordPair,
 } from '../../../data/spyWordBank.js';
 import { getErrorMessage } from '../../../lib/firestore.js';
+import { useSpySession } from '../../../hooks/useSpySession.js';
 import {
+  adminSkipCrewVoteRound,
   advanceSpyDescribe,
-  cancelSpySession,
+  advanceTieDebate,
+  acknowledgeCrewSabotage,
+  completeCrewGame,
   createSpySession,
   finishSpySession,
-  getCurrentSpeaker,
   getSpyPortalLink,
   getSpyPresentLink,
-  getSpySessionResults,
+  openSpyMeeting,
   openSpyLobby,
   openSpyVote,
+  resolveSpyVoteRound,
+  resolveTieRevote,
   restartSpyRound,
-  revealSpyRound,
+  checkCrewTaskWin,
+  startCrewGame,
   startSpyGame,
-  subscribeSpyParticipants,
-  subscribeSpySession,
-  subscribeSpyVotes,
-  syncSpyClassPointer,
-  tallySpyVotes,
 } from '../../../services/spy.service.js';
 import { SpyStage } from './SpyStage.jsx';
+import { SpyGmRoster, SpyTieCountdown } from './SpyGmRoster.jsx';
 
 function SpyWordPicker({
   wordMode,
@@ -132,9 +133,6 @@ export function SpyGame({
 }) {
   const toast = useToast();
   const [sessionId, setSessionId] = useState(null);
-  const [session, setSession] = useState(null);
-  const [participants, setParticipants] = useState([]);
-  const [votes, setVotes] = useState([]);
   const [busy, setBusy] = useState(false);
   const [wordMode, setWordMode] = useState('bank');
   const [categoryId, setCategoryId] = useState(SPY_WORD_CATEGORIES[0].id);
@@ -142,9 +140,32 @@ export function SpyGame({
   const [civilianWord, setCivilianWord] = useState('');
   const [spyWord, setSpyWord] = useState('');
   const [impostorCount, setImpostorCount] = useState(1);
-  const [revealData, setRevealData] = useState(null);
+  const [describeRoundTotal, setDescribeRoundTotal] = useState(1);
+  const [gameMode, setGameMode] = useState('word');
+  const [taskPerPlayer, setTaskPerPlayer] = useState(5);
 
   const presentIds = useMemo(() => [...(presentStudentIds || [])], [presentStudentIds]);
+
+  const onParticipantsError = useCallback((err) => {
+    toast.error(getErrorMessage(err) || 'Không tải được danh sách học sinh trong phòng.');
+  }, [toast]);
+
+  const {
+    session,
+    participants,
+    votes,
+    tally,
+    topCandidates,
+    taskProgress,
+    activeParticipants,
+    speakerId,
+    speakerName,
+    spyNames,
+  } = useSpySession(sessionId, {
+    watchStudentIds: presentIds,
+    onParticipantsError,
+  });
+
   const maxSpies = maxSpyCount(presentStudents.length);
   const categoryPairs = useMemo(() => getCategoryPairs(categoryId), [categoryId]);
 
@@ -168,67 +189,63 @@ export function SpyGame({
   }, [wordMode, categoryId, pairIndex, categoryPairs]);
 
   useEffect(() => {
-    if (!sessionId) {
-      setSession(null);
-      return undefined;
-    }
-    return subscribeSpySession(sessionId, setSession, () => {});
-  }, [sessionId]);
+    if (!sessionId || session?.mode !== 'crew' || session?.status !== 'vote') return undefined;
+    const endsAt = session.crewVoteResolveEndsAt?.toMillis?.() ?? 0;
+    if (!endsAt) return undefined;
+    const delay = Math.max(0, endsAt - Date.now());
+    const timer = setTimeout(() => {
+      resolveSpyVoteRound(sessionId).catch(() => {});
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [sessionId, session?.mode, session?.status, session?.crewVoteResolveEndsAt]);
 
-  useEffect(() => {
-    if (!sessionId) {
-      setParticipants([]);
-      return undefined;
-    }
-    return subscribeSpyParticipants(sessionId, setParticipants, () => {});
-  }, [sessionId]);
-
-  useEffect(() => {
-    if (!sessionId) {
-      setVotes([]);
-      return undefined;
-    }
-    return subscribeSpyVotes(sessionId, setVotes, () => {});
-  }, [sessionId]);
-
-  useEffect(() => {
-    if (!sessionId || !session?.status) return;
-    syncSpyClassPointer(sessionId).catch(() => {});
-  }, [sessionId, session?.status]);
-
-  useEffect(() => {
-    if (session?.status !== 'reveal' || !sessionId) {
-      setRevealData(null);
-      return;
-    }
-    getSpySessionResults(sessionId).then(setRevealData).catch(() => {});
-  }, [session?.status, sessionId]);
-
-  const joinedIds = useMemo(() => new Set(participants.map((p) => p.id)), [participants]);
-  const notJoined = presentStudents.filter((s) => !joinedIds.has(s.id));
   const portalLink = sessionId && selectedClass ? getSpyPortalLink(selectedClass, sessionId) : '';
   const presentLink = sessionId ? getSpyPresentLink(sessionId) : '';
-  const speakerId = getCurrentSpeaker(session);
-  const speakerName = participants.find((p) => p.id === speakerId)?.studentName || '';
-  const tally = useMemo(() => tallySpyVotes(votes, participants), [votes, participants]);
-  const spyNames = useMemo(() => {
-    if (session?.status === 'reveal' && revealData?.spies) {
-      return revealData.spies.map((p) => p.studentName);
-    }
-    return [];
-  }, [session?.status, revealData]);
 
   const runAction = useCallback(async (fn, successMsg) => {
     setBusy(true);
     try {
-      await fn();
-      if (successMsg) toast.success(successMsg);
+      const result = await fn();
+      const msg = typeof successMsg === 'function' ? successMsg(result) : successMsg;
+      if (msg) toast.success(msg);
+      return result;
     } catch (error) {
       toast.error(getErrorMessage(error));
+      return null;
     } finally {
       setBusy(false);
     }
   }, [toast]);
+
+  const formatEliminateResult = (result) => {
+    if (!result) return '';
+    if (result.skipped) return 'Phiếu trắng thắng — tiếp tục nhiệm vụ';
+    if (result.phase === 'tie_debate') {
+      return 'Hòa phiếu — bắt đầu biện luận (mỗi người 1 phút)';
+    }
+    if (result.lastTieBreak?.pickedName) {
+      const names = (result.lastTieBreak.candidateIds || [])
+        .map((id) => participants.find((p) => p.id === id)?.studentName || id)
+        .join(', ');
+      return `Hòa phiếu${names ? ` giữa ${names}` : ''} — đã bốc thăm loại ${result.lastTieBreak.pickedName}`;
+    }
+    if (result.eliminatedName) {
+      return `Đã loại ${result.eliminatedName}`;
+    }
+    return 'Đã chốt vote và loại người';
+  };
+  const isCrewSession = session?.mode === 'crew';
+  const crewReady = isCrewSession && checkCrewTaskWin(session, participants, taskProgress);
+
+  useEffect(() => {
+    if (!sessionId || !crewReady || session?.status !== 'playing') return undefined;
+    const timer = setTimeout(() => {
+      completeCrewGame(sessionId)
+        .then(() => toast.success('Đủ nhiệm vụ — đã công bố kết quả!'))
+        .catch(() => {});
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [sessionId, crewReady, session?.status, toast]);
 
   const handleCreate = () => {
     if (!selectedClass) {
@@ -244,6 +261,9 @@ export function SpyGame({
         classCode: selectedClass,
         presentStudentIds: presentIds,
         impostorCount,
+        describeRoundTotal,
+        mode: gameMode,
+        taskPerPlayer,
       });
       await openSpyLobby(id);
       setSessionId(id);
@@ -251,6 +271,13 @@ export function SpyGame({
   };
 
   const handleStart = () => {
+    if (session?.mode === 'crew') {
+      runAction(
+        () => startCrewGame(sessionId),
+        'Đã bắt đầu mode Phi hành đoàn.',
+      );
+      return;
+    }
     const validated = validateWordPair(civilianWord, spyWord);
     if (validated.error) {
       toast.error(validated.error);
@@ -329,7 +356,40 @@ export function SpyGame({
               onChange={(e) => setImpostorCount(Number(e.target.value) || 1)}
             />
           </Field>
-          <SpyWordPicker {...wordPickerProps} />
+          <Field label="Mode">
+            <Select value={gameMode} onChange={(e) => setGameMode(e.target.value)}>
+              {Object.entries(SPY_MODES).map(([id, label]) => (
+                <option key={id} value={id}>{label}</option>
+              ))}
+            </Select>
+          </Field>
+          {gameMode === 'word' ? (
+            <>
+              <Field label="Số vòng mô tả (ván đầu)">
+                <Input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={describeRoundTotal}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    setDescribeRoundTotal(Number.isFinite(n) ? Math.min(20, Math.max(1, n)) : 1);
+                  }}
+                />
+              </Field>
+              <SpyWordPicker {...wordPickerProps} />
+            </>
+          ) : (
+            <Field label="Số nhiệm vụ / người">
+              <Input
+                type="number"
+                min={1}
+                max={20}
+                value={taskPerPlayer}
+                onChange={(e) => setTaskPerPlayer(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+              />
+            </Field>
+          )}
           <Button onClick={handleCreate} loading={busy}>
             <Search className="h-4 w-4" />
             Tạo phòng & mở lobby
@@ -342,6 +402,12 @@ export function SpyGame({
           <div className="card space-y-3 p-4">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone="brand">{spyStatusLabel(session.status)}</Badge>
+              <Badge tone="slate">{session.mode === 'crew' ? SPY_MODES.crew : SPY_MODES.word}</Badge>
+              {isCrewSession && session.status === 'playing' && (
+                <Badge tone="brand">
+                  Đang làm nhiệm vụ
+                </Badge>
+              )}
               <span className="text-sm text-slate-600 dark:text-slate-300">
                 {participants.length} / {presentStudents.length} trong phòng
               </span>
@@ -369,101 +435,208 @@ export function SpyGame({
             </div>
 
             <p className="text-xs text-slate-500">
-              Mở <strong>Màn trình chiếu</strong> trên TV/máy chiếu — học sinh không thấy từ khóa. Điều khiển ván ở màn hình này.
+              Mở <strong>Màn trình chiếu</strong> trên TV/máy chiếu.
+              {isCrewSession
+                ? ' Mode Phi hành đoàn: gián điệp phá hệ thống sẽ loại ngẫu nhiên 1 người và mở họp khẩn.'
+                : ' Trong vòng mô tả, giáo viên chủ động bấm Mở bỏ phiếu khi muốn vote.'}
             </p>
 
             <div className="flex flex-wrap gap-2 border-t border-slate-200 pt-3 dark:border-slate-700">
               {session.status === 'describe' && (
                 <>
-                  <Button size="sm" onClick={() => runAction(() => advanceSpyDescribe(sessionId))} loading={busy}>
+                  <Button
+                    size="sm"
+                    onClick={() => runAction(async () => {
+                      const result = await advanceSpyDescribe(sessionId);
+                      if (result.roundComplete) {
+                        toast.info('Đã hết vòng mô tả — bấm "Mở bỏ phiếu" khi sẵn sàng.');
+                      }
+                    })}
+                    loading={busy}
+                  >
                     <SkipForward className="h-4 w-4" />
                     Người tiếp theo
                   </Button>
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() => runAction(() => openSpyVote(sessionId), 'Mở bỏ phiếu')}
+                    onClick={() => runAction(() => openSpyVote(sessionId), 'Đã mở bỏ phiếu')}
                     loading={busy}
                   >
                     <Vote className="h-4 w-4" />
-                    Bỏ phiếu ngay
+                    Mở bỏ phiếu
                   </Button>
                 </>
               )}
-              {session.status === 'vote' && (
-                <Button
-                  size="sm"
-                  onClick={() => runAction(
-                    () => revealSpyRound(sessionId, { civilianWord, spyWord }),
-                    'Đã công bố trên màn trình chiếu',
-                  )}
-                  loading={busy}
-                >
-                  Công bố kết quả
-                </Button>
-              )}
-              {(session.status === 'reveal' || session.status === 'finished') && (
+              {session.status === 'playing' && (
                 <>
                   <Button
                     size="sm"
-                    onClick={() => runAction(() => restartSpyRound(sessionId), 'Ván mới — học sinh chờ trong phòng')}
+                    onClick={() => runAction(() => openSpyMeeting(sessionId), 'Đã mở họp khẩn')}
                     loading={busy}
                   >
-                    <RotateCcw className="h-4 w-4" />
-                    Ván tiếp theo
+                    <Vote className="h-4 w-4" />
+                    Họp khẩn
                   </Button>
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() => runAction(() => finishSpySession(sessionId), 'Đã đóng phòng')}
+                    disabled={!crewReady}
+                    onClick={() => runAction(() => completeCrewGame(sessionId), 'Đã công bố kết quả')}
                     loading={busy}
                   >
-                    Đóng phòng
+                    Kết thúc — công bố
                   </Button>
                 </>
               )}
+              {session.status === 'sabotage_alert' && (
+                <Button
+                  size="sm"
+                  onClick={() => runAction(
+                    () => acknowledgeCrewSabotage(sessionId),
+                    'Đã vào họp khẩn — bỏ phiếu',
+                  )}
+                  loading={busy}
+                >
+                  <Vote className="h-4 w-4" />
+                  Vào họp khẩn — bỏ phiếu
+                </Button>
+              )}
+              {session.status === 'vote' && (
+                <>
+                  {session.mode === 'crew' && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => runAction(
+                        () => adminSkipCrewVoteRound(sessionId),
+                        'Đã bỏ qua vote — tiếp tục nhiệm vụ',
+                      )}
+                      loading={busy}
+                    >
+                      <SkipForward className="h-4 w-4" />
+                      Bỏ qua vote — tiếp tục ({votes.length}/{activeParticipants.length})
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    onClick={() => runAction(
+                      () => resolveSpyVoteRound(sessionId),
+                      formatEliminateResult,
+                    )}
+                    loading={busy}
+                    disabled={!votes.length}
+                  >
+                    <Vote className="h-4 w-4" />
+                    Chốt vote & loại người ({votes.length}/{activeParticipants.length})
+                  </Button>
+                </>
+              )}
+              {session.status === 'tie_debate' && (
+                <>
+                  <div className="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+                    <p>
+                      Đang biện luận:{' '}
+                      <strong>
+                        {participants.find((p) => p.id === (session.tieCandidateIds?.[session.tieDebateIndex]))?.studentName
+                          || '—'}
+                      </strong>
+                      {' · '}
+                      {(session.tieDebateIndex || 0) + 1}/{session.tieCandidateIds?.length || 0}
+                    </p>
+                    <SpyTieCountdown session={session} className="mt-1" />
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => runAction(
+                      () => advanceTieDebate(sessionId),
+                      (result) => (result?.openedRevote
+                        ? 'Đã mở đổi phiếu sau biện luận'
+                        : 'Chuyển người biện luận tiếp theo'),
+                    )}
+                    loading={busy}
+                  >
+                    <SkipForward className="h-4 w-4" />
+                    {(session.tieDebateIndex || 0) + 1 >= (session.tieCandidateIds?.length || 0)
+                      ? 'Mở đổi phiếu'
+                      : 'Người tiếp theo'}
+                  </Button>
+                </>
+              )}
+              {session.status === 'tie_revote' && (
+                <Button
+                  size="sm"
+                  onClick={() => runAction(
+                    () => resolveTieRevote(sessionId),
+                    formatEliminateResult,
+                  )}
+                  loading={busy}
+                  disabled={!votes.length}
+                >
+                  <Vote className="h-4 w-4" />
+                  Chốt sau biện luận ({votes.length}/{activeParticipants.length})
+                </Button>
+              )}
+              {(session.status === 'reveal' || session.status === 'finished') && (
+                <Button
+                  size="sm"
+                  onClick={() => runAction(() => restartSpyRound(sessionId), 'Ván mới — học sinh chờ trong phòng')}
+                  loading={busy}
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Ván tiếp theo
+                </Button>
+              )}
               <Button
-                variant="ghost"
+                variant="secondary"
                 size="sm"
-                onClick={() => runAction(() => cancelSpySession(sessionId)).then(() => setSessionId(null))}
+                onClick={() => runAction(() => finishSpySession(sessionId), 'Đã đóng phòng').then((result) => {
+                  if (result !== null) setSessionId(null);
+                })}
                 loading={busy}
               >
-                <Square className="h-4 w-4" />
-                Huỷ phòng
+                Đóng phòng
               </Button>
             </div>
           </div>
 
-          {(session.status === 'lobby' || session.status === 'reveal' || session.status === 'finished') && (
+          {session.mode !== 'crew' && (session.status === 'lobby' || session.status === 'reveal' || session.status === 'finished') && (
             <SpyWordPicker {...wordPickerProps} compact />
           )}
 
-          {session.status === 'lobby' && (
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="card p-4">
-                <p className="mb-2 text-sm font-semibold">Trong phòng ({participants.length})</p>
-                <ul className="space-y-1 text-sm">
-                  {participants.map((p) => (
-                    <li key={p.id}>{p.studentName}</li>
-                  ))}
-                </ul>
-              </div>
-              <div className="card p-4">
-                <p className="mb-2 text-sm font-semibold text-amber-700">Chưa vào ({notJoined.length})</p>
-                <ul className="space-y-1 text-sm text-slate-600">
-                  {notJoined.map((s) => (
-                    <li key={s.id}>{s.fullName}</li>
-                  ))}
-                </ul>
-              </div>
-              <div className="lg:col-span-2">
-                <Button onClick={handleStart} loading={busy} disabled={participants.length < impostorCount + 2}>
-                  <Play className="h-4 w-4" />
-                  Bắt đầu ván — phát từ cho học sinh
-                </Button>
-              </div>
+          {session.status === 'reveal' && session.outcome && (
+            <div className="card border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+              <p className="text-lg font-bold text-emerald-800 dark:text-emerald-200">
+                {spyOutcomeLabel(session.outcome, session.mode)}
+              </p>
+              {(session.eliminatedIds || []).length > 0 && (
+                <p className="mt-2 text-sm text-emerald-700 dark:text-emerald-300">
+                  Đã loại: {(session.eliminatedIds || [])
+                    .map((id) => participants.find((p) => p.id === id)?.studentName || id)
+                    .join(' → ')}
+                </p>
+              )}
             </div>
           )}
+
+          {session.status === 'lobby' && (
+            <div>
+              <Button onClick={handleStart} loading={busy} disabled={participants.length < impostorCount + 2}>
+                <Play className="h-4 w-4" />
+                {session.mode === 'crew' ? 'Bắt đầu mode Phi hành đoàn' : 'Bắt đầu ván — phát từ cho học sinh'}
+              </Button>
+            </div>
+          )}
+
+          <SpyGmRoster
+            session={session}
+            presentStudents={presentStudents}
+            participants={participants}
+            votes={votes}
+            tally={tally}
+            taskProgress={taskProgress}
+            speakerId={speakerId}
+          />
 
           <div className="card border border-slate-200 p-4 dark:border-slate-700">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -474,6 +647,8 @@ export function SpyGame({
               participants={participants}
               votes={votes}
               tally={tally}
+              topCandidates={topCandidates}
+              taskProgress={taskProgress}
               speakerName={speakerName}
               presenting={false}
               hideWords

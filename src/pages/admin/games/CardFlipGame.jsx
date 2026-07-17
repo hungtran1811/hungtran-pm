@@ -142,10 +142,17 @@ export function CardFlipGame({
   const cancelPickRef = useRef(null);
   const { shellRef, presenting, togglePresentation } = useGamePresentation();
   const sound = useGameSound();
+  const stopSoundRef = useRef(sound.stop);
+  stopSoundRef.current = sound.stop;
 
   const activeClasses = useMemo(
     () => classes.filter((c) => c.status === 'active'),
     [classes],
+  );
+
+  const presentIdsKey = useMemo(
+    () => presentStudents.map((s) => s.id).sort().join('|'),
+    [presentStudents],
   );
 
   useEffect(() => {
@@ -153,12 +160,15 @@ export function CardFlipGame({
     setHighlightKey(null);
     setLastRevealedKey(null);
     setPhase('idle');
-  }, [selectedClass, presentStudents]);
+    cancelPickRef.current?.();
+    cancelPickRef.current = null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- rebuild only when class or roster ids change
+  }, [selectedClass, presentIdsKey]);
 
   useEffect(() => () => {
     cancelPickRef.current?.();
-    sound.stop('spin');
-  }, [sound]);
+    stopSoundRef.current?.('spin');
+  }, []);
 
   const remaining = useMemo(() => deck.filter((c) => !c.flipped), [deck]);
   const flippedCount = deck.length - remaining.length;

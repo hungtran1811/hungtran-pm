@@ -36,6 +36,7 @@ import { useSettings } from '../../state/settings.store.jsx';
 import { getErrorMessage } from '../../lib/firestore.js';
 import { filterClassesBySubject, subjectsWithClasses } from '../../lib/subjectGroups.js';
 import { CodeSubmissionsPurgePanel } from '../../ui/components/CodeSubmissionsPurgePanel.jsx';
+import { FEATURE_KNOWLEDGE_FEEDBACK_ENABLED, FEATURE_CODE_UPLOAD_ENABLED } from '../../config/features.js';
 
 const STATUS_TONES = { active: 'green', completed: 'blue', archived: 'slate' };
 
@@ -167,6 +168,10 @@ export function ClassesPage() {
   );
 
   useEffect(() => {
+    if (!FEATURE_KNOWLEDGE_FEEDBACK_ENABLED) {
+      setFeedbacksByClass({});
+      return undefined;
+    }
     let cancelled = false;
     const codes = visibleClassCodes ? visibleClassCodes.split('|').filter(Boolean) : [];
     if (!codes.length) {
@@ -187,7 +192,7 @@ export function ClassesPage() {
     return () => {
       cancelled = true;
     };
-  }, [visibleClassCodes]);
+  }, [visibleClassCodes, toast]);
 
   return (
     <AppShell
@@ -237,7 +242,9 @@ export function ClassesPage() {
         )}
       </div>
 
-      {tab === 'archived' && <CodeSubmissionsPurgePanel classes={classes} />}
+      {FEATURE_CODE_UPLOAD_ENABLED && tab === 'archived' && (
+        <CodeSubmissionsPurgePanel classes={classes} />
+      )}
 
       {loading ? (
         <SkeletonRows count={4} />
@@ -261,11 +268,19 @@ export function ClassesPage() {
               key={cls.id}
               cls={cls}
               programs={programs}
-              avgUnderstanding={averageUnderstanding(feedbacksByClass[cls.classCode] || [])}
-              sessionAvgUnderstanding={averageUnderstanding(
-                feedbacksByClass[cls.classCode] || [],
-                cls.curriculumCurrentSession,
-              )}
+              avgUnderstanding={
+                FEATURE_KNOWLEDGE_FEEDBACK_ENABLED
+                  ? averageUnderstanding(feedbacksByClass[cls.classCode] || [])
+                  : null
+              }
+              sessionAvgUnderstanding={
+                FEATURE_KNOWLEDGE_FEEDBACK_ENABLED
+                  ? averageUnderstanding(
+                      feedbacksByClass[cls.classCode] || [],
+                      cls.curriculumCurrentSession,
+                    )
+                  : null
+              }
               onEdit={() => openEdit(cls)}
               onDelete={() => setDeleteTarget(cls)}
               onArchive={() => handleStatusChange(cls, 'completed')}
@@ -368,32 +383,36 @@ function ClassCard({
           <dt className="text-slate-400">Học sinh</dt>
           <dd className="font-medium text-slate-700 dark:text-slate-200">{cls.studentCount}</dd>
         </div>
-        <div className="flex items-center justify-between gap-2">
-          <dt className="text-slate-400">Hiểu bài TB</dt>
-          <dd className="flex flex-col items-end gap-1">
-            {avgUnderstanding != null ? (
-              <>
-                <span
-                  className={`text-sm font-semibold tabular-nums ${
-                    (() => {
-                      const tone = understandingTone(Math.round(avgUnderstanding));
-                      if (tone === 'green') return 'text-emerald-600 dark:text-emerald-400';
-                      if (tone === 'amber') return 'text-amber-600 dark:text-amber-400';
-                      if (tone === 'red') return 'text-red-600 dark:text-red-400';
-                      return 'text-slate-700 dark:text-slate-200';
-                    })()
-                  }`}
-                >
-                  {avgUnderstanding}/5
-                </span>
-                <UnderstandingDots level={Math.round(avgUnderstanding)} />
-              </>
-            ) : (
-              <span className="font-medium text-slate-400">—</span>
-            )}
-          </dd>
-        </div>
-        {Number(cls.curriculumCurrentSession) > 0 && sessionAvgUnderstanding != null && (
+        {FEATURE_KNOWLEDGE_FEEDBACK_ENABLED && (
+          <div className="flex items-center justify-between gap-2">
+            <dt className="text-slate-400">Hiểu bài TB</dt>
+            <dd className="flex flex-col items-end gap-1">
+              {avgUnderstanding != null ? (
+                <>
+                  <span
+                    className={`text-sm font-semibold tabular-nums ${
+                      (() => {
+                        const tone = understandingTone(Math.round(avgUnderstanding));
+                        if (tone === 'green') return 'text-emerald-600 dark:text-emerald-400';
+                        if (tone === 'amber') return 'text-amber-600 dark:text-amber-400';
+                        if (tone === 'red') return 'text-red-600 dark:text-red-400';
+                        return 'text-slate-700 dark:text-slate-200';
+                      })()
+                    }`}
+                  >
+                    {avgUnderstanding}/5
+                  </span>
+                  <UnderstandingDots level={Math.round(avgUnderstanding)} />
+                </>
+              ) : (
+                <span className="font-medium text-slate-400">—</span>
+              )}
+            </dd>
+          </div>
+        )}
+        {FEATURE_KNOWLEDGE_FEEDBACK_ENABLED
+          && Number(cls.curriculumCurrentSession) > 0
+          && sessionAvgUnderstanding != null && (
           <div className="flex justify-between">
             <dt className="text-slate-400">Buổi {cls.curriculumCurrentSession}</dt>
             <dd className="font-medium text-slate-700 dark:text-slate-200">

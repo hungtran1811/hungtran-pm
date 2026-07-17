@@ -29,5 +29,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Lint
+        run: npm run lint
+
       - name: Run CI checks
-        run: npm run ci
+        run: npm test && npm run test:rules && npm run build && npm run audit:security:gate

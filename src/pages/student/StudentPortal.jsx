@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { ArrowRight, Ban, Mountain, Search, Swords, UserRound, Users } from 'lucide-react';
+import { ArrowRight, Ban, Search, Swords, UserRound, Users } from 'lucide-react';
 import { StudentShell } from './StudentShell.jsx';
 import { Button } from '../../ui/components/Button.jsx';
 import { Input } from '../../ui/components/Field.jsx';
@@ -15,8 +15,6 @@ import {
 import { getCurriculumProgram } from '../../services/curriculum.service.js';
 import { getStudentFeedbackLessonIds } from '../../services/knowledgeReports.service.js';
 import { getErrorMessage } from '../../lib/firestore.js';
-import { LessonsView } from './LessonsView.jsx';
-import { StudentOverview } from './StudentOverview.jsx';
 import { ProjectNamePendingBanner, ProjectNameSetup } from './ProjectNameSetup.jsx';
 import {
   classUsesProjectNames,
@@ -26,11 +24,15 @@ import {
   projectNameDisplay,
   resolveFinalMode,
 } from '../../lib/classFinalMode.js';
-import { FEATURE_CODING_SHOWDOWN_ENABLED, FEATURE_OLYMPIA_ENABLED, FEATURE_SPY_GAME_ENABLED } from '../../config/features.js';
+import {
+  FEATURE_CODING_SHOWDOWN_ENABLED,
+  FEATURE_KNOWLEDGE_FEEDBACK_ENABLED,
+  FEATURE_SPY_GAME_ENABLED,
+} from '../../config/features.js';
 
-const OlympiaStudentViewLazy = FEATURE_OLYMPIA_ENABLED
-  ? lazy(() => import('./OlympiaStudentView.jsx').then((m) => ({ default: m.OlympiaStudentView })))
-  : null;
+const LessonsViewLazy = lazy(() =>
+  import('./LessonsView.jsx').then((m) => ({ default: m.LessonsView })),
+);
 
 const ShowdownStudentViewLazy = FEATURE_CODING_SHOWDOWN_ENABLED
   ? lazy(() => import('./ShowdownStudentView.jsx').then((m) => ({ default: m.ShowdownStudentView })))
@@ -52,7 +54,6 @@ export function StudentPortalPage() {
   const { classCode: rawCode } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const classCode = decodeURIComponent(rawCode || '');
-  const olympiaParam = searchParams.get('olympia');
   const showdownParam = searchParams.get('showdown');
   const spyParam = searchParams.get('spy');
   const toast = useToast();
@@ -71,13 +72,12 @@ export function StudentPortalPage() {
   });
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [submittedLessonIds, setSubmittedLessonIds] = useState([]);
-  const [activeOlympia, setActiveOlympia] = useState(null);
-  const [olympiaSessionId, setOlympiaSessionId] = useState(() => olympiaParam || null);
   const [activeShowdown, setActiveShowdown] = useState(null);
   const [showdownSessionId, setShowdownSessionId] = useState(() => showdownParam || null);
   const [activeSpy, setActiveSpy] = useState(null);
   const [spySessionId, setSpySessionId] = useState(() => spyParam || null);
   const [quizFocus, setQuizFocus] = useState(false);
+  const [activeLessonSession, setActiveLessonSession] = useState(null);
 
   useEffect(() => {
     if (!classCode) return;
@@ -103,7 +103,12 @@ export function StudentPortalPage() {
         setLoading(false);
       },
       (err) => {
-        setError(getErrorMessage(err));
+        const msg = getErrorMessage(err);
+        setError(
+          err?.code === 'permission-denied'
+            ? 'Không đọc được lớp này. Kiểm tra mã lớp hoặc nhờ giáo viên mở lớp (trạng thái đang hoạt động).'
+            : msg,
+        );
         setLoading(false);
       },
     );
@@ -134,7 +139,7 @@ export function StudentPortalPage() {
   }, [classDoc?.curriculumProgramId, classDoc?.curriculumCurrentSession, toast]);
 
   useEffect(() => {
-    if (!selectedStudentId || !classDoc?.classCode) {
+    if (!FEATURE_KNOWLEDGE_FEEDBACK_ENABLED || !selectedStudentId || !classDoc?.classCode) {
       setSubmittedLessonIds([]);
       return undefined;
     }
@@ -149,7 +154,7 @@ export function StudentPortalPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedStudentId, classDoc?.classCode]);
+  }, [selectedStudentId, classDoc?.classCode, toast]);
 
   useEffect(() => {
     if (!selectedStudentId) {
@@ -171,39 +176,6 @@ export function StudentPortalPage() {
     );
     return unsubscribe;
   }, [selectedStudentId]);
-
-  useEffect(() => {
-    if (!FEATURE_OLYMPIA_ENABLED || !olympiaParam) return;
-    setOlympiaSessionId(olympiaParam);
-  }, [olympiaParam]);
-
-  useEffect(() => {
-    if (!FEATURE_OLYMPIA_ENABLED || !classCode) return undefined;
-    let cancelled = false;
-    let unsubscribe = () => {};
-    import('../../services/olympia.service.js').then(({ subscribeActiveOlympiaForClass }) => {
-      if (cancelled) return;
-      unsubscribe = subscribeActiveOlympiaForClass(classCode, setActiveOlympia, () => {});
-    });
-    return () => {
-      cancelled = true;
-      unsubscribe();
-    };
-  }, [classCode]);
-
-  const enterOlympia = (sessionId) => {
-    setOlympiaSessionId(sessionId);
-    const next = new URLSearchParams(searchParams);
-    next.set('olympia', sessionId);
-    setSearchParams(next, { replace: true });
-  };
-
-  const exitOlympia = () => {
-    setOlympiaSessionId(null);
-    const next = new URLSearchParams(searchParams);
-    next.delete('olympia');
-    setSearchParams(next, { replace: true });
-  };
 
   useEffect(() => {
     if (!FEATURE_CODING_SHOWDOWN_ENABLED || !showdownParam || !classCode) return;
@@ -265,23 +237,32 @@ export function StudentPortalPage() {
   useEffect(() => {
     if (!FEATURE_SPY_GAME_ENABLED || !spyParam || !classCode) return;
     let cancelled = false;
+    const clearSpyParam = () => {
+      setSpySessionId(null);
+      const next = new URLSearchParams(searchParams);
+      next.delete('spy');
+      setSearchParams(next, { replace: true });
+    };
     import('../../services/spy.service.js').then(({ fetchSpySession }) => {
       fetchSpySession(spyParam).then((session) => {
         if (cancelled) return;
         if (!session) {
           toast.error('Không tìm thấy phòng chơi.');
-          setSpySessionId(null);
-          const next = new URLSearchParams(searchParams);
-          next.delete('spy');
-          setSearchParams(next, { replace: true });
+          clearSpyParam();
           return;
         }
         if (session.classCode !== classCode) {
           toast.error('Phòng chơi không thuộc lớp học này.');
-          setSpySessionId(null);
-          const next = new URLSearchParams(searchParams);
-          next.delete('spy');
-          setSearchParams(next, { replace: true });
+          clearSpyParam();
+          return;
+        }
+        if (
+          selectedStudent?.id
+          && Array.isArray(session.presentStudentIds)
+          && !session.presentStudentIds.includes(selectedStudent.id)
+        ) {
+          toast.error('Bạn không có mặt buổi này — không thể tham gia.');
+          clearSpyParam();
           return;
         }
         setSpySessionId(spyParam);
@@ -290,7 +271,7 @@ export function StudentPortalPage() {
     return () => {
       cancelled = true;
     };
-  }, [spyParam, classCode, toast, searchParams, setSearchParams]);
+  }, [spyParam, classCode, selectedStudent?.id, toast, searchParams, setSearchParams]);
 
   const activeSpyPointer = classDoc?.activeSpySessionId || null;
   useEffect(() => {
@@ -317,6 +298,14 @@ export function StudentPortalPage() {
   const enterSpy = (sessionId) => {
     if (activeSpy?.classCode && activeSpy.classCode !== classCode) {
       toast.error('Phòng chơi không thuộc lớp học này.');
+      return;
+    }
+    if (
+      selectedStudent?.id
+      && Array.isArray(activeSpy?.presentStudentIds)
+      && !activeSpy.presentStudentIds.includes(selectedStudent.id)
+    ) {
+      toast.error('Bạn không có mặt buổi này — không thể tham gia.');
       return;
     }
     setSpySessionId(sessionId);
@@ -354,21 +343,23 @@ export function StudentPortalPage() {
   const finalMode = resolveFinalMode(classDoc, program);
 
   const bottomNavItems = useMemo(() => {
-    const items = [{ id: 'overview', label: 'Tổng quan', sectionId: 'student-overview' }];
     if (isFinalPhase && finalMode === 'project') {
-      items.push({ id: 'report', label: 'Dự án', sectionId: 'student-report' });
-    } else {
-      items.push({ id: 'lessons', label: 'Bài giảng', sectionId: 'student-lessons' });
+      return [{ id: 'report', label: 'Dự án', sectionId: 'student-report' }];
     }
-    return items;
-  }, [isFinalPhase, finalMode]);
+    return [
+      {
+        id: 'lessons',
+        label: activeLessonSession != null ? `Buổi ${activeLessonSession}` : 'Bài giảng',
+        sectionId: 'student-lessons',
+      },
+    ];
+  }, [isFinalPhase, finalMode, activeLessonSession]);
 
-  const showOlympiaBanner =
-    FEATURE_OLYMPIA_ENABLED &&
-    !olympiaSessionId &&
-    activeOlympia &&
-    selectedStudent &&
-    ['lobby', 'playing', 'reveal'].includes(activeOlympia.status);
+  const shellSubtitle = useMemo(() => {
+    const base = classDoc?.className || classDoc?.classCode || '';
+    if (activeLessonSession == null) return base;
+    return `${base} · Buổi ${activeLessonSession}`;
+  }, [classDoc?.className, classDoc?.classCode, activeLessonSession]);
 
   const showShowdownBanner =
     FEATURE_CODING_SHOWDOWN_ENABLED &&
@@ -377,12 +368,19 @@ export function StudentPortalPage() {
     selectedStudent &&
     ['lobby', 'playing', 'reveal'].includes(activeShowdown.status);
 
+  const isPresentForSpy =
+    Boolean(selectedStudent?.id)
+    && Array.isArray(activeSpy?.presentStudentIds)
+    && activeSpy.presentStudentIds.includes(selectedStudent.id);
+
   const showSpyBanner =
     FEATURE_SPY_GAME_ENABLED &&
     !spySessionId &&
     activeSpy &&
     selectedStudent &&
-    ['lobby', 'describe', 'vote', 'reveal'].includes(activeSpy.status);
+    isPresentForSpy &&
+    ['lobby', 'describe', 'playing', 'vote', 'tie_debate', 'tie_revote', 'reveal'].includes(activeSpy.status);
+  const isCrewSpyBanner = activeSpy?.mode === 'crew';
 
   const chooseStudent = (student) => {
     setSelectedStudentId(student.id);
@@ -393,6 +391,7 @@ export function StudentPortalPage() {
   const clearStudent = () => {
     setSelectedStudentId(null);
     setSelectedStudent(null);
+    setActiveLessonSession(null);
     localStorage.removeItem(storageKey(classCode));
   };
 
@@ -457,33 +456,9 @@ export function StudentPortalPage() {
     );
   }
 
-  if (FEATURE_OLYMPIA_ENABLED && olympiaSessionId && selectedStudent && OlympiaStudentViewLazy) {
-    const OlympiaStudentView = OlympiaStudentViewLazy;
-    return (
-      <StudentShell
-        subtitle={`${classDoc.className || classDoc.classCode} · Olympia`}
-        right={
-          <Button variant="subtle" size="sm" onClick={clearStudent} className="shadow-sm">
-            <UserRound className="h-4 w-4" />
-            Đổi tên
-          </Button>
-        }
-      >
-        <Suspense fallback={<FullPageLoader label="Đang tải Olympia..." />}>
-          <OlympiaStudentView
-            sessionId={olympiaSessionId}
-            classCode={classCode}
-            student={selectedStudent}
-            onExit={exitOlympia}
-          />
-        </Suspense>
-      </StudentShell>
-    );
-  }
-
   return (
     <StudentShell
-      subtitle={`${classDoc.className || classDoc.classCode}`}
+      subtitle={shellSubtitle}
       bottomNavItems={quizFocus ? [] : bottomNavItems}
       right={
         <Button variant="subtle" size="sm" onClick={clearStudent} className="shadow-sm">
@@ -507,31 +482,18 @@ export function StudentPortalPage() {
         )
       )}
 
-      {showOlympiaBanner && (
-        <div className="mb-5 flex flex-col gap-3 rounded-2xl border-2 border-amber-400/50 bg-gradient-to-r from-amber-500/10 to-orange-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <Mountain className="mt-0.5 h-6 w-6 shrink-0 text-amber-600 dark:text-amber-400" />
-            <div>
-              <p className="font-bold text-slate-800 dark:text-slate-100">Olympia Python đang diễn ra!</p>
-              <p className="text-sm text-slate-600 dark:text-slate-300">
-                Giáo viên đã mở phòng thi — tham gia ngay để leo núi cùng lớp.
-              </p>
-            </div>
-          </div>
-          <Button onClick={() => enterOlympia(activeOlympia.id)} className="min-h-12 shrink-0">
-            Tham gia Olympia
-          </Button>
-        </div>
-      )}
-
       {showSpyBanner && (
         <div className="mb-5 flex flex-col gap-3 rounded-2xl border-2 border-violet-400/50 bg-gradient-to-r from-violet-500/10 to-purple-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-start gap-3">
             <Search className="mt-0.5 h-6 w-6 shrink-0 text-violet-600 dark:text-violet-400" />
             <div>
-              <p className="font-bold text-slate-800 dark:text-slate-100">Truy tìm gián điệp đang diễn ra!</p>
+              <p className="font-bold text-slate-800 dark:text-slate-100">
+                {isCrewSpyBanner ? 'Phi hành đoàn đang diễn ra!' : 'Truy tìm gián điệp đang diễn ra!'}
+              </p>
               <p className="text-sm text-slate-600 dark:text-slate-300">
-                Giáo viên đã mở phòng — tham gia ngay để nhận từ khóa và tìm gián điệp.
+                {isCrewSpyBanner
+                  ? 'Giáo viên đã mở phòng — tham gia để làm nhiệm vụ, Report hoặc phá hệ thống.'
+                  : 'Giáo viên đã mở phòng — tham gia ngay để nhận từ khóa và tìm gián điệp.'}
               </p>
             </div>
           </div>
@@ -558,16 +520,6 @@ export function StudentPortalPage() {
         </div>
       )}
 
-      <section id="student-overview" className="scroll-mt-[4.5rem]">
-        <StudentOverview
-          classDoc={classDoc}
-          student={selectedStudent}
-          program={program}
-          isFinalPhase={isFinalPhase}
-          submittedLessonIds={submittedLessonIds}
-        />
-      </section>
-
       {isFinalPhase && finalMode === 'project' && (
         <section id="student-report" className="mt-8 scroll-mt-[4.5rem]">
           <Suspense fallback={<FullPageLoader label="Đang tải báo cáo dự án..." />}>
@@ -586,18 +538,21 @@ export function StudentPortalPage() {
       )}
 
       {!(isFinalPhase && finalMode === 'project') && (
-      <section id="student-lessons" className="mt-8 scroll-mt-[4.5rem]">
-        <LessonsView
-          classDoc={classDoc}
-          program={program}
-          student={selectedStudent}
-          submittedLessonIds={submittedLessonIds}
-          isFinalPhase={isFinalPhase}
-          onQuizFocusChange={setQuizFocus}
-          onFeedbackSubmitted={(lessonId) =>
-            setSubmittedLessonIds((prev) => (prev.includes(lessonId) ? prev : [...prev, lessonId]))
-          }
-        />
+      <section id="student-lessons" className="scroll-mt-[4.5rem]">
+        <Suspense fallback={<FullPageLoader label="Đang tải bài học..." />}>
+          <LessonsViewLazy
+            classDoc={classDoc}
+            program={program}
+            student={selectedStudent}
+            submittedLessonIds={submittedLessonIds}
+            isFinalPhase={isFinalPhase}
+            onQuizFocusChange={setQuizFocus}
+            onActiveSessionChange={setActiveLessonSession}
+            onFeedbackSubmitted={(lessonId) =>
+              setSubmittedLessonIds((prev) => (prev.includes(lessonId) ? prev : [...prev, lessonId]))
+            }
+          />
+        </Suspense>
       </section>
       )}
     </StudentShell>

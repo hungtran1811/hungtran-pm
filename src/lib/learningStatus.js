@@ -6,6 +6,7 @@ import {
 } from './classFinalMode.js';
 import { unlockedLessonSessionCap } from './sessionScope.js';
 import { daysSince, STALE_REPORT_DAYS } from './submissionTracking.js';
+import { FEATURE_KNOWLEDGE_FEEDBACK_ENABLED } from '../config/features.js';
 
 function normalizeSet(value) {
   if (!value) return new Set();
@@ -46,10 +47,10 @@ export function buildStudentLearningStatus({
   const quizSet = normalizeSet(quizLessonIds);
   const practiceSet = normalizeSet(practiceLessonIds);
 
-  const feedbackDone = isFinalPhase
+  const feedbackDone = !FEATURE_KNOWLEDGE_FEEDBACK_ENABLED || isFinalPhase
     ? null
     : openLessons.filter((lesson) => submittedSet.has(lesson.id)).length;
-  const feedbackTotal = isFinalPhase ? null : openLessons.length;
+  const feedbackTotal = !FEATURE_KNOWLEDGE_FEEDBACK_ENABLED || isFinalPhase ? null : openLessons.length;
   const pendingFeedback = feedbackTotal === null ? null : Math.max(0, feedbackTotal - feedbackDone);
 
   const requiredPracticeLessons = openLessons.filter((lesson) => practiceSet.has(lesson.id));
@@ -108,7 +109,7 @@ export function buildStudentLearningStatus({
           : 'Chưa có báo cáo tiến độ nào.',
       };
     }
-  } else if (pendingFeedback > 0) {
+  } else if (FEATURE_KNOWLEDGE_FEEDBACK_ENABLED && pendingFeedback > 0) {
     const lesson = firstOpenLesson(openLessons, (item) => !submittedSet.has(item.id));
     nextAction = {
       tone: 'amber',
@@ -143,7 +144,7 @@ export function buildStudentLearningStatus({
 
   const lessonStatuses = openLessons.map((lesson) => ({
     lesson,
-    feedbackDone: submittedSet.has(lesson.id),
+    feedbackDone: FEATURE_KNOWLEDGE_FEEDBACK_ENABLED ? submittedSet.has(lesson.id) : true,
     practiceRequired: practiceSet.has(lesson.id),
     practiceDone: Boolean(lessonActivity[lesson.id]?.practiceDone),
     practiceScore: lessonActivity[lesson.id]?.practiceScore ?? null,

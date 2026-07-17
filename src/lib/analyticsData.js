@@ -1,5 +1,6 @@
 import { listKnowledgeReportsByClass } from '../services/knowledgeReports.service.js';
 import { listReportsByClass } from '../services/reports.service.js';
+import { FEATURE_KNOWLEDGE_FEEDBACK_ENABLED } from '../config/features.js';
 
 const FEEDBACK_LIMIT = 100;
 const REPORT_LIMIT = 100;
@@ -13,7 +14,9 @@ export async function loadAnalyticsByClass(classCodes) {
   const pairs = await Promise.all(
     classCodes.map(async (classCode) => {
       const [feedbacks, reports] = await Promise.all([
-        listKnowledgeReportsByClass(classCode, FEEDBACK_LIMIT),
+        FEATURE_KNOWLEDGE_FEEDBACK_ENABLED
+          ? listKnowledgeReportsByClass(classCode, FEEDBACK_LIMIT)
+          : Promise.resolve([]),
         listReportsByClass(classCode, REPORT_LIMIT),
       ]);
       return { classCode, feedbacks, reports };

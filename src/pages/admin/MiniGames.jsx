@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { CircleDot, Dices, Gift, Hash, Layers, Mountain, Search, Swords } from 'lucide-react';
+import { CircleDot, Dices, Gift, Hash, Layers, Search, Swords } from 'lucide-react';
 import { AppShell } from '../../ui/components/AppShell.jsx';
 import { SkeletonRows } from '../../ui/components/Skeleton.jsx';
 import { Spinner } from '../../ui/components/Spinner.jsx';
@@ -23,7 +23,6 @@ import {
 } from '../../lib/minigameAttendance.js';
 import {
   FEATURE_CODING_SHOWDOWN_ENABLED,
-  FEATURE_OLYMPIA_ENABLED,
   FEATURE_SPY_GAME_ENABLED,
   FEATURE_WHEEL_OF_FORTUNE_ENABLED,
 } from '../../config/features.js';
@@ -47,11 +46,8 @@ const SpyGame = lazy(() => import('./games/SpyGame.jsx').then((m) => ({ default:
 const CodingShowdownGame = lazy(() =>
   import('./games/CodingShowdownGame.jsx').then((m) => ({ default: m.CodingShowdownGame })),
 );
-const OlympiaGame = lazy(() =>
-  import('./games/OlympiaGame.jsx').then((m) => ({ default: m.OlympiaGame })),
-);
 
-const BASE_GAMES = [
+const GAMES = [
   { id: 'random-student', title: 'Quay tên', icon: Dices },
   { id: 'number-guess', title: 'Đoán số', icon: Hash },
   { id: 'card-flip', title: 'Lật bài', icon: Layers },
@@ -66,10 +62,6 @@ const BASE_GAMES = [
     ? [{ id: 'coding-showdown', title: 'Coding Showdown', icon: Swords }]
     : []),
 ];
-
-const OLYMPIA_GAME = { id: 'olympia', title: 'Olympia Python', icon: Mountain };
-
-const GAMES = FEATURE_OLYMPIA_ENABLED ? [...BASE_GAMES, OLYMPIA_GAME] : BASE_GAMES;
 
 const GAMES_WITH_ATTENDANCE = new Set([
   'random-student',
@@ -343,11 +335,6 @@ export function MiniGamesPage() {
                 programs={programs}
                 loadError={loadError}
               />
-            </GameSuspense>
-          )}
-          {activeGame === 'olympia' && FEATURE_OLYMPIA_ENABLED && (
-            <GameSuspense label="Đang tải Olympia Python...">
-              <OlympiaGame classes={classes} programs={programs} />
             </GameSuspense>
           )}
         </div>

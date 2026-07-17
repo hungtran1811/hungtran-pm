@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { visualizer } from 'rollup-plugin-visualizer';
 
 function isEditorDep(id) {
   return (
@@ -37,8 +38,17 @@ function isFirebaseDep(id) {
   return id.includes('@firebase/') || id.includes('/firebase/');
 }
 
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
+export default defineConfig(({ mode }) => ({
+  plugins: [
+    react(),
+    tailwindcss(),
+    mode === 'analyze'
+      && visualizer({
+        filename: 'dist/bundle-stats.html',
+        gzipSize: true,
+        open: false,
+      }),
+  ].filter(Boolean),
   resolve: {
     dedupe: ['react', 'react-dom', 'react-router-dom'],
   },
@@ -61,4 +71,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

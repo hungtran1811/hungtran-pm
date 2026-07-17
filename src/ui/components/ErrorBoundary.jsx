@@ -2,6 +2,7 @@ import { Component } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from './Button.jsx';
+import { captureError } from '../../lib/errorReporting.js';
 
 export class ErrorBoundary extends Component {
   constructor(props) {
@@ -14,6 +15,7 @@ export class ErrorBoundary extends Component {
   }
 
   componentDidCatch(error, info) {
+    captureError(error, { componentStack: info?.componentStack });
     if (import.meta.env.DEV) {
       console.error('[ErrorBoundary]', error, info?.componentStack);
     }

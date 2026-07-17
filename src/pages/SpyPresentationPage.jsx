@@ -1,68 +1,25 @@
-import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Maximize2, Minimize2, Search, Tv } from 'lucide-react';
 import { FullPageLoader } from '../ui/components/Spinner.jsx';
 import { Button } from '../ui/components/Button.jsx';
 import { SpyStage } from './admin/games/SpyStage.jsx';
 import { useGamePresentation } from './admin/games/GamePresentationShell.jsx';
-import {
-  getCurrentSpeaker,
-  getSpySessionResults,
-  subscribeSpyParticipants,
-  subscribeSpySession,
-  subscribeSpyVotes,
-  tallySpyVotes,
-} from '../services/spy.service.js';
+import { useSpySession } from '../hooks/useSpySession.js';
 
 export function SpyPresentationPage() {
   const { sessionId } = useParams();
   const { shellRef, presenting, togglePresentation } = useGamePresentation();
-  const [session, setSession] = useState(null);
-  const [participants, setParticipants] = useState([]);
-  const [votes, setVotes] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [revealData, setRevealData] = useState(null);
-
-  useEffect(() => {
-    if (!sessionId) return undefined;
-    setLoading(true);
-    return subscribeSpySession(
-      sessionId,
-      (data) => {
-        setSession(data);
-        setLoading(false);
-      },
-      () => setLoading(false),
-    );
-  }, [sessionId]);
-
-  useEffect(() => {
-    if (!sessionId) return undefined;
-    return subscribeSpyParticipants(sessionId, setParticipants, () => {});
-  }, [sessionId]);
-
-  useEffect(() => {
-    if (!sessionId) return undefined;
-    return subscribeSpyVotes(sessionId, setVotes, () => {});
-  }, [sessionId]);
-
-  useEffect(() => {
-    if (session?.status !== 'reveal' || !sessionId) {
-      setRevealData(null);
-      return;
-    }
-    getSpySessionResults(sessionId).then(setRevealData).catch(() => {});
-  }, [session?.status, sessionId]);
-
-  const speakerId = getCurrentSpeaker(session);
-  const speakerName = participants.find((p) => p.id === speakerId)?.studentName || '';
-  const tally = useMemo(() => tallySpyVotes(votes, participants), [votes, participants]);
-  const spyNames = useMemo(() => {
-    if (session?.status === 'reveal' && revealData?.spies) {
-      return revealData.spies.map((p) => p.studentName);
-    }
-    return [];
-  }, [session?.status, revealData]);
+  const {
+    session,
+    participants,
+    votes,
+    tally,
+    topCandidates,
+    taskProgress,
+    speakerName,
+    spyNames,
+    loading,
+  } = useSpySession(sessionId, { syncClassPointer: false });
 
   if (loading) return <FullPageLoader label="Đang tải màn trình chiếu..." />;
 
@@ -89,10 +46,11 @@ export function SpyPresentationPage() {
         </span>
         <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-300">
           <Search className="h-4 w-4" />
-          Truy tìm gián điệp
+          {session.mode === 'crew' ? 'Phi hành đoàn' : 'Truy tìm gián điệp'}
         </span>
         <span className="min-w-0 flex-1 truncate text-sm text-white/60">
           {session.classCode} · {participants.length} HS
+          {session.mode === 'crew' && session.status === 'playing' ? ' · Nhiệm vụ' : ''}
         </span>
         <Button
           variant="ghost"
@@ -117,9 +75,11 @@ export function SpyPresentationPage() {
             participants={participants}
             votes={votes}
             tally={tally}
+            topCandidates={topCandidates}
+            taskProgress={taskProgress}
             speakerName={speakerName}
             presenting
-            hideWords={false}
+            hideWords
             spyNames={spyNames}
           />
         </div>

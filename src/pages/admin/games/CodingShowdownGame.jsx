@@ -40,13 +40,8 @@ import {
   gradeShowdownCodeResponse,
   openShowdownLobby,
   isShowdownTimerWaiting,
-  resolveQuestionDeadlineMs,
   startShowdownGame,
   startShowdownQuestionTimer,
-  subscribeShowdownParticipants,
-  subscribeShowdownResponses,
-  subscribeShowdownSession,
-  syncShowdownClassPointer,
 } from '../../../services/showdown.service.js';
 import {
   getQuestionFromSession,
@@ -64,6 +59,7 @@ import { waitForShowdownStep, SHOWDOWN_SETTLE_MS } from '../../../lib/showdownSy
 import { useShowdownStepSync } from '../../../lib/useShowdownStepSync.js';
 import { roundLabel } from '../../../lib/showdownConstants.js';
 import { getErrorMessage } from '../../../lib/firestore.js';
+import { useShowdownSession } from '../../../hooks/useShowdownSession.js';
 import {
   listShowdownMatrices,
   listShowdownQuestions,
@@ -93,10 +89,14 @@ export function CodingShowdownGame({ classes, programs = [] }) {
   const [questionSelection, setQuestionSelection] = useState(null);
 
   const [sessionId, setSessionId] = useState(null);
-  const [session, setSession] = useState(null);
-  const [participants, setParticipants] = useState([]);
-  const [responses, setResponses] = useState([]);
-  const [countdown, setCountdown] = useState(0);
+  const {
+    session,
+    participants,
+    responses,
+    countdown,
+  } = useShowdownSession(sessionId, {
+    onSessionError: (err) => toast.error(getErrorMessage(err)),
+  });
   const [busy, setBusy] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
 
@@ -231,50 +231,8 @@ export function CodingShowdownGame({ classes, programs = [] }) {
   }, [selectedClass]);
 
   useEffect(() => {
-    if (!sessionId) {
-      setSession(null);
-      return undefined;
-    }
-    return subscribeShowdownSession(sessionId, setSession, (err) => toast.error(getErrorMessage(err)));
-  }, [sessionId, toast]);
-
-  useEffect(() => {
-    if (!sessionId) {
-      setParticipants([]);
-      return undefined;
-    }
-    return subscribeShowdownParticipants(sessionId, setParticipants, () => {});
-  }, [sessionId]);
-
-  useEffect(() => {
-    if (!sessionId) {
-      setResponses([]);
-      return undefined;
-    }
-    return subscribeShowdownResponses(sessionId, setResponses, () => {});
-  }, [sessionId]);
-
-  useEffect(() => {
-    const end = resolveQuestionDeadlineMs(session);
-    if (session?.status !== 'playing' || !end) {
-      setCountdown(0);
-      return undefined;
-    }
-    const tick = () => setCountdown(Math.max(0, Math.ceil((end - Date.now()) / 1000)));
-    tick();
-    const id = setInterval(tick, 250);
-    return () => clearInterval(id);
-  }, [session?.status, session?.serverStartedAt, session?.questionDeadlineAt, session?.questionDurationSeconds]);
-
-  useEffect(() => {
     if (session?.status === 'finished') setShowConfetti(true);
   }, [session?.status]);
-
-  // Keep the public class pointer in sync so students can auto-discover the room.
-  useEffect(() => {
-    if (!sessionId || !session?.status) return;
-    syncShowdownClassPointer(sessionId).catch(() => {});
-  }, [sessionId, session?.status]);
 
   const currentQuestion = useMemo(() => {
     if (!session) return null;
@@ -381,7 +339,6 @@ export function CodingShowdownGame({ classes, programs = [] }) {
 
   const resetSetup = () => {
     setSessionId(null);
-    setSession(null);
     setShowConfetti(false);
   };
 

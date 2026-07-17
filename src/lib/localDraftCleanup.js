@@ -1,4 +1,4 @@
-const DRAFT_PREFIXES = ['quizExamDraft:', 'showdown-submission:', 'olympia-submission:'];
+const DRAFT_PREFIXES = ['quizExamDraft:', 'showdown-submission:'];
 
 export function clearLocalDrafts() {
   let removed = 0;

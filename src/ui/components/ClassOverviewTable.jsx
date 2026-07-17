@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { Button } from './Button.jsx';
 import { Input } from './Field.jsx';
@@ -12,7 +13,21 @@ const STATUS_FILTERS = [
   { id: 'completed', label: 'Đã hoàn thành' },
 ];
 
-export function ClassOverviewTable({ rows, scopeClasses, showStatus = false }) {
+const BADGE_STYLES = {
+  red: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300',
+  amber: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200',
+  green: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
+  slate: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+};
+
+export function ClassOverviewTable({
+  rows,
+  scopeClasses,
+  showStatus = false,
+  showUnderstanding = false,
+  linkToReports = false,
+  linkToScores = false,
+}) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
@@ -116,7 +131,10 @@ export function ClassOverviewTable({ rows, scopeClasses, showStatus = false }) {
                     <th className="bg-white px-3 py-2.5 pr-3 dark:bg-slate-900">HS</th>
                     <th className="bg-white px-3 py-2.5 pr-3 dark:bg-slate-900">Hoàn thành</th>
                     <th className="bg-white px-3 py-2.5 pr-3 dark:bg-slate-900">Tiến độ TB</th>
-                    <th className="bg-white px-3 py-2.5 dark:bg-slate-900">Hiểu bài TB</th>
+                    {showUnderstanding && (
+                      <th className="bg-white px-3 py-2.5 pr-3 dark:bg-slate-900">Hiểu bài TB</th>
+                    )}
+                    <th className="bg-white px-3 py-2.5 dark:bg-slate-900">Gợi ý</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -128,14 +146,30 @@ export function ClassOverviewTable({ rows, scopeClasses, showStatus = false }) {
                         : cls?.status === 'completed'
                           ? 'Đã hoàn thành'
                           : 'Lưu trữ';
+                    const badge = row.badge || { label: 'OK', tone: 'green' };
+                    const classHref = linkToReports
+                      ? `/admin/reports?tab=progress&class=${encodeURIComponent(row.classCode)}`
+                      : linkToScores
+                        ? `/admin/scores?class=${encodeURIComponent(row.classCode)}`
+                        : null;
+                    const classCell = classHref ? (
+                      <Link
+                        to={classHref}
+                        className="font-medium text-brand-600 hover:underline dark:text-brand-300"
+                      >
+                        {row.classCode}
+                      </Link>
+                    ) : (
+                      <span className="font-medium text-slate-800 dark:text-slate-100">
+                        {row.classCode}
+                      </span>
+                    );
                     return (
                       <tr
                         key={row.classCode}
                         className="border-b border-slate-100 dark:border-slate-800"
                       >
-                        <td className="px-3 py-2.5 pr-3 font-medium text-slate-800 dark:text-slate-100">
-                          {row.classCode}
-                        </td>
+                        <td className="px-3 py-2.5 pr-3">{classCell}</td>
                         {showStatus && (
                           <td className="px-3 py-2.5 pr-3">
                             <span
@@ -152,7 +186,20 @@ export function ClassOverviewTable({ rows, scopeClasses, showStatus = false }) {
                         <td className="px-3 py-2.5 pr-3">{row.students}</td>
                         <td className="px-3 py-2.5 pr-3">{row.completionRate}%</td>
                         <td className="px-3 py-2.5 pr-3">{row.avgProgress}%</td>
-                        <td className="px-3 py-2.5">{row.avgUnderstanding || '—'}/5</td>
+                        {showUnderstanding && (
+                          <td className="px-3 py-2.5 pr-3">
+                            {row.avgUnderstanding != null ? `${row.avgUnderstanding}/5` : '—'}
+                          </td>
+                        )}
+                        <td className="px-3 py-2.5">
+                          <span
+                            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                              BADGE_STYLES[badge.tone] || BADGE_STYLES.slate
+                            }`}
+                          >
+                            {badge.label}
+                          </span>
+                        </td>
                       </tr>
                     );
                   })}

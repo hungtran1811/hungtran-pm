@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ChevronDown, CircleHelp, FileCode2, Link2 } from 'lucide-react';
+import { FEATURE_CODE_UPLOAD_ENABLED } from '../../config/features.js';
 import { ProjectProductLinks } from './ProjectProductLinks.jsx';
 import { SessionCodeUpload } from './SessionCodeUpload.jsx';
 import { GUIDE_SECTIONS } from './ProjectSubmissionGuide.jsx';
@@ -51,7 +52,11 @@ export function ProjectExtrasPanel({ classDoc, student, links, onChangeLink, onO
         <div className="flex items-start justify-between gap-2">
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Bổ sung dự án</p>
-            <p className="mt-0.5 text-xs text-slate-400">Liên kết và file code — mở khi cần cập nhật</p>
+            <p className="mt-0.5 text-xs text-slate-400">
+              {FEATURE_CODE_UPLOAD_ENABLED
+                ? 'Liên kết và file code — mở khi cần cập nhật'
+                : 'Liên kết sản phẩm — mở khi cần cập nhật'}
+            </p>
           </div>
           {onOpenGuide && (
             <button
@@ -88,21 +93,23 @@ export function ProjectExtrasPanel({ classDoc, student, links, onChangeLink, onO
         />
       </AccordionSection>
 
-      <AccordionSection icon={FileCode2} title="Nộp file code theo buổi" hint=".py, .html, .css, .js, .ui">
-        {onOpenGuide && (
-          <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-            Chưa biết cách nộp?{' '}
-            <button
-              type="button"
-              onClick={() => onOpenGuide(GUIDE_SECTIONS.code)}
-              className="font-medium text-brand-600 underline-offset-2 hover:underline dark:text-brand-400"
-            >
-              Xem hướng dẫn file theo buổi
-            </button>
-          </p>
-        )}
-        <SessionCodeUpload classDoc={classDoc} student={student} compact />
-      </AccordionSection>
+      {FEATURE_CODE_UPLOAD_ENABLED && (
+        <AccordionSection icon={FileCode2} title="Nộp file code theo buổi" hint=".py, .html, .css, .js, .ui">
+          {onOpenGuide && (
+            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+              Chưa biết cách nộp?{' '}
+              <button
+                type="button"
+                onClick={() => onOpenGuide(GUIDE_SECTIONS.code)}
+                className="font-medium text-brand-600 underline-offset-2 hover:underline dark:text-brand-400"
+              >
+                Xem hướng dẫn file theo buổi
+              </button>
+            </p>
+          )}
+          <SessionCodeUpload classDoc={classDoc} student={student} compact />
+        </AccordionSection>
+      )}
     </div>
   );
 }

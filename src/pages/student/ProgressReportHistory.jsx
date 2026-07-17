@@ -4,8 +4,12 @@ import { Badge } from '../../ui/components/Badge.jsx';
 import { EmptyState } from '../../ui/components/EmptyState.jsx';
 import { Spinner } from '../../ui/components/Spinner.jsx';
 import { STATUS_TONES } from '../../constants/index.js';
-import { formatDateTime } from '../../lib/firestore.js';
-import { subscribeReportsByStudent } from '../../services/reports.service.js';
+import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
+import {
+  getReport,
+  listReportsByStudent,
+  subscribeReportsByStudent,
+} from '../../services/reports.service.js';
 import { ProjectLinksReadonly } from './ProjectProductLinks.jsx';
 
 function ReportHistoryCard({ report }) {
@@ -60,28 +64,74 @@ function ReportHistoryCard({ report }) {
   );
 }
 
-export function ProgressReportHistory({ studentId, embedded = false }) {
+function normalizeReports(rows = []) {
+  return rows.filter((r) => r && r.source !== 'student-snapshot');
+}
+
+async function loadReportsFallback(studentId, latestReportId) {
+  try {
+    const rows = await listReportsByStudent(studentId, 20);
+    if (rows.length) return normalizeReports(rows);
+  } catch (error) {
+    console.warn('[ProgressReportHistory] listReportsByStudent failed', error);
+  }
+
+  if (!latestReportId) return [];
+  const latest = await getReport(latestReportId);
+  return latest ? normalizeReports([latest]) : [];
+}
+
+export function ProgressReportHistory({ studentId, latestReportId = null, embedded = false }) {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (!studentId) {
       setReports([]);
+      setError('');
       setLoading(false);
       return undefined;
     }
+
+    let cancelled = false;
     setLoading(true);
+    setError('');
+
     const unsubscribe = subscribeReportsByStudent(
       studentId,
       (rows) => {
-        setReports(rows.filter((r) => r.source !== 'student-snapshot'));
+        if (cancelled) return;
+        setReports(normalizeReports(rows));
+        setError('');
         setLoading(false);
       },
-      () => setLoading(false),
-      10,
+      (err) => {
+        if (cancelled) return;
+        console.warn('[ProgressReportHistory] subscribe failed, trying one-shot load', err);
+        loadReportsFallback(studentId, latestReportId)
+          .then((rows) => {
+            if (cancelled) return;
+            setReports(rows);
+            setError(rows.length ? '' : getErrorMessage(err));
+          })
+          .catch((fallbackErr) => {
+            if (cancelled) return;
+            setReports([]);
+            setError(getErrorMessage(fallbackErr || err));
+          })
+          .finally(() => {
+            if (!cancelled) setLoading(false);
+          });
+      },
+      20,
     );
-    return unsubscribe;
-  }, [studentId]);
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [studentId, latestReportId]);
 
   if (loading) {
     return embedded ? (
@@ -92,6 +142,16 @@ export function ProgressReportHistory({ studentId, embedded = false }) {
       <div className="card flex justify-center p-6">
         <Spinner />
       </div>
+    );
+  }
+
+  if (error && reports.length === 0) {
+    return (
+      <EmptyState
+        icon={<History className="h-7 w-7" />}
+        title="Không tải được lịch sử"
+        description={error || 'Thử tải lại trang. Nếu vẫn lỗi, báo giáo viên kiểm tra kết nối.'}
+      />
     );
   }
 
@@ -107,14 +167,12 @@ export function ProgressReportHistory({ studentId, embedded = false }) {
 
   const list = (
     <>
-      {!embedded && (
-        <div className="flex items-center gap-2">
-          <History className="h-5 w-5 text-slate-500" />
-          <h3 className="font-semibold text-slate-800 dark:text-slate-100">
-            Lịch sử báo cáo ({reports.length})
-          </h3>
-        </div>
-      )}
+      <div className="flex items-center gap-2">
+        <History className="h-5 w-5 text-slate-500" />
+        <h3 className="font-semibold text-slate-800 dark:text-slate-100">
+          Lịch sử báo cáo ({reports.length})
+        </h3>
+      </div>
       <div className="space-y-2">
         {reports.map((report) => (
           <ReportHistoryCard key={report.id} report={report} />
@@ -127,9 +185,5 @@ export function ProgressReportHistory({ studentId, embedded = false }) {
     return <div className="space-y-3">{list}</div>;
   }
 
-  return (
-    <div className="card space-y-3 p-5">
-      {list}
-    </div>
-  );
+  return <div className="card space-y-3 p-5">{list}</div>;
 }

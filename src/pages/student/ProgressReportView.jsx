@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, GitBranch } from 'lucide-react';
 import { Button } from '../../ui/components/Button.jsx';
 import { Badge } from '../../ui/components/Badge.jsx';
 import { Field, Textarea, Select } from '../../ui/components/Field.jsx';
@@ -8,11 +8,21 @@ import { STAGES, STATUSES, STATUS_TONES } from '../../constants/index.js';
 import { submitProgressReport } from '../../services/reports.service.js';
 import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
 import { isProjectNameApproved, projectNameAwaitingReview } from '../../lib/classFinalMode.js';
+import { getWaterfallStage } from '../../data/productWaterfall.js';
 import { ProgressReportHistory } from './ProgressReportHistory.jsx';
 import { ProjectLinksReadonly } from './ProjectProductLinks.jsx';
 import { ProjectExtrasPanel } from './ProjectExtrasPanel.jsx';
 
-export function ProgressReportView({ classDoc, student, onUpdateStudent, onOpenGuide, embedded = false }) {
+export function ProgressReportView({
+  classDoc,
+  student,
+  onUpdateStudent,
+  onOpenGuide,
+  onOpenProcess,
+  stagePrefill = null,
+  onStagePrefillConsumed,
+  embedded = false,
+}) {
   const toast = useToast();
   const [form, setForm] = useState({
     stage: student.currentStage || STAGES[0],
@@ -36,6 +46,13 @@ export function ProgressReportView({ classDoc, student, onUpdateStudent, onOpenG
     });
   }, [student.id, student.projectGithubUrl, student.projectCanvaUrl]);
 
+  useEffect(() => {
+    if (!stagePrefill || !STAGES.includes(stagePrefill)) return;
+    setForm((prev) => ({ ...prev, stage: stagePrefill }));
+    onStagePrefillConsumed?.();
+  }, [stagePrefill, onStagePrefillConsumed]);
+
+  const stageGuide = getWaterfallStage(form.stage);
   const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
   const updateLink = (key, value) => setLinks((prev) => ({ ...prev, [key]: value }));
 
@@ -126,6 +143,29 @@ export function ProgressReportView({ classDoc, student, onUpdateStudent, onOpenG
         />
       </div>
 
+      <div className="rounded-xl border border-brand-200 bg-brand-50/70 px-3 py-3 dark:border-brand-500/30 dark:bg-brand-500/10">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-300">
+              Ở giai đoạn này bạn nên…
+            </p>
+            <p className="mt-1 text-sm leading-6 text-slate-700 dark:text-slate-200">
+              {stageGuide.tip}
+            </p>
+          </div>
+          {onOpenProcess && (
+            <button
+              type="button"
+              onClick={onOpenProcess}
+              className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-brand-700 transition hover:bg-white/80 dark:text-brand-300 dark:hover:bg-slate-900/40"
+            >
+              <GitBranch className="h-3.5 w-3.5" />
+              Xem quy trình
+            </button>
+          )}
+        </div>
+      </div>
+
       <ProjectLinksReadonly
         githubUrl={student.projectGithubUrl}
         canvaUrl={student.projectCanvaUrl}
@@ -167,7 +207,7 @@ export function ProgressReportView({ classDoc, student, onUpdateStudent, onOpenG
           rows={3}
           value={form.doneToday}
           onChange={(e) => update('doneToday', e.target.value)}
-          placeholder="Ví dụ: hoàn thành màn hình đăng nhập, kết nối cơ sở dữ liệu... (ít nhất 10 ký tự)"
+          placeholder={stageGuide.doneTodayPlaceholder}
         />
       </Field>
 
@@ -176,7 +216,7 @@ export function ProgressReportView({ classDoc, student, onUpdateStudent, onOpenG
           rows={3}
           value={form.nextGoal}
           onChange={(e) => update('nextGoal', e.target.value)}
-          placeholder="Ví dụ: làm chức năng thêm sản phẩm... (ít nhất 10 ký tự)"
+          placeholder={stageGuide.nextGoalPlaceholder}
         />
       </Field>
 
@@ -208,6 +248,15 @@ export function ProgressReportView({ classDoc, student, onUpdateStudent, onOpenG
         Tên dự án <em>{projectNameAwaitingReview(student)}</em> đang chờ giáo viên duyệt. Sau khi được duyệt, bạn
         có thể gửi báo cáo tiến độ sản phẩm.
       </p>
+      {onOpenProcess && (
+        <button
+          type="button"
+          onClick={onOpenProcess}
+          className="mt-3 text-sm font-medium text-brand-600 hover:underline dark:text-brand-300"
+        >
+          Trong lúc chờ, đọc Quy trình làm sản phẩm →
+        </button>
+      )}
     </div>
   ) : (
     <>
@@ -226,7 +275,21 @@ export function ProgressReportView({ classDoc, student, onUpdateStudent, onOpenG
   return (
     <div className="space-y-4">
       {reportContent}
-      {!embedded && <ProgressReportHistory studentId={student.id} />}
+      {!embedded && (
+        <ProgressReportHistory
+          studentId={student.id}
+          latestReportId={student.latestReportId}
+        />
+      )}
+      {embedded && (
+        <div className="border-t border-slate-200 pt-4 dark:border-slate-700">
+          <ProgressReportHistory
+            studentId={student.id}
+            latestReportId={student.latestReportId}
+            embedded
+          />
+        </div>
+      )}
     </div>
   );
 }

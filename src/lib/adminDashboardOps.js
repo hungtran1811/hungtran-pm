@@ -1,5 +1,6 @@
 import { STALE_REPORT_DAYS, studentsMissingFeedback, studentsMissingReport } from './submissionTracking.js';
 import { summarizeQuizScoresByClass } from './quizAdminScores.js';
+import { FEATURE_KNOWLEDGE_FEEDBACK_ENABLED } from '../config/features.js';
 
 export function buildDashboardTodayItems({
   classes = [],
@@ -15,15 +16,17 @@ export function buildDashboardTodayItems({
     const session = Number(cls.curriculumCurrentSession ?? 0);
     if (session <= 0) return;
 
-    const feedbacks = feedbackByClass[cls.classCode] ?? [];
-    const missingFeedback = studentsMissingFeedback(classStudents, feedbacks, session);
-    if (missingFeedback.length) {
-      items.push({
-        id: `feedback-${cls.classCode}-${session}`,
-        tone: 'amber',
-        label: `${cls.classCode} · ${missingFeedback.length} HS chưa phản hồi buổi ${session}`,
-        to: `/admin/reports?tab=feedback&class=${encodeURIComponent(cls.classCode)}&session=${session}`,
-      });
+    if (FEATURE_KNOWLEDGE_FEEDBACK_ENABLED) {
+      const feedbacks = feedbackByClass[cls.classCode] ?? [];
+      const missingFeedback = studentsMissingFeedback(classStudents, feedbacks, session);
+      if (missingFeedback.length) {
+        items.push({
+          id: `feedback-${cls.classCode}-${session}`,
+          tone: 'amber',
+          label: `${cls.classCode} · ${missingFeedback.length} HS chưa phản hồi buổi ${session}`,
+          to: `/admin/reports?tab=feedback&class=${encodeURIComponent(cls.classCode)}&session=${session}`,
+        });
+      }
     }
 
     const missingReports = studentsMissingReport(classStudents, STALE_REPORT_DAYS).filter(

@@ -19,6 +19,7 @@ import {
   buildStudentLearningStatus,
   getOpenLessonsForClass,
 } from '../../lib/learningStatus.js';
+import { FEATURE_KNOWLEDGE_FEEDBACK_ENABLED } from '../../config/features.js';
 import { subscribeFeedbackSummariesForStudent } from '../../services/knowledgeReports.service.js';
 import { listPublicPracticeQuizBanksForProgram } from '../../services/practiceQuiz.service.js';
 import { listPublicQuizBanksForProgram } from '../../services/quiz.service.js';
@@ -120,7 +121,7 @@ function FeedbackDetails({ summary }) {
 }
 
 function lessonPriority(row) {
-  if (!row.feedbackDone) return 0;
+  if (FEATURE_KNOWLEDGE_FEEDBACK_ENABLED && !row.feedbackDone) return 0;
   if (row.practiceRequired && !row.practiceDone) return 1;
   if (row.quizRequired && !row.quizSubmitted) return 2;
   return 3;
@@ -154,7 +155,11 @@ function LessonChecklist({ status, loading, feedbackSummaryByLesson }) {
         <div>
           <h2 className="font-semibold text-slate-900 dark:text-slate-50">Checklist học tập</h2>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            {loading ? 'Đang cập nhật trạng thái quiz/ôn tập...' : 'Ưu tiên buổi còn thiếu phản hồi, ôn tập hoặc quiz.'}
+            {loading
+              ? 'Đang cập nhật trạng thái quiz/ôn tập...'
+              : FEATURE_KNOWLEDGE_FEEDBACK_ENABLED
+                ? 'Ưu tiên buổi còn thiếu phản hồi, ôn tập hoặc quiz.'
+                : 'Ưu tiên buổi còn thiếu ôn tập hoặc quiz.'}
           </p>
         </div>
         <a
@@ -178,7 +183,11 @@ function LessonChecklist({ status, loading, feedbackSummaryByLesson }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone="brand">Buổi {lesson.sessionNumber}</Badge>
-                    {feedbackDone ? <Badge tone="green">Đã phản hồi</Badge> : <Badge tone="amber">Chờ phản hồi</Badge>}
+                    {FEATURE_KNOWLEDGE_FEEDBACK_ENABLED && (
+                      feedbackDone
+                        ? <Badge tone="green">Đã phản hồi</Badge>
+                        : <Badge tone="amber">Chờ phản hồi</Badge>
+                    )}
                     {practiceRequired && (
                       <Badge tone={practiceDone ? 'green' : 'blue'}>
                         {practiceDone ? `Ôn tập ${practiceScore != null ? `${practiceScore}%` : 'xong'}` : 'Cần ôn tập'}
@@ -194,7 +203,7 @@ function LessonChecklist({ status, loading, feedbackSummaryByLesson }) {
                     {lesson.title || `Buổi ${lesson.sessionNumber}`}
                   </p>
                 </div>
-                {feedbackDone && (
+                {FEATURE_KNOWLEDGE_FEEDBACK_ENABLED && feedbackDone && (
                   <button
                     type="button"
                     onClick={() => setExpandedLessonId(expanded ? null : lesson.id)}
@@ -205,7 +214,7 @@ function LessonChecklist({ status, loading, feedbackSummaryByLesson }) {
                   </button>
                 )}
               </div>
-              {expanded && (
+              {FEATURE_KNOWLEDGE_FEEDBACK_ENABLED && expanded && (
                 <div className="mt-3">
                   <FeedbackDetails summary={summary} />
                 </div>
@@ -328,7 +337,7 @@ export function StudentOverview({ classDoc, student, program, isFinalPhase, subm
   }, [classDoc?.classCode, student?.id, program?.id, openLessons]);
 
   useEffect(() => {
-    if (isFinalPhase || !classDoc?.classCode || !student?.id) {
+    if (!FEATURE_KNOWLEDGE_FEEDBACK_ENABLED || isFinalPhase || !classDoc?.classCode || !student?.id) {
       setFeedbackSummaries([]);
       return undefined;
     }
@@ -359,16 +368,13 @@ export function StudentOverview({ classDoc, student, program, isFinalPhase, subm
 
   const nextTone = status.nextAction?.tone || 'green';
   const NextIcon = NEXT_ACTION_ICONS[nextTone] || Target;
-  const feedbackValue = status.feedbackTotal == null
-    ? `${student.currentProgressPercent || 0}%`
-    : `${status.feedbackDone}/${status.feedbackTotal}`;
-  const feedbackLabel = status.feedbackTotal == null ? 'Tiến độ' : 'Phản hồi';
-  const feedbackHint = status.feedbackTotal == null
-    ? 'Sản phẩm cuối khóa'
-    : `${status.pendingFeedback} buổi còn thiếu`;
+  const showFeedbackStats = FEATURE_KNOWLEDGE_FEEDBACK_ENABLED && status.feedbackTotal != null;
+  const progressValue = `${student.currentProgressPercent || 0}%`;
   const statsGridClass = isFinalPhase
     ? 'grid gap-3 sm:grid-cols-2'
-    : 'grid gap-3 sm:grid-cols-2 lg:grid-cols-4';
+    : showFeedbackStats
+      ? 'grid gap-3 sm:grid-cols-2 lg:grid-cols-4'
+      : 'grid gap-3 sm:grid-cols-2 lg:grid-cols-3';
   const feedbackSummaryByLesson = useMemo(() => {
     const map = {};
     feedbackSummaries.forEach((summary) => {
@@ -407,13 +413,23 @@ export function StudentOverview({ classDoc, student, program, isFinalPhase, subm
       </section>
 
       <div className={statsGridClass}>
-        <StatTile
-          label={feedbackLabel}
-          value={feedbackValue}
-          hint={feedbackHint}
-          tone={status.pendingFeedback > 0 ? 'amber' : 'green'}
-          icon={<ClipboardList className="h-4 w-4" />}
-        />
+        {showFeedbackStats ? (
+          <StatTile
+            label="Phản hồi"
+            value={`${status.feedbackDone}/${status.feedbackTotal}`}
+            hint={`${status.pendingFeedback} buổi còn thiếu`}
+            tone={status.pendingFeedback > 0 ? 'amber' : 'green'}
+            icon={<ClipboardList className="h-4 w-4" />}
+          />
+        ) : isFinalPhase ? (
+          <StatTile
+            label="Tiến độ"
+            value={progressValue}
+            hint="Sản phẩm cuối khóa"
+            tone="green"
+            icon={<ClipboardList className="h-4 w-4" />}
+          />
+        ) : null}
         {!isFinalPhase && (
           <>
             <StatTile

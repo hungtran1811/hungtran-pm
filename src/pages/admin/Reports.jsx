@@ -31,6 +31,7 @@ import {
   listCodeSubmissionsByClass,
   summarizeCodeSubmissions,
 } from '../../services/codeSubmissions.service.js';
+import { FEATURE_CODE_UPLOAD_ENABLED } from '../../config/features.js';
 
 export function ReportsPanel({
   selectedClass: selectedClassProp,
@@ -70,6 +71,7 @@ export function ReportsPanel({
     [classes, selectedClass],
   );
   const showCodeOverview =
+    FEATURE_CODE_UPLOAD_ENABLED &&
     !isAllClasses &&
     selectedClassDoc?.curriculumPhase === 'final' &&
     selectedClassDoc?.finalMode !== 'exam';

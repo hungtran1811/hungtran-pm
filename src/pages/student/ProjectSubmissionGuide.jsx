@@ -10,6 +10,7 @@ import {
   Link2,
   Palette,
 } from 'lucide-react';
+import { FEATURE_CODE_UPLOAD_ENABLED } from '../../config/features.js';
 import {
   CODE_SUBMISSION_EXTENSIONS,
   CODE_SUBMISSION_MAX_FILES_PER_SESSION,
@@ -444,8 +445,10 @@ export function ProjectSubmissionGuide({ initialSection = GUIDE_SECTIONS.overvie
       <header className="space-y-2">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Hướng dẫn nộp dự án</h2>
         <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-          Làm theo từng bước bên dưới để nộp GitHub, Canva và file code theo buổi. Bạn có thể đọc một lần rồi quay
-          lại tab <strong>Báo cáo</strong> để điền link và upload.
+          Làm theo từng bước bên dưới để nộp GitHub và Canva
+          {FEATURE_CODE_UPLOAD_ENABLED ? ' và file code theo buổi' : ''}. Bạn có thể đọc một lần rồi quay
+          lại tab <strong>Báo cáo</strong> để điền link
+          {FEATURE_CODE_UPLOAD_ENABLED ? ' và upload' : ''}.
         </p>
         <p className="text-xs text-slate-400">Cập nhật: {GUIDE_UPDATED}</p>
       </header>
@@ -468,13 +471,15 @@ export function ProjectSubmissionGuide({ initialSection = GUIDE_SECTIONS.overvie
               <strong>Canva</strong> — slide hoặc thiết kế trình bày (link xem, không cần quyền chỉnh sửa).
             </span>
           </li>
-          <li className="flex gap-2">
-            <FileCode2 className="mt-0.5 h-4 w-4 shrink-0" />
-            <span>
-              <strong>File theo buổi</strong> — file code từng buổi học trên cổng này ({EXT_LIST}).{' '}
-              <em>Không thay thế GitHub.</em>
-            </span>
-          </li>
+          {FEATURE_CODE_UPLOAD_ENABLED && (
+            <li className="flex gap-2">
+              <FileCode2 className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                <strong>File theo buổi</strong> — file code từng buổi học trên cổng này ({EXT_LIST}).{' '}
+                <em>Không thay thế GitHub.</em>
+              </span>
+            </li>
+          )}
         </ul>
       </div>
 
@@ -625,39 +630,41 @@ export function ProjectSubmissionGuide({ initialSection = GUIDE_SECTIONS.overvie
         />
       </GuideAccordion>
 
-      <GuideAccordion
-        id={GUIDE_SECTIONS.code}
-        icon={FileCode2}
-        title="Nộp file code theo buổi"
-        subtitle={`${EXT_LIST} · tối đa ${MAX_FILE_KB} KB/file`}
-        open={openSections.has(GUIDE_SECTIONS.code)}
-        onToggle={() => toggle(GUIDE_SECTIONS.code)}
-      >
-        <StepList steps={CODE_STEPS} />
-        <Checklist
-          items={[
-            `Đúng buổi học và đúng định dạng (${EXT_LIST}).`,
-            `Mỗi file ≤ ${MAX_FILE_KB} KB, tối đa ${CODE_SUBMISSION_MAX_FILES_PER_SESSION} file/buổi.`,
-            'Tên file dễ nhận biết (ví dụ: buoi5_game.py).',
-          ]}
-        />
-        <CommonErrors
-          items={[
-            {
-              problem: 'File .zip hoặc .txt bị từ chối',
-              fix: `Chỉ nộp từng file code đúng đuôi: ${EXT_LIST}. Giải nén zip trước khi upload.`,
-            },
-            {
-              problem: 'Nhầm với GitHub',
-              fix: 'GitHub = cả dự án. File theo buổi = bài làm từng buổi trên cổng. Nên làm cả hai nếu giáo viên yêu cầu.',
-            },
-            {
-              problem: 'Upload nhầm buổi',
-              fix: 'Xóa file sai buổi, chọn đúng buổi rồi upload lại.',
-            },
-          ]}
-        />
-      </GuideAccordion>
+      {FEATURE_CODE_UPLOAD_ENABLED && (
+        <GuideAccordion
+          id={GUIDE_SECTIONS.code}
+          icon={FileCode2}
+          title="Nộp file code theo buổi"
+          subtitle={`${EXT_LIST} · tối đa ${MAX_FILE_KB} KB/file`}
+          open={openSections.has(GUIDE_SECTIONS.code)}
+          onToggle={() => toggle(GUIDE_SECTIONS.code)}
+        >
+          <StepList steps={CODE_STEPS} />
+          <Checklist
+            items={[
+              `Đúng buổi học và đúng định dạng (${EXT_LIST}).`,
+              `Mỗi file ≤ ${MAX_FILE_KB} KB, tối đa ${CODE_SUBMISSION_MAX_FILES_PER_SESSION} file/buổi.`,
+              'Tên file dễ nhận biết (ví dụ: buoi5_game.py).',
+            ]}
+          />
+          <CommonErrors
+            items={[
+              {
+                problem: 'File .zip hoặc .txt bị từ chối',
+                fix: `Chỉ nộp từng file code đúng đuôi: ${EXT_LIST}. Giải nén zip trước khi upload.`,
+              },
+              {
+                problem: 'Nhầm với GitHub',
+                fix: 'GitHub = cả dự án. File theo buổi = bài làm từng buổi trên cổng. Nên làm cả hai nếu giáo viên yêu cầu.',
+              },
+              {
+                problem: 'Upload nhầm buổi',
+                fix: 'Xóa file sai buổi, chọn đúng buổi rồi upload lại.',
+              },
+            ]}
+          />
+        </GuideAccordion>
+      )}
     </div>
   );
 }

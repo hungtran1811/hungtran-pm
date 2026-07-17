@@ -27,6 +27,7 @@ import {
 } from '../../services/knowledgeReports.service.js';
 import { recordLessonOpened } from '../../services/students.service.js';
 import { getErrorMessage } from '../../lib/firestore.js';
+import { FEATURE_KNOWLEDGE_FEEDBACK_ENABLED } from '../../config/features.js';
 
 const StudentQuizExam = lazy(() =>
   import('./StudentQuizExam.jsx').then((m) => ({ default: m.StudentQuizExam })),
@@ -125,6 +126,7 @@ export function LessonsView({
   embedded = false,
   onFeedbackSubmitted,
   onQuizFocusChange,
+  onActiveSessionChange,
 }) {
   const [activeIndex, setActiveIndex] = useState(null);
   const [readIds, setReadIds] = useState(() => loadReadIds(classDoc.classCode, student.id));
@@ -149,6 +151,18 @@ export function LessonsView({
     });
     return map;
   }, [submittedLessonIds]);
+
+  useEffect(() => {
+    const session =
+      activeIndex !== null && lessons[activeIndex]
+        ? Number(lessons[activeIndex].sessionNumber)
+        : null;
+    onActiveSessionChange?.(session);
+  }, [activeIndex, lessons, onActiveSessionChange]);
+
+  useEffect(() => {
+    return () => onActiveSessionChange?.(null);
+  }, [onActiveSessionChange]);
 
   useEffect(() => {
     if (!lessons.length) {
@@ -395,20 +409,50 @@ function LessonDetail({
       )}
 
       {!quizExamActive && (
-      <div className="student-sticky-below-header -mx-4 mb-4 overflow-x-auto border-b border-slate-200/80 bg-slate-50/95 px-4 py-2 backdrop-blur dark:border-slate-800/80 dark:bg-slate-950/95 sm:mx-0 sm:rounded-xl sm:border sm:px-3 sm:backdrop-blur-none">
-        <div className="flex gap-2 pb-1">
+      <div className="student-sticky-below-header -mx-4 mb-4 border-b border-slate-200/80 bg-slate-50/95 px-4 py-3 backdrop-blur dark:border-slate-800/80 dark:bg-slate-950/95 sm:mx-0 sm:rounded-xl sm:border sm:px-3 sm:backdrop-blur-none">
+        <div className="mb-3 flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="min-h-10 min-w-10 shrink-0 px-0"
+            onClick={() => onSelectLesson(activeIndex - 1)}
+            disabled={activeIndex <= 0}
+            aria-label="Buổi trước"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div className="min-w-0 flex-1 text-center">
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+              Buổi {displayLesson.sessionNumber}
+              <span className="font-normal text-slate-400"> / {lessons.length}</span>
+            </p>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="min-h-10 min-w-10 shrink-0 px-0"
+            onClick={() => onSelectLesson(activeIndex + 1)}
+            disabled={activeIndex >= lessons.length - 1}
+            aria-label="Buổi sau"
+          >
+            <ArrowRight className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="grid grid-cols-5 gap-2 sm:grid-cols-6 md:grid-cols-8">
           {lessons.map((l, i) => (
             <button
               key={l.id}
               type="button"
               onClick={() => onSelectLesson(i)}
-              className={`shrink-0 rounded-full px-3.5 py-2 text-sm font-medium transition ${
+              aria-label={`Buổi ${l.sessionNumber}`}
+              aria-current={i === activeIndex ? 'true' : undefined}
+              className={`min-h-11 rounded-xl text-sm font-semibold tabular-nums transition ${
                 i === activeIndex
                   ? 'bg-brand-600 text-white shadow-sm'
-                  : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:ring-brand-300 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700'
+                  : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-brand-300 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700'
               }`}
             >
-              Buổi {l.sessionNumber}
+              {l.sessionNumber}
             </button>
           ))}
         </div>
@@ -584,7 +628,7 @@ function LessonDetail({
         />
       </Suspense>
 
-      {!quizExamActive && !isFinalPhase && (
+      {FEATURE_KNOWLEDGE_FEEDBACK_ENABLED && !quizExamActive && !isFinalPhase && (
         <FeedbackForm
           lesson={displayLesson}
           classDoc={classDoc}

@@ -39,7 +39,7 @@ export function StudentShell({ subtitle, right, bottomNavItems, children }) {
 
   return (
     <div className="student-portal min-h-screen bg-gradient-to-b from-brand-50/40 via-slate-50 to-slate-50 dark:from-slate-950 dark:via-slate-950 dark:to-slate-950">
-      <header className="student-header sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 backdrop-blur-md dark:border-slate-800/80 dark:bg-slate-950/90">
+      <header className="student-header sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 pt-[env(safe-area-inset-top)] backdrop-blur-md dark:border-slate-800/80 dark:bg-slate-950/90">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-2 px-4 py-3 sm:gap-3 sm:py-3.5">
           <Link
             to="/"
@@ -55,7 +55,7 @@ export function StudentShell({ subtitle, right, bottomNavItems, children }) {
         </div>
       </header>
       <main
-        className={`student-main mx-auto max-w-3xl overflow-x-hidden px-4 py-5 sm:py-6 ${
+        className={`student-main mx-auto max-w-3xl overflow-x-hidden px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:py-6 ${
           hasBottomNav ? 'student-main-with-nav' : 'pb-6'
         }`}
       >

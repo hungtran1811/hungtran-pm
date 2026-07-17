@@ -1,25 +1,16 @@
 import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import {
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   BarChart3,
+  AlertTriangle,
   Users,
-  CheckCircle2,
-  Gauge,
   Layers,
   Activity,
   RefreshCw,
   Download,
+  Gauge,
+  CheckCircle2,
+  ArrowRight,
 } from 'lucide-react';
 import { Button } from '../../ui/components/Button.jsx';
 import { AppShell } from '../../ui/components/AppShell.jsx';
@@ -32,20 +23,37 @@ import { listStudentsByClassCodes } from '../../services/students.service.js';
 import { fetchAdminBaseData, invalidateAdminDataCache } from '../../lib/adminDataCache.js';
 import { loadAnalyticsByClass } from '../../lib/analyticsData.js';
 import {
-  aggregateWeeklyProgress,
   classComparisonRows,
-  sessionUnderstandingHeatmap,
+  studentStatusDistribution,
+  progressBucketDistribution,
+  buildAttentionItems,
+  phaseSplit,
 } from '../../lib/classAnalytics.js';
 import { getErrorMessage } from '../../lib/firestore.js';
 import { ClassOverviewTable } from '../../ui/components/ClassOverviewTable.jsx';
+import {
+  FEATURE_KNOWLEDGE_FEEDBACK_ENABLED,
+  FEATURE_PROGRESS_REPORTS_ENABLED,
+} from '../../config/features.js';
 
 const TABS = [
   { id: 'active', label: 'Đang hoạt động' },
   { id: 'all', label: 'Tất cả lớp' },
 ];
 
-const CHART_GRID = 'var(--color-slate-200, #e2e8f0)';
-const CHART_TEXT = 'var(--color-slate-500, #64748b)';
+const BAR_TONES = {
+  brand: 'bg-brand-500',
+  red: 'bg-red-500',
+  amber: 'bg-amber-500',
+  green: 'bg-emerald-500',
+  slate: 'bg-slate-400',
+};
+
+const BADGE_TONES = {
+  red: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300',
+  amber: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200',
+  green: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300',
+};
 
 export function AnalyticsPage() {
   const toast = useToast();
@@ -64,7 +72,6 @@ export function AnalyticsPage() {
   const [classes, setClasses] = useState([]);
   const [students, setStudents] = useState([]);
   const [feedbacksByClass, setFeedbacksByClass] = useState({});
-  const [reportsByClass, setReportsByClass] = useState({});
   const [hasLoaded, setHasLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -96,9 +103,8 @@ export function AnalyticsPage() {
       const scopedStudents = await listStudentsByClassCodes(codes, { activeOnly: true });
       setStudents(scopedStudents);
 
-      const { feedbacksByClass: fb, reportsByClass: rp } = await loadAnalyticsByClass(codes);
-      setFeedbacksByClass(fb);
-      setReportsByClass(rp);
+      const { feedbacksByClass: fb } = await loadAnalyticsByClass(codes);
+      setFeedbacksByClass(FEATURE_KNOWLEDGE_FEEDBACK_ENABLED ? fb : {});
       setHasLoaded(true);
       setLastLoadedAt(Date.now());
       setFiltersDirty(false);
@@ -110,10 +116,7 @@ export function AnalyticsPage() {
     }
   };
 
-  const handleLoad = () => {
-    loadAnalytics({ force: !hasLoaded });
-  };
-
+  const handleLoad = () => loadAnalytics({ force: !hasLoaded });
   const handleRefresh = () => {
     invalidateAdminDataCache();
     loadAnalytics({ force: true });
@@ -129,16 +132,6 @@ export function AnalyticsPage() {
     [students, scopeClassCodes],
   );
 
-  const scopedFeedbacks = useMemo(
-    () => scopeClasses.flatMap((c) => feedbacksByClass[c.classCode] || []),
-    [scopeClasses, feedbacksByClass],
-  );
-
-  const scopedReports = useMemo(
-    () => scopeClasses.flatMap((c) => reportsByClass[c.classCode] || []),
-    [scopeClasses, reportsByClass],
-  );
-
   const classOverview = useMemo(
     () => classComparisonRows(scopeClasses, students, feedbacksByClass),
     [scopeClasses, students, feedbacksByClass],
@@ -146,24 +139,28 @@ export function AnalyticsPage() {
 
   const summaryStats = useMemo(() => {
     const total = scopedStudents.length;
-    const done = scopedStudents.filter((s) => s.currentStatus === 'Hoàn thành').length;
     const needSupport = scopedStudents.filter((s) => s.currentStatus === 'Cần hỗ trợ').length;
+    const completed = scopedStudents.filter((s) => s.currentStatus === 'Hoàn thành').length;
     const avgProgress = total
       ? Math.round(
           scopedStudents.reduce((sum, s) => sum + Number(s.currentProgressPercent || 0), 0) / total,
         )
       : 0;
+    const completionRate = total ? Math.round((completed / total) * 100) : 0;
+    const openClasses = scopeClasses.filter((c) => c.status === 'active').length;
     return {
-      classCount: scopeClasses.length,
-      total,
-      completionRate: total ? Math.round((done / total) * 100) : 0,
+      openClasses: tab === 'active' ? scopeClasses.length : openClasses,
+      totalStudents: total,
       needSupport,
       avgProgress,
+      completionRate,
     };
-  }, [scopedStudents, scopeClasses.length]);
+  }, [scopedStudents, scopeClasses, tab]);
 
-  const weeklyTrend = useMemo(() => aggregateWeeklyProgress(scopedReports), [scopedReports]);
-  const heatmap = useMemo(() => sessionUnderstandingHeatmap(scopedFeedbacks), [scopedFeedbacks]);
+  const statusDist = useMemo(() => studentStatusDistribution(scopedStudents), [scopedStudents]);
+  const progressDist = useMemo(() => progressBucketDistribution(scopedStudents), [scopedStudents]);
+  const attention = useMemo(() => buildAttentionItems(classOverview), [classOverview]);
+  const phases = useMemo(() => phaseSplit(scopeClasses), [scopeClasses]);
 
   const toolbar = (
     <div className="flex flex-wrap items-center gap-3">
@@ -220,7 +217,7 @@ export function AnalyticsPage() {
           <EmptyState
             icon={<BarChart3 className="h-7 w-7" />}
             title="Chưa tải dữ liệu thống kê"
-            description="Bấm nút bên dưới để xem thống kê."
+            description="Tải snapshot để xem tổng quan công việc theo lớp và học sinh."
             action={(
               <Button size="lg" onClick={handleLoad}>
                 <Download className="h-5 w-5" />
@@ -233,7 +230,7 @@ export function AnalyticsPage() {
         <div className="space-y-6">
           {toolbar}
           <SkeletonCardGrid count={4} />
-          <SkeletonRows count={4} />
+          <SkeletonRows count={5} />
         </div>
       ) : (
         <div className="space-y-6">
@@ -251,19 +248,19 @@ export function AnalyticsPage() {
 
           {lastLoadedAt && <SnapshotBadge loadedAt={lastLoadedAt} />}
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard
-              label={tab === 'active' ? 'Lớp đang hoạt động' : 'Lớp trong phạm vi'}
-              value={summaryStats.classCount}
+              label={tab === 'active' ? 'Lớp đang mở' : 'Lớp đang hoạt động'}
+              value={summaryStats.openClasses}
+              hint={`${phases.learning} học · ${phases.finalPhase} cuối khóa`}
               tone="brand"
               icon={<Activity className="h-5 w-5" />}
             />
-            <StatCard label="Tổng học sinh" value={summaryStats.total} icon={<Users className="h-5 w-5" />} />
             <StatCard
-              label="Tỉ lệ hoàn thành TB"
-              value={`${summaryStats.completionRate}%`}
-              tone="green"
-              icon={<CheckCircle2 className="h-5 w-5" />}
+              label="Học sinh"
+              value={summaryStats.totalStudents}
+              hint={`${summaryStats.completionRate}% hoàn thành`}
+              icon={<Users className="h-5 w-5" />}
             />
             <StatCard
               label="Tiến độ TB"
@@ -271,7 +268,101 @@ export function AnalyticsPage() {
               tone="amber"
               icon={<Gauge className="h-5 w-5" />}
             />
+            <StatCard
+              label="Cần hỗ trợ"
+              value={summaryStats.needSupport}
+              tone={summaryStats.needSupport > 0 ? 'red' : 'green'}
+              icon={<AlertTriangle className="h-5 w-5" />}
+            />
           </div>
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            <section className="card p-5">
+              <h2 className="mb-1 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                Phân bố trạng thái HS
+              </h2>
+              <p className="mb-4 text-xs text-slate-400">Toàn bộ học sinh trong phạm vi đang xem</p>
+              {scopedStudents.length === 0 ? (
+                <p className="py-6 text-center text-sm text-slate-400">Chưa có học sinh.</p>
+              ) : (
+                <DistributionBars items={statusDist} />
+              )}
+            </section>
+
+            <section className="card p-5">
+              <h2 className="mb-1 text-sm font-semibold text-slate-800 dark:text-slate-100">
+                Phân bố tiến độ
+              </h2>
+              <p className="mb-4 text-xs text-slate-400">Theo % tiến độ hiện tại trên hồ sơ HS</p>
+              {scopedStudents.length === 0 ? (
+                <p className="py-6 text-center text-sm text-slate-400">Chưa có học sinh.</p>
+              ) : (
+                <DistributionBars items={progressDist} />
+              )}
+            </section>
+          </div>
+
+          <section className="card p-5">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  Cần chú ý hôm nay
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Lớp có HS cần hỗ trợ
+                  {FEATURE_PROGRESS_REPORTS_ENABLED ? ' hoặc thiếu báo cáo cuối khóa' : ''}
+                </p>
+              </div>
+              <Link
+                to="/admin/students"
+                className="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:underline dark:text-brand-300"
+              >
+                Mở học sinh
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+            {attention.length === 0 ? (
+              <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:bg-emerald-500/10 dark:text-emerald-200">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                Không có lớp nào đang ở trạng thái cần xử lý.
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {attention.map((item) => (
+                  <li
+                    key={item.classCode}
+                    className="flex flex-col gap-2 rounded-xl border border-slate-200 px-3 py-3 sm:flex-row sm:items-center sm:justify-between dark:border-slate-700"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link
+                          to={`/admin/scores?class=${encodeURIComponent(item.classCode)}`}
+                          className="font-semibold text-brand-600 hover:underline dark:text-brand-300"
+                        >
+                          {item.classCode}
+                        </Link>
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                            BADGE_TONES[item.tone] || BADGE_TONES.amber
+                          }`}
+                        >
+                          {item.label}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">{item.detail}</p>
+                    </div>
+                    <Link
+                      to={`/admin/scores?class=${encodeURIComponent(item.classCode)}`}
+                      className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-slate-600 hover:text-brand-600 dark:text-slate-300"
+                    >
+                      Điểm số
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
 
           {classOverview.length === 0 ? (
             <EmptyState
@@ -279,62 +370,54 @@ export function AnalyticsPage() {
               title={tab === 'active' ? 'Chưa có lớp đang hoạt động' : 'Chưa có lớp trong phạm vi'}
             />
           ) : (
-            <ChartCard title="Tổng quan theo lớp">
+            <section className="card p-5">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    So sánh theo lớp
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Bấm mã lớp để mở điểm số theo lớp
+                  </p>
+                </div>
+              </div>
               <ClassOverviewTable
                 rows={classOverview}
                 scopeClasses={scopeClasses}
                 showStatus={tab === 'all'}
+                showUnderstanding={FEATURE_KNOWLEDGE_FEEDBACK_ENABLED}
+                linkToReports={FEATURE_PROGRESS_REPORTS_ENABLED}
+                linkToScores={!FEATURE_PROGRESS_REPORTS_ENABLED}
               />
-            </ChartCard>
+            </section>
           )}
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            <ChartCard
-              title={
-                tab === 'active'
-                  ? 'Xu hướng tiến độ theo tuần (lớp đang hoạt động)'
-                  : 'Xu hướng tiến độ theo tuần (tất cả lớp)'
-              }
-            >
-              {weeklyTrend.length === 0 ? (
-                <p className="py-8 text-center text-sm text-slate-400">Chưa có báo cáo tiến độ.</p>
-              ) : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={weeklyTrend}>
-                    <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" />
-                    <XAxis dataKey="week" tick={{ fill: CHART_TEXT, fontSize: 12 }} />
-                    <YAxis domain={[0, 100]} tick={{ fill: CHART_TEXT, fontSize: 12 }} />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="avg" name="Tiến độ TB %" stroke="#4f46e5" strokeWidth={2} dot />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
-            </ChartCard>
-            <ChartCard
-              title={
-                tab === 'active'
-                  ? 'Mức hiểu bài theo buổi (lớp đang hoạt động)'
-                  : 'Mức hiểu bài theo buổi (tất cả lớp)'
-              }
-            >
-              {heatmap.length === 0 ? (
-                <p className="py-8 text-center text-sm text-slate-400">Chưa có phản hồi buổi học.</p>
-              ) : (
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={heatmap}>
-                    <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" />
-                    <XAxis dataKey="session" tick={{ fill: CHART_TEXT, fontSize: 12 }} />
-                    <YAxis domain={[0, 5]} tick={{ fill: CHART_TEXT, fontSize: 12 }} />
-                    <Tooltip />
-                    <Bar dataKey="avg" name="Mức hiểu TB" fill="#4f46e5" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </ChartCard>
-          </div>
         </div>
       )}
     </AppShell>
+  );
+}
+
+function DistributionBars({ items }) {
+  const max = Math.max(...items.map((i) => i.count), 1);
+  return (
+    <div className="space-y-3">
+      {items.map((item) => (
+        <div key={item.id}>
+          <div className="mb-1 flex items-center justify-between gap-2 text-xs">
+            <span className="font-medium text-slate-700 dark:text-slate-200">{item.label}</span>
+            <span className="tabular-nums text-slate-500">
+              {item.count} · {item.percent}%
+            </span>
+          </div>
+          <div className="h-2.5 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+            <div
+              className={`h-full rounded-full transition-all ${BAR_TONES[item.tone] || BAR_TONES.slate}`}
+              style={{ width: `${Math.max(4, Math.round((item.count / max) * 100))}%` }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -345,16 +428,7 @@ function SnapshotBadge({ loadedAt }) {
   });
   return (
     <p className="text-sm text-slate-500">
-      Dữ liệu tải lúc {time}. Bấm «Làm mới» để cập nhật.
+      Snapshot lúc {time}. Bấm «Làm mới» để cập nhật.
     </p>
-  );
-}
-
-function ChartCard({ title, children }) {
-  return (
-    <section className="card p-5">
-      <h2 className="mb-4 text-sm font-semibold text-slate-700 dark:text-slate-200">{title}</h2>
-      {children}
-    </section>
   );
 }

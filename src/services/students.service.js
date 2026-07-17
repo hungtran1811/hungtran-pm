@@ -169,6 +169,9 @@ export async function createStudent(payload) {
     projectNameStatus: '',
     projectNameReviewNote: '',
     projectNameSubmittedAt: null,
+    projectTopic: '',
+    projectProblemSolution: '',
+    projectPlannedFeatures: '',
     projectGithubUrl: '',
     projectCanvaUrl: '',
     currentStatus: payload.currentStatus ?? DEFAULT_STATUS,
@@ -198,14 +201,42 @@ export async function updateStudent(studentId, payload) {
   });
 }
 
-export async function submitProjectName(studentId, projectName) {
-  const trimmed = projectName.trim();
+export async function submitProjectName(studentId, {
+  projectName,
+  projectTopic,
+  projectProblemSolution,
+  projectPlannedFeatures,
+}) {
+  const trimmed = String(projectName || '').trim();
+  const topic = String(projectTopic || '').trim();
+  const problem = String(projectProblemSolution || '').trim();
+  const features = String(projectPlannedFeatures || '').trim();
+
   if (trimmed.length < 3) {
     throw new Error('Tên dự án cần ít nhất 3 ký tự.');
   }
   if (trimmed.length > 80) {
     throw new Error('Tên dự án tối đa 80 ký tự.');
   }
+  if (topic.length < 3) {
+    throw new Error('Chủ đề cần ít nhất 3 ký tự.');
+  }
+  if (topic.length > 120) {
+    throw new Error('Chủ đề tối đa 120 ký tự.');
+  }
+  if (problem.length < 10) {
+    throw new Error('Vấn đề và cách giải quyết cần ít nhất 10 ký tự.');
+  }
+  if (problem.length > 800) {
+    throw new Error('Vấn đề và cách giải quyết tối đa 800 ký tự.');
+  }
+  if (features.length < 10) {
+    throw new Error('Các tính năng dự kiến cần ít nhất 10 ký tự.');
+  }
+  if (features.length > 800) {
+    throw new Error('Các tính năng dự kiến tối đa 800 ký tự.');
+  }
+
   const student = await getStudent(studentId);
   if (!student?.active) {
     throw new Error('Học sinh không hợp lệ.');
@@ -225,6 +256,9 @@ export async function submitProjectName(studentId, projectName) {
     projectNameStatus: 'pending',
     projectNameReviewNote: '',
     projectNameSubmittedAt: serverTimestamp(),
+    projectTopic: topic,
+    projectProblemSolution: problem,
+    projectPlannedFeatures: features,
     updatedAt: serverTimestamp(),
   });
 }

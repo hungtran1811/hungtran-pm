@@ -11,6 +11,11 @@ import { listReportsByStudent } from '../../services/reports.service.js';
 import { listKnowledgeReportsByStudent } from '../../services/knowledgeReports.service.js';
 import { listCodeSubmissionsByStudent } from '../../services/codeSubmissions.service.js';
 import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
+import {
+  FEATURE_CODE_UPLOAD_ENABLED,
+  FEATURE_KNOWLEDGE_FEEDBACK_ENABLED,
+  FEATURE_PROGRESS_REPORTS_ENABLED,
+} from '../../config/features.js';
 
 const UNDERSTANDING_LABELS = UNDERSTANDING_LEVELS.reduce((acc, item) => {
   acc[item.value] = item.label;
@@ -24,15 +29,21 @@ export function StudentHistoryModal({ student, onClose, feedbackOnly = false }) 
   const [feedbacks, setFeedbacks] = useState([]);
   const [codeSubmissions, setCodeSubmissions] = useState([]);
 
+  const loadFeedback = FEATURE_KNOWLEDGE_FEEDBACK_ENABLED;
+  const loadReports = FEATURE_PROGRESS_REPORTS_ENABLED && !feedbackOnly;
+  const loadCode = FEATURE_CODE_UPLOAD_ENABLED && !feedbackOnly;
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
       try {
         const classCode = student.classId || student.classCode;
-        const f = await listKnowledgeReportsByStudent(student.id);
-        const r = feedbackOnly ? [] : await listReportsByStudent(student.id);
-        const code = feedbackOnly ? [] : await listCodeSubmissionsByStudent(classCode, student.id);
+        const [f, r, code] = await Promise.all([
+          loadFeedback ? listKnowledgeReportsByStudent(student.id) : Promise.resolve([]),
+          loadReports ? listReportsByStudent(student.id) : Promise.resolve([]),
+          loadCode ? listCodeSubmissionsByStudent(classCode, student.id) : Promise.resolve([]),
+        ]);
         if (!cancelled) {
           setReports(r);
           setFeedbacks(f);
@@ -48,7 +59,7 @@ export function StudentHistoryModal({ student, onClose, feedbackOnly = false }) 
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [student.id, student.classId, student.classCode]);
+  }, [student.id, student.classId, student.classCode, loadFeedback, loadReports, loadCode]);
 
   const timeline = useMemo(() => {
     const items = [
@@ -71,6 +82,10 @@ export function StudentHistoryModal({ student, onClose, feedbackOnly = false }) 
   );
 
   const classCode = student.classId || student.classCode;
+  const showProgressStats = loadReports;
+  const showCodeStats = loadCode;
+  const showFeedbackStats = loadFeedback;
+  const statCols = [showProgressStats, showProgressStats, showCodeStats, showFeedbackStats].filter(Boolean).length;
 
   return (
     <Modal
@@ -80,30 +95,40 @@ export function StudentHistoryModal({ student, onClose, feedbackOnly = false }) 
       size="xl"
     >
       <div className="space-y-4">
-        <div className={`grid gap-3 ${feedbackOnly ? 'grid-cols-1' : 'grid-cols-2 sm:grid-cols-4'}`}>
-          {!feedbackOnly && (
-            <>
-              <div className="rounded-xl bg-slate-50 p-3 text-center dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500">Báo cáo tiến độ</p>
-                <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{reports.length}</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 p-3 text-center dark:bg-slate-800/50">
-                <p className="text-xs text-slate-500">Tiến độ hiện tại</p>
-                <p className="text-lg font-bold text-slate-800 dark:text-slate-100">
-                  {student.currentProgressPercent ?? 0}%
-                </p>
-              </div>
+        {statCols > 0 && (
+          <div
+            className={`grid gap-3 ${
+              statCols === 1 ? 'grid-cols-1' : statCols === 2 ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4'
+            }`}
+          >
+            {showProgressStats && (
+              <>
+                <div className="rounded-xl bg-slate-50 p-3 text-center dark:bg-slate-800/50">
+                  <p className="text-xs text-slate-500">Báo cáo tiến độ</p>
+                  <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{reports.length}</p>
+                </div>
+                <div className="rounded-xl bg-slate-50 p-3 text-center dark:bg-slate-800/50">
+                  <p className="text-xs text-slate-500">Tiến độ hiện tại</p>
+                  <p className="text-lg font-bold text-slate-800 dark:text-slate-100">
+                    {student.currentProgressPercent ?? 0}%
+                  </p>
+                </div>
+              </>
+            )}
+            {showCodeStats && (
               <div className="rounded-xl bg-slate-50 p-3 text-center dark:bg-slate-800/50">
                 <p className="text-xs text-slate-500">File code</p>
                 <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{codeFileCount}</p>
               </div>
-            </>
-          )}
-          <div className="rounded-xl bg-slate-50 p-3 text-center dark:bg-slate-800/50">
-            <p className="text-xs text-slate-500">Phản hồi buổi học</p>
-            <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{feedbacks.length}</p>
+            )}
+            {showFeedbackStats && (
+              <div className="rounded-xl bg-slate-50 p-3 text-center dark:bg-slate-800/50">
+                <p className="text-xs text-slate-500">Phản hồi buổi học</p>
+                <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{feedbacks.length}</p>
+              </div>
+            )}
           </div>
-        </div>
+        )}
 
         {!feedbackOnly && (student.projectGithubUrl || student.projectCanvaUrl) && (
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
@@ -115,7 +140,7 @@ export function StudentHistoryModal({ student, onClose, feedbackOnly = false }) 
           </div>
         )}
 
-        {!feedbackOnly && (
+        {showCodeStats && (
           <CodeSubmissionsPanel
             submissions={codeSubmissions}
             classCode={classCode}
@@ -128,7 +153,14 @@ export function StudentHistoryModal({ student, onClose, feedbackOnly = false }) 
             <Spinner />
           </div>
         ) : timeline.length === 0 ? (
-          <EmptyState title="Chưa có hoạt động" />
+          <EmptyState
+            title="Chưa có hoạt động"
+            description={
+              !loadReports && !loadFeedback
+                ? 'Lịch sử báo cáo / phản hồi đang tắt.'
+                : undefined
+            }
+          />
         ) : (
           <div className="space-y-3">
             {timeline.map((item, i) =>
@@ -149,78 +181,38 @@ export function StudentHistoryModal({ student, onClose, feedbackOnly = false }) 
   );
 }
 
-function TimelineReport({ report, isLatest = false }) {
+function TimelineReport({ report, isLatest }) {
   return (
-    <div
-      className={`card-prose min-w-0 overflow-hidden rounded-xl border p-4 ${
-        isLatest
-          ? 'border-brand-400 bg-brand-50/50 ring-2 ring-brand-400/25 dark:border-brand-500/50 dark:bg-brand-500/10 dark:ring-brand-400/20'
-          : 'border-slate-200 dark:border-slate-700'
-      }`}
-    >
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
         <Badge tone="brand">Báo cáo tiến độ</Badge>
-        {isLatest && <Badge tone="brand">Mới nhất</Badge>}
-        <Badge tone={STATUS_TONES[report.status] || 'slate'}>{report.status}</Badge>
-        <span className="text-xs text-slate-400">
-          {report.submittedAt ? formatDateTime(report.submittedAt) : ''}
-        </span>
-        <span className="ml-auto text-sm font-semibold text-brand-600 dark:text-brand-300">
-          {report.progressPercent}%
-        </span>
+        {isLatest && <Badge tone="green">Mới nhất</Badge>}
+        <Badge tone={STATUS_TONES[report.status] || 'slate'}>{report.status || '—'}</Badge>
+        <span className="text-xs text-slate-400">{formatDateTime(report.submittedAt)}</span>
       </div>
-      <p className="mt-2 text-xs font-medium text-slate-500">{report.stage}</p>
+      <p className="text-sm text-slate-700 dark:text-slate-200">
+        {report.stage || '—'} · {report.progressPercent ?? 0}%
+      </p>
       {report.doneToday && (
-        <p className="card-prose mt-1.5 text-sm text-slate-700 dark:text-slate-200">
-          <span className="font-medium">Đã làm:</span> {report.doneToday}
-        </p>
+        <p className="mt-1 text-xs text-slate-500">Đã làm: {report.doneToday}</p>
       )}
       {report.nextGoal && (
-        <p className="card-prose mt-1 text-sm text-slate-700 dark:text-slate-200">
-          <span className="font-medium">Mục tiêu tiếp:</span> {report.nextGoal}
-        </p>
+        <p className="mt-1 text-xs text-slate-500">Tiếp theo: {report.nextGoal}</p>
       )}
-      {report.difficulties && (
-        <p className="card-prose mt-1 text-sm text-amber-700 dark:text-amber-300">
-          <span className="font-medium">Khó khăn:</span> {report.difficulties}
-        </p>
-      )}
-      <ProjectLinksReadonly
-        githubUrl={report.projectGithubUrl}
-        canvaUrl={report.projectCanvaUrl}
-        className="mt-2"
-      />
     </div>
   );
 }
 
 function TimelineFeedback({ feedback }) {
   return (
-    <div className="card-prose min-w-0 overflow-hidden rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
         <Badge tone="amber">Phản hồi buổi {feedback.sessionNumber}</Badge>
-        <span className="text-xs text-slate-400">
-          {feedback.submittedAt ? formatDateTime(feedback.submittedAt) : ''}
-        </span>
-        <span className="ml-auto text-xs font-medium text-slate-500">
-          Mức hiểu: {UNDERSTANDING_LABELS[feedback.understandingLevel] || feedback.understandingLevel}
-        </span>
+        <span className="text-xs text-slate-400">{formatDateTime(feedback.submittedAt)}</span>
       </div>
-      {feedback.understoodTopics && (
-        <p className="card-prose mt-2 text-sm text-slate-700 dark:text-slate-200">
-          <span className="font-medium">Đã hiểu:</span> {feedback.understoodTopics}
-        </p>
-      )}
-      {feedback.unclearTopics && (
-        <p className="card-prose mt-1 text-sm text-slate-700 dark:text-slate-200">
-          <span className="font-medium">Chưa rõ:</span> {feedback.unclearTopics}
-        </p>
-      )}
-      {feedback.supportRequest && (
-        <p className="card-prose mt-1 text-sm text-amber-700 dark:text-amber-300">
-          <span className="font-medium">Cần hỗ trợ:</span> {feedback.supportRequest}
-        </p>
-      )}
+      <p className="text-sm text-slate-700 dark:text-slate-200">
+        Mức hiểu: {UNDERSTANDING_LABELS[feedback.understandingLevel] || feedback.understandingLevel}
+      </p>
     </div>
   );
 }

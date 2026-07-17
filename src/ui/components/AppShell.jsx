@@ -18,18 +18,21 @@ import { useAuth } from '../../state/auth.store.jsx';
 import { ThemeToggle } from './ThemeToggle.jsx';
 import { Button } from './Button.jsx';
 import { BrandLogo } from './BrandLogo.jsx';
+import { FEATURE_PROGRESS_REPORTS_ENABLED } from '../../config/features.js';
 
 const NAV_ITEMS = [
   { to: '/admin', label: 'Tổng quan', icon: LayoutDashboard, end: true },
   { to: '/admin/classes', label: 'Lớp học', icon: School },
   { to: '/admin/students', label: 'Học sinh', icon: Users },
-  { to: '/admin/reports', label: 'Báo cáo học sinh', icon: TrendingUp },
+  FEATURE_PROGRESS_REPORTS_ENABLED
+    ? { to: '/admin/reports', label: 'Báo cáo học sinh', icon: TrendingUp }
+    : null,
   { to: '/admin/scores', label: 'Điểm số', icon: ClipboardList },
   { to: '/admin/analytics', label: 'Thống kê', icon: BarChart3 },
   { to: '/admin/lessons', label: 'Bài giảng', icon: BookOpen },
   { to: '/admin/games', label: 'Mini game', icon: Gamepad2 },
   { to: '/admin/settings', label: 'Cài đặt', icon: Settings },
-];
+].filter(Boolean);
 
 function navLinkClass(isActive) {
   return [

@@ -27,6 +27,7 @@ import { invalidateAdminDataCache } from '../../lib/adminDataCache.js';
 import { loadDashboardOpsSnapshot } from '../../lib/adminPanelData.js';
 import { computeDashboardStats } from '../../lib/dashboardStats.js';
 import { getErrorMessage } from '../../lib/firestore.js';
+import { FEATURE_PROGRESS_REPORTS_ENABLED } from '../../config/features.js';
 
 function formatLoadedAt(date) {
   if (!date) return '';
@@ -294,17 +295,19 @@ export function DashboardPage() {
                 description="Danh sách lớp, chương trình, trạng thái buổi học."
                 emphasis
               />
-              <QuickAction
-                to="/admin/reports"
-                icon={<ClipboardList className="h-6 w-6" />}
-                title="Báo cáo học sinh"
-                description="Phản hồi buổi học, tiến độ cuối khóa, HS chưa nộp."
-              />
+              {FEATURE_PROGRESS_REPORTS_ENABLED && (
+                <QuickAction
+                  to="/admin/reports"
+                  icon={<ClipboardList className="h-6 w-6" />}
+                  title="Báo cáo học sinh"
+                  description="Tiến độ cuối khóa, HS chưa nộp báo cáo."
+                />
+              )}
               <QuickAction
                 to="/admin/scores"
                 icon={<GraduationCap className="h-6 w-6" />}
                 title="Chấm điểm"
-                description="Quiz, ôn tập, Olympia — xem điểm theo lớp & buổi."
+                description="Quiz, ôn tập — xem điểm theo lớp & buổi."
               />
               <QuickAction
                 to="/admin/games"
@@ -328,7 +331,7 @@ export function DashboardPage() {
                 to="/admin/analytics"
                 icon={<BarChart3 className="h-6 w-6" />}
                 title="Thống kê"
-                description="Biểu đồ tiến độ, hiểu bài và so sánh lớp."
+                description="Tổng quan lớp, phân bố tiến độ và điểm cần chú ý."
               />
             </div>
           </section>

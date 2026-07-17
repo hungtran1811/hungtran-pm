@@ -272,18 +272,59 @@ export function StudentsPage() {
   );
 }
 
+function ProjectProposalDetails({ student }) {
+  return (
+    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm dark:border-slate-700 dark:bg-slate-800/60">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Tên dự án</p>
+        <p className="mt-1 font-medium text-slate-800 dark:text-slate-100">
+          {student.projectNameSubmission || student.projectName || '—'}
+        </p>
+      </div>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Chủ đề</p>
+        <p className="mt-1 whitespace-pre-wrap text-slate-700 dark:text-slate-200">
+          {student.projectTopic?.trim() || '— Chưa ghi'}
+        </p>
+      </div>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Vấn đề — cách giải quyết
+        </p>
+        <p className="mt-1 whitespace-pre-wrap text-slate-700 dark:text-slate-200">
+          {student.projectProblemSolution?.trim() || '— Chưa ghi'}
+        </p>
+      </div>
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Tính năng dự kiến
+        </p>
+        <p className="mt-1 whitespace-pre-wrap text-slate-700 dark:text-slate-200">
+          {student.projectPlannedFeatures?.trim() || '— Chưa ghi'}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function StudentRow({ student, showClass, studentClassDoc, onEdit, onDelete, onView }) {
   const usesProjectNames = classUsesProjectNames(studentClassDoc);
   const toast = useToast();
-  const [rejectOpen, setRejectOpen] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [rejectNote, setRejectNote] = useState('');
   const [reviewing, setReviewing] = useState(false);
+
+  const closeReview = () => {
+    setReviewOpen(false);
+    setRejectNote('');
+  };
 
   const handleApprove = async () => {
     setReviewing(true);
     try {
       await reviewProjectName(student.id, { approved: true });
-      toast.success(`Đã duyệt tên dự án của ${student.fullName}.`);
+      toast.success(`Đã duyệt đề xuất của ${student.fullName}.`);
+      closeReview();
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -295,9 +336,8 @@ function StudentRow({ student, showClass, studentClassDoc, onEdit, onDelete, onV
     setReviewing(true);
     try {
       await reviewProjectName(student.id, { approved: false, reviewNote: rejectNote });
-      toast.success('Đã từ chối tên dự án.');
-      setRejectOpen(false);
-      setRejectNote('');
+      toast.success('Đã từ chối đề xuất dự án.');
+      closeReview();
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -313,6 +353,11 @@ function StudentRow({ student, showClass, studentClassDoc, onEdit, onDelete, onV
       return (
         <div className="space-y-1">
           <p className="truncate text-slate-700 dark:text-slate-200">{student.projectName}</p>
+          {student.projectTopic && (
+            <p className="truncate text-[11px] text-slate-400" title={student.projectTopic}>
+              {student.projectTopic}
+            </p>
+          )}
           <Badge tone="green">Đã duyệt</Badge>
         </div>
       );
@@ -320,10 +365,19 @@ function StudentRow({ student, showClass, studentClassDoc, onEdit, onDelete, onV
     if (canReviewStudentProjectName(student, studentClassDoc)) {
       const name = student.projectNameSubmission || student.projectName || '—';
       return (
-        <div className="space-y-1">
+        <button
+          type="button"
+          onClick={() => setReviewOpen(true)}
+          className="w-full space-y-1 rounded-lg text-left transition hover:bg-amber-50/80 dark:hover:bg-amber-500/10"
+        >
           <p className="truncate font-medium text-slate-700 dark:text-slate-200">{name}</p>
-          <Badge tone="amber">Chờ duyệt</Badge>
-        </div>
+          {student.projectTopic && (
+            <p className="truncate text-[11px] text-slate-400" title={student.projectTopic}>
+              {student.projectTopic}
+            </p>
+          )}
+          <Badge tone="amber">Chờ duyệt — bấm để đọc</Badge>
+        </button>
       );
     }
     if (student.projectNameStatus === 'rejected') {
@@ -382,22 +436,10 @@ function StudentRow({ student, showClass, studentClassDoc, onEdit, onDelete, onV
       </div>
       <div className="flex flex-wrap gap-1 md:col-span-2 md:justify-end">
         {canReviewStudentProjectName(student, studentClassDoc) && (
-          <>
-            <Button size="sm" variant="subtle" onClick={handleApprove} loading={reviewing}>
-              <Check className="h-4 w-4" />
-              Duyệt
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              className="text-red-600"
-              onClick={() => setRejectOpen(true)}
-              disabled={reviewing}
-            >
-              <X className="h-4 w-4" />
-              Từ chối
-            </Button>
-          </>
+          <Button size="sm" variant="subtle" onClick={() => setReviewOpen(true)}>
+            <Check className="h-4 w-4" />
+            Đọc & duyệt
+          </Button>
         )}
         <Button size="sm" variant="ghost" onClick={onView} title="Xem lịch sử">
           <History className="h-4 w-4" />
@@ -411,32 +453,43 @@ function StudentRow({ student, showClass, studentClassDoc, onEdit, onDelete, onV
       </div>
 
       <Modal
-        open={rejectOpen}
-        onClose={() => setRejectOpen(false)}
-        title="Từ chối tên dự án"
-        size="sm"
+        open={reviewOpen}
+        onClose={closeReview}
+        title={`Đề xuất dự án · ${student.fullName}`}
+        size="lg"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setRejectOpen(false)} disabled={reviewing}>
-              Huỷ
+            <Button variant="secondary" onClick={closeReview} disabled={reviewing}>
+              Đóng
             </Button>
-            <Button variant="danger" onClick={handleReject} loading={reviewing}>
+            <Button
+              variant="danger"
+              onClick={handleReject}
+              loading={reviewing}
+            >
+              <X className="h-4 w-4" />
               Từ chối
+            </Button>
+            <Button onClick={handleApprove} loading={reviewing}>
+              <Check className="h-4 w-4" />
+              Duyệt
             </Button>
           </>
         }
       >
         <p className="mb-3 text-sm text-slate-600 dark:text-slate-300">
-          Học sinh <strong>{student.fullName}</strong> gửi:{' '}
-          <em>{student.projectNameSubmission || student.projectName}</em>
+          Đọc kỹ toàn bộ đề xuất trước khi duyệt hoặc từ chối.
         </p>
-        <Field label="Ghi chú cho học sinh (tuỳ chọn)">
-          <Input
-            value={rejectNote}
-            onChange={(e) => setRejectNote(e.target.value)}
-            placeholder="Ví dụ: Tên quá chung, hãy cụ thể hơn..."
-          />
-        </Field>
+        <ProjectProposalDetails student={student} />
+        <div className="mt-4">
+          <Field label="Ghi chú khi từ chối (tuỳ chọn)">
+            <Input
+              value={rejectNote}
+              onChange={(e) => setRejectNote(e.target.value)}
+              placeholder="Ví dụ: Phạm vi quá rộng, hãy thu hẹp tính năng..."
+            />
+          </Field>
+        </div>
       </Modal>
     </div>
   );
