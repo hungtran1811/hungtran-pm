@@ -43,6 +43,7 @@ export async function captureError(error, context = {}) {
 export function reportUnhandledRejection(event) {
   const reason = event?.reason;
   if (reason instanceof Error) {
-    captureError(reason, { source: 'unhandledrejection' });
+    // Không await — bắt rejection của chính captureError để tránh vòng lặp unhandledrejection.
+    captureError(reason, { source: 'unhandledrejection' }).catch(() => {});
   }
 }
