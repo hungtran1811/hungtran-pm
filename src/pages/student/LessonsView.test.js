@@ -12,6 +12,11 @@ vi.mock('../../services/curriculum.service.js', () => ({
   getProgramLesson: vi.fn(async () => null),
 }));
 
+vi.mock('../../services/knowledgeReports.service.js', () => ({
+  subscribeFeedbackReceipt: vi.fn(() => () => {}),
+  submitKnowledgeReport: vi.fn(async () => {}),
+}));
+
 let container;
 let root;
 

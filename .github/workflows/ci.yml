@@ -9,6 +9,16 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      VITE_FIREBASE_API_KEY: ci-dummy-api-key
+      VITE_FIREBASE_AUTH_DOMAIN: localhost
+      VITE_FIREBASE_PROJECT_ID: demo-ci
+      VITE_FIREBASE_STORAGE_BUCKET: demo-ci.appspot.com
+      VITE_FIREBASE_MESSAGING_SENDER_ID: '1234567890'
+      VITE_FIREBASE_APP_ID: 1:1234567890:web:abcdef
+      VITE_CLOUDINARY_CLOUD_NAME: demo
+      VITE_CLOUDINARY_UPLOAD_PRESET: demo
+      VITE_CLOUDINARY_CURRICULUM_FOLDER: demo
 
     steps:
       - name: Checkout
