@@ -26,7 +26,7 @@ export function ClassOverviewTable({
   showStatus = false,
   showUnderstanding = false,
   linkToReports = false,
-  linkToScores = false,
+  linkToStudents = false,
 }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -149,8 +149,8 @@ export function ClassOverviewTable({
                     const badge = row.badge || { label: 'OK', tone: 'green' };
                     const classHref = linkToReports
                       ? `/admin/reports?tab=progress&class=${encodeURIComponent(row.classCode)}`
-                      : linkToScores
-                        ? `/admin/scores?class=${encodeURIComponent(row.classCode)}`
+                      : linkToStudents
+                        ? `/admin/students?class=${encodeURIComponent(row.classCode)}`
                         : null;
                     const classCell = classHref ? (
                       <Link

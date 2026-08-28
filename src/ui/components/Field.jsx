@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement, useId } from 'react';
+import { cloneElement, isValidElement, useId, forwardRef } from 'react';
 
 export function Field({ label, hint, error, required, children, id: idProp, className }) {
   const autoId = useId();
@@ -43,9 +43,15 @@ export function Input(props) {
   return <input {...props} className={`input-base ${props.className || ''}`} />;
 }
 
-export function Textarea(props) {
-  return <textarea {...props} className={`input-base min-h-24 resize-y ${props.className || ''}`} />;
-}
+export const Textarea = forwardRef(function Textarea(props, ref) {
+  return (
+    <textarea
+      {...props}
+      ref={ref}
+      className={`input-base min-h-24 resize-y ${props.className || ''}`}
+    />
+  );
+});
 
 export function Select({ children, ...props }) {
   return (

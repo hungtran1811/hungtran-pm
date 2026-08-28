@@ -36,6 +36,8 @@ export const SPY_CREW_FEEDBACK_FAIL_MS = 400;
 /** Delay khi chuyển mini-game để tránh overload / đơ UI. */
 export const SPY_CREW_GAME_SWITCH_MS = 550;
 export const SPY_MAX_SPY_ASSIGNMENTS_PER_PLAYER = 3;
+/** Giới hạn trên cho completedCount cá nhân — không còn quota, chỉ để rules validate. */
+export const SPY_CREW_TASK_PROGRESS_CAP = 999;
 /** ID đặc biệt cho phiếu trắng (bỏ qua vòng vote). */
 export const SPY_BLANK_VOTE_ID = '__blank__';
 export const SPY_MODES = {
@@ -73,4 +75,11 @@ export const SPY_CREW_OUTCOME_LABELS = {
 export function spyOutcomeLabel(outcome, mode = 'word') {
   const labels = mode === 'crew' ? SPY_CREW_OUTCOME_LABELS : SPY_OUTCOME_LABELS;
   return labels[outcome] || '';
+}
+
+/** Nhãn vai trò thống nhất trên Stage / Roster / học sinh. */
+export function spyRoleLabel(mode, isSpy, { short = false } = {}) {
+  if (isSpy) return 'Gián điệp';
+  if (mode === 'crew') return 'Phi hành đoàn';
+  return short ? 'Dân' : 'Dân thường';
 }

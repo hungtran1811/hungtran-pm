@@ -8,6 +8,7 @@ export function GameAttendanceRoster({
   onPresentChange,
   minPresent = 2,
   minPresentHint,
+  lockedHint = '',
   disabled = false,
 }) {
   const presentCount = presentStudentIds?.size ?? 0;
@@ -53,7 +54,16 @@ export function GameAttendanceRoster({
 
       {presentCount < minPresent && (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
-          {minPresentHint || `Cần ít nhất ${minPresent} học sinh có mặt để chơi.`}
+          {minPresentHint
+            || (presentCount === 0
+              ? 'Chọn đủ học sinh có mặt trước khi tạo phòng.'
+              : `Cần ít nhất ${minPresent} học sinh có mặt để chơi.`)}
+        </p>
+      )}
+
+      {lockedHint && (
+        <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-300">
+          {lockedHint}
         </p>
       )}
 

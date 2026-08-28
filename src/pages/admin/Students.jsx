@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, History, Plus, School, Users, X } from 'lucide-react';
+import { Check, Eye, History, Plus, School, Users, X } from 'lucide-react';
 import { AppShell } from '../../ui/components/AppShell.jsx';
 import { Button } from '../../ui/components/Button.jsx';
 import { Badge } from '../../ui/components/Badge.jsx';
@@ -21,6 +21,7 @@ import {
   updateStudent,
 } from '../../services/students.service.js';
 import { ALL_CLASSES_VALUE, buildClassesByCode, resolveScopedClasses } from '../../lib/classFilterScope.js';
+import { invalidateAdminSnapshots } from '../../lib/adminPanelData.js';
 import { subscribeManyByClass } from '../../lib/multiClassSubscribe.js';
 import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
 import {
@@ -29,6 +30,12 @@ import {
   displayStudentStatus,
   displayStudentStatusTone,
 } from '../../lib/classFinalMode.js';
+import {
+  hasLegacyProjectProposalDetails,
+  hasViewableProjectProposal,
+  projectProposalName,
+  projectProposalStatusPresentation,
+} from '../../lib/projectProposalView.js';
 
 const EMPTY_FORM = {
   fullName: '',
@@ -143,6 +150,7 @@ export function StudentsPage() {
     setDeleting(true);
     try {
       await deleteStudent(deleteTarget.id, deleteTarget.classCode);
+      invalidateAdminSnapshots();
       toast.success('Đã xoá học sinh.');
       setDeleteTarget(null);
     } catch (error) {
@@ -273,35 +281,76 @@ export function StudentsPage() {
 }
 
 function ProjectProposalDetails({ student }) {
+  const status = projectProposalStatusPresentation(student);
+  const hasLegacyDetails = hasLegacyProjectProposalDetails(student);
+
   return (
-    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm dark:border-slate-700 dark:bg-slate-800/60">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Tên dự án</p>
-        <p className="mt-1 font-medium text-slate-800 dark:text-slate-100">
-          {student.projectNameSubmission || student.projectName || '—'}
-        </p>
+    <div className="space-y-4 text-sm">
+      <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2 dark:border-slate-700 dark:bg-slate-900">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Trạng thái</p>
+          <div className="mt-1">
+            <Badge tone={status.tone}>{status.label}</Badge>
+          </div>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Thời điểm gửi
+          </p>
+          <p className="mt-1 text-slate-700 dark:text-slate-200">
+            {student.projectNameSubmittedAt
+              ? formatDateTime(student.projectNameSubmittedAt)
+              : 'Dữ liệu cũ — không có thời điểm gửi'}
+          </p>
+        </div>
+        <div className="sm:col-span-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Ghi chú xét duyệt
+          </p>
+          <p className="mt-1 whitespace-pre-wrap text-slate-700 dark:text-slate-200">
+            {student.projectNameReviewNote?.trim() || '— Không có ghi chú'}
+          </p>
+        </div>
       </div>
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Chủ đề</p>
-        <p className="mt-1 whitespace-pre-wrap text-slate-700 dark:text-slate-200">
-          {student.projectTopic?.trim() || '— Chưa ghi'}
-        </p>
-      </div>
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-          Vấn đề — cách giải quyết
-        </p>
-        <p className="mt-1 whitespace-pre-wrap text-slate-700 dark:text-slate-200">
-          {student.projectProblemSolution?.trim() || '— Chưa ghi'}
-        </p>
-      </div>
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-          Tính năng dự kiến
-        </p>
-        <p className="mt-1 whitespace-pre-wrap text-slate-700 dark:text-slate-200">
-          {student.projectPlannedFeatures?.trim() || '— Chưa ghi'}
-        </p>
+
+      {hasLegacyDetails && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+          <p className="font-medium">Dữ liệu cũ — chưa có nội dung chi tiết</p>
+          <p className="mt-1 text-xs opacity-80">
+            Hệ thống giữ nguyên bản ghi cũ và không tự bổ sung nội dung học sinh chưa gửi.
+          </p>
+        </div>
+      )}
+
+      <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Tên dự án</p>
+          <p className="mt-1 font-medium text-slate-800 dark:text-slate-100">
+            {projectProposalName(student) || '—'}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Chủ đề</p>
+          <p className="mt-1 whitespace-pre-wrap text-slate-700 dark:text-slate-200">
+            {student.projectTopic?.trim() || '— Chưa có nội dung'}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Vấn đề — cách giải quyết
+          </p>
+          <p className="mt-1 whitespace-pre-wrap text-slate-700 dark:text-slate-200">
+            {student.projectProblemSolution?.trim() || '— Chưa có nội dung'}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Tính năng dự kiến
+          </p>
+          <p className="mt-1 whitespace-pre-wrap text-slate-700 dark:text-slate-200">
+            {student.projectPlannedFeatures?.trim() || '— Chưa có nội dung'}
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -309,6 +358,9 @@ function ProjectProposalDetails({ student }) {
 
 function StudentRow({ student, showClass, studentClassDoc, onEdit, onDelete, onView }) {
   const usesProjectNames = classUsesProjectNames(studentClassDoc);
+  const hasProposal = hasViewableProjectProposal(student);
+  const canReview = canReviewStudentProjectName(student, studentClassDoc);
+  const proposalStatus = projectProposalStatusPresentation(student);
   const toast = useToast();
   const [reviewOpen, setReviewOpen] = useState(false);
   const [rejectNote, setRejectNote] = useState('');
@@ -320,6 +372,7 @@ function StudentRow({ student, showClass, studentClassDoc, onEdit, onDelete, onV
   };
 
   const handleApprove = async () => {
+    if (!canReview) return;
     setReviewing(true);
     try {
       await reviewProjectName(student.id, { approved: true });
@@ -333,6 +386,7 @@ function StudentRow({ student, showClass, studentClassDoc, onEdit, onDelete, onV
   };
 
   const handleReject = async () => {
+    if (!canReview) return;
     setReviewing(true);
     try {
       await reviewProjectName(student.id, { approved: false, reviewNote: rejectNote });
@@ -346,53 +400,26 @@ function StudentRow({ student, showClass, studentClassDoc, onEdit, onDelete, onV
   };
 
   const projectCell = () => {
-    if (!usesProjectNames) {
-      return <span className="text-slate-400">—</span>;
-    }
-    if (student.projectNameStatus === 'approved' && student.projectName) {
-      return (
-        <div className="space-y-1">
-          <p className="truncate text-slate-700 dark:text-slate-200">{student.projectName}</p>
-          {student.projectTopic && (
-            <p className="truncate text-[11px] text-slate-400" title={student.projectTopic}>
-              {student.projectTopic}
-            </p>
-          )}
-          <Badge tone="green">Đã duyệt</Badge>
-        </div>
-      );
-    }
-    if (canReviewStudentProjectName(student, studentClassDoc)) {
-      const name = student.projectNameSubmission || student.projectName || '—';
+    if (hasProposal) {
       return (
         <button
           type="button"
           onClick={() => setReviewOpen(true)}
-          className="w-full space-y-1 rounded-lg text-left transition hover:bg-amber-50/80 dark:hover:bg-amber-500/10"
+          className="-mx-2 w-[calc(100%+1rem)] space-y-1 rounded-lg px-2 py-1 text-left transition hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 dark:hover:bg-slate-800"
+          aria-label={`Xem đề xuất dự án của ${student.fullName}`}
         >
-          <p className="truncate font-medium text-slate-700 dark:text-slate-200">{name}</p>
-          {student.projectTopic && (
-            <p className="truncate text-[11px] text-slate-400" title={student.projectTopic}>
-              {student.projectTopic}
-            </p>
-          )}
-          <Badge tone="amber">Chờ duyệt — bấm để đọc</Badge>
+          <p className="truncate font-medium text-slate-700 dark:text-slate-200">
+            {projectProposalName(student)}
+          </p>
+          <Badge tone={proposalStatus.tone}>{proposalStatus.label}</Badge>
         </button>
       );
     }
-    if (student.projectNameStatus === 'rejected') {
-      return (
-        <div className="space-y-1">
-          <p className="truncate text-slate-600 dark:text-slate-300">{student.projectNameSubmission || '—'}</p>
-          <Badge tone="red">Đã từ chối</Badge>
-        </div>
-      );
-    }
-    return <span className="text-slate-400">Chưa gửi</span>;
+    return <span className="text-slate-400">{usesProjectNames ? 'Chưa gửi' : '—'}</span>;
   };
 
   return (
-    <div className="grid grid-cols-1 gap-2 px-5 py-4 md:grid-cols-12 md:items-center md:gap-3">
+    <div className="grid grid-cols-1 gap-2 px-5 py-3 md:grid-cols-12 md:items-center md:gap-3">
       <div className={`min-w-0 ${showClass ? 'md:col-span-4' : 'md:col-span-3'}`}>
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
@@ -435,10 +462,14 @@ function StudentRow({ student, showClass, studentClassDoc, onEdit, onDelete, onV
         </p>
       </div>
       <div className="flex flex-wrap gap-1 md:col-span-2 md:justify-end">
-        {canReviewStudentProjectName(student, studentClassDoc) && (
-          <Button size="sm" variant="subtle" onClick={() => setReviewOpen(true)}>
-            <Check className="h-4 w-4" />
-            Đọc & duyệt
+        {hasProposal && (
+          <Button
+            size="sm"
+            variant={canReview ? 'subtle' : 'ghost'}
+            onClick={() => setReviewOpen(true)}
+          >
+            {canReview ? <Check className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {canReview ? 'Đọc & duyệt' : 'Xem'}
           </Button>
         )}
         <Button size="sm" variant="ghost" onClick={onView} title="Xem lịch sử">
@@ -462,34 +493,38 @@ function StudentRow({ student, showClass, studentClassDoc, onEdit, onDelete, onV
             <Button variant="secondary" onClick={closeReview} disabled={reviewing}>
               Đóng
             </Button>
-            <Button
-              variant="danger"
-              onClick={handleReject}
-              loading={reviewing}
-            >
-              <X className="h-4 w-4" />
-              Từ chối
-            </Button>
-            <Button onClick={handleApprove} loading={reviewing}>
-              <Check className="h-4 w-4" />
-              Duyệt
-            </Button>
+            {canReview && (
+              <>
+                <Button variant="danger" onClick={handleReject} loading={reviewing}>
+                  <X className="h-4 w-4" />
+                  Từ chối
+                </Button>
+                <Button onClick={handleApprove} loading={reviewing}>
+                  <Check className="h-4 w-4" />
+                  Duyệt
+                </Button>
+              </>
+            )}
           </>
         }
       >
         <p className="mb-3 text-sm text-slate-600 dark:text-slate-300">
-          Đọc kỹ toàn bộ đề xuất trước khi duyệt hoặc từ chối.
+          {canReview
+            ? 'Đọc kỹ toàn bộ đề xuất trước khi duyệt hoặc từ chối.'
+            : 'Đề xuất đã được xử lý hoặc chỉ có dữ liệu cũ; nội dung bên dưới ở chế độ chỉ đọc.'}
         </p>
         <ProjectProposalDetails student={student} />
-        <div className="mt-4">
-          <Field label="Ghi chú khi từ chối (tuỳ chọn)">
-            <Input
-              value={rejectNote}
-              onChange={(e) => setRejectNote(e.target.value)}
-              placeholder="Ví dụ: Phạm vi quá rộng, hãy thu hẹp tính năng..."
-            />
-          </Field>
-        </div>
+        {canReview && (
+          <div className="mt-4">
+            <Field label="Ghi chú khi từ chối (tuỳ chọn)">
+              <Input
+                value={rejectNote}
+                onChange={(e) => setRejectNote(e.target.value)}
+                placeholder="Ví dụ: Phạm vi quá rộng, hãy thu hẹp tính năng..."
+              />
+            </Field>
+          </div>
+        )}
       </Modal>
     </div>
   );
@@ -518,9 +553,11 @@ function StudentFormModal({ initial, classCode, onClose, onSaved }) {
       };
       if (isEdit) {
         await updateStudent(initial.id, payload);
+        invalidateAdminSnapshots();
         toast.success('Đã cập nhật học sinh.');
       } else {
         await createStudent(payload);
+        invalidateAdminSnapshots();
         toast.success('Đã thêm học sinh.');
       }
       await onSaved();

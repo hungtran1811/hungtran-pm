@@ -1,9 +1,6 @@
 import { fetchAdminBaseData, invalidateAdminDataCache } from './adminDataCache.js';
 import { listKnowledgeReportsByClass } from '../services/knowledgeReports.service.js';
-import { listPracticeSubmissionsByClass, regradePendingPracticeSubmissions } from '../services/practiceQuiz.service.js';
 import { loadLatestReportsForStudents } from '../services/reports.service.js';
-import { listStudentQuizSubmissions, regradePendingQuizSubmissions } from '../services/quiz.service.js';
-import { listStudentsByClassCodes } from '../services/students.service.js';
 
 async function mergeByClass(classCodes, loadFn) {
   if (!classCodes.length) return [];
@@ -25,10 +22,9 @@ export async function loadAdminClasses({ force = false } = {}) {
 }
 
 export async function loadReportsPanelSnapshot(classCodes, { force = false } = {}) {
-  const [base, students] = await Promise.all([
-    fetchAdminBaseData({ force }),
-    listStudentsByClassCodes(classCodes, { activeOnly: true }),
-  ]);
+  const base = await fetchAdminBaseData({ force });
+  const codeSet = new Set(classCodes || []);
+  const students = (base.students || []).filter((s) => codeSet.has(s.classCode));
   const latestByStudent = await loadLatestReportsForStudents(students);
   return { classes: base.classes, students, latestByStudent };
 }
@@ -54,32 +50,13 @@ export async function loadFeedbackByClassCodes(classCodes, { force = false } = {
 }
 
 export async function loadFeedbackPanelSnapshot(classCodes, { force = false } = {}) {
-  const [base, students, reports] = await Promise.all([
+  const [base, reports] = await Promise.all([
     fetchAdminBaseData({ force }),
-    listStudentsByClassCodes(classCodes, { activeOnly: true }),
     mergeByClass(classCodes, listKnowledgeReportsByClass),
   ]);
+  const codeSet = new Set(classCodes || []);
+  const students = (base.students || []).filter((s) => codeSet.has(s.classCode));
   return { classes: base.classes, students, reports };
-}
-
-export async function loadQuizPanelSnapshot(classCodes, { force = false } = {}) {
-  const [base, submissions] = await Promise.all([
-    fetchAdminBaseData({ force }),
-    mergeByClass(classCodes, listStudentQuizSubmissions),
-  ]);
-  await regradePendingQuizSubmissions(submissions);
-  const refreshed = await mergeByClass(classCodes, listStudentQuizSubmissions);
-  return { classes: base.classes, submissions: refreshed };
-}
-
-export async function loadPracticePanelSnapshot(classCodes, { force = false } = {}) {
-  const [base, submissions] = await Promise.all([
-    fetchAdminBaseData({ force }),
-    mergeByClass(classCodes, listPracticeSubmissionsByClass),
-  ]);
-  await regradePendingPracticeSubmissions(submissions);
-  const refreshed = await mergeByClass(classCodes, listPracticeSubmissionsByClass);
-  return { classes: base.classes, submissions: refreshed };
 }
 
 export async function loadDashboardOpsSnapshot({ force = false } = {}) {

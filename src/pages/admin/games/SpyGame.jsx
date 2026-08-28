@@ -36,6 +36,7 @@ import {
   finishSpySession,
   getSpyPortalLink,
   getSpyPresentLink,
+  isSpyLobbyRosterReady,
   openSpyMeeting,
   openSpyLobby,
   openSpyVote,
@@ -45,83 +46,13 @@ import {
   checkCrewTaskWin,
   startCrewGame,
   startSpyGame,
+  syncSpyPresentRosterToJoined,
+  updateSpyPresentRoster,
 } from '../../../services/spy.service.js';
 import { SpyStage } from './SpyStage.jsx';
 import { SpyGmRoster, SpyTieCountdown } from './SpyGmRoster.jsx';
+import { SpyWordPicker } from './SpyWordPicker.jsx';
 
-function SpyWordPicker({
-  wordMode,
-  setWordMode,
-  categoryId,
-  setCategoryId,
-  pairIndex,
-  setPairIndex,
-  civilianWord,
-  setCivilianWord,
-  spyWord,
-  setSpyWord,
-  onRandomPair,
-  compact = false,
-}) {
-  const categoryPairs = useMemo(() => getCategoryPairs(categoryId), [categoryId]);
-
-  return (
-    <div className={`space-y-3 ${compact ? '' : 'card p-4'}`}>
-      {!compact && (
-        <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-          Cặp từ (chỉ giáo viên thấy)
-        </p>
-      )}
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" variant={wordMode === 'bank' ? 'primary' : 'secondary'} size="sm" onClick={() => setWordMode('bank')}>
-          Bộ từ sẵn
-        </Button>
-        <Button type="button" variant={wordMode === 'custom' ? 'primary' : 'secondary'} size="sm" onClick={() => setWordMode('custom')}>
-          Tuỳ chỉnh
-        </Button>
-      </div>
-
-      {wordMode === 'bank' ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Chủ đề">
-            <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-              {SPY_WORD_CATEGORIES.map((c) => (
-                <option key={c.id} value={c.id}>{c.label}</option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Cặp từ">
-            <Select value={pairIndex} onChange={(e) => setPairIndex(Number(e.target.value))}>
-              {categoryPairs.map((pair, index) => (
-                <option key={`${pair.civilian}-${pair.spy}`} value={index}>
-                  {pair.civilian} / {pair.spy}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <div className="sm:col-span-2">
-            <Button type="button" variant="secondary" size="sm" onClick={onRandomPair}>
-              Random cặp từ
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Từ dân thường">
-            <Input value={civilianWord} onChange={(e) => setCivilianWord(e.target.value)} />
-          </Field>
-          <Field label="Từ gián điệp">
-            <Input value={spyWord} onChange={(e) => setSpyWord(e.target.value)} />
-          </Field>
-        </div>
-      )}
-
-      <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
-        GV xem: <strong>{civilianWord || '—'}</strong> · <strong>{spyWord || '—'}</strong>
-      </p>
-    </div>
-  );
-}
 
 export function SpyGame({
   selectedClass = '',
@@ -142,7 +73,7 @@ export function SpyGame({
   const [impostorCount, setImpostorCount] = useState(1);
   const [describeRoundTotal, setDescribeRoundTotal] = useState(1);
   const [gameMode, setGameMode] = useState('word');
-  const [taskPerPlayer, setTaskPerPlayer] = useState(5);
+  const [crewTaskTarget, setCrewTaskTarget] = useState(15);
 
   const presentIds = useMemo(() => [...(presentStudentIds || [])], [presentStudentIds]);
 
@@ -236,6 +167,27 @@ export function SpyGame({
   };
   const isCrewSession = session?.mode === 'crew';
   const crewReady = isCrewSession && checkCrewTaskWin(session, participants, taskProgress);
+  const sessionPresentIds = session?.presentStudentIds || [];
+  const sessionPresentCount = sessionPresentIds.length;
+  const lobbyRosterReady = Boolean(
+    session
+    && isSpyLobbyRosterReady(
+      participants.map((p) => p.id),
+      sessionPresentIds,
+    ),
+  );
+  const missingJoiners = useMemo(() => {
+    if (!session) return [];
+    const joined = new Set(participants.map((p) => p.id));
+    const nameById = new Map([
+      ...presentStudents.map((s) => [s.id, s.fullName]),
+      ...participants.map((p) => [p.id, p.studentName]),
+    ]);
+    return (session.presentStudentIds || [])
+      .filter((id) => !joined.has(id))
+      .map((id) => ({ id, name: nameById.get(id) || id }));
+  }, [session, participants, presentStudents]);
+  const canStartLobby = lobbyRosterReady && participants.length >= impostorCount + 2;
 
   useEffect(() => {
     if (!sessionId || !crewReady || session?.status !== 'playing') return undefined;
@@ -263,7 +215,7 @@ export function SpyGame({
         impostorCount,
         describeRoundTotal,
         mode: gameMode,
-        taskPerPlayer,
+        crewTaskTarget,
       });
       await openSpyLobby(id);
       setSessionId(id);
@@ -332,7 +284,13 @@ export function SpyGame({
     return <EmptyState icon={<Users className="h-7 w-7" />} title="Lớp chưa có học sinh" />;
   }
   if (!presentStudents.length) {
-    return <EmptyState icon={<Users className="h-7 w-7" />} title="Chưa chọn học sinh có mặt" />;
+    return (
+      <EmptyState
+        icon={<Users className="h-7 w-7" />}
+        title="Chưa chọn học sinh có mặt"
+        description="Tick điểm danh tường minh trên hub trước khi tạo phòng."
+      />
+    );
   }
 
   return (
@@ -380,13 +338,13 @@ export function SpyGame({
               <SpyWordPicker {...wordPickerProps} />
             </>
           ) : (
-            <Field label="Số nhiệm vụ / người">
+            <Field label="Tổng nhiệm vụ nhóm">
               <Input
                 type="number"
-                min={1}
-                max={20}
-                value={taskPerPlayer}
-                onChange={(e) => setTaskPerPlayer(Math.max(1, Math.min(20, Number(e.target.value) || 1)))}
+                min={5}
+                max={100}
+                value={crewTaskTarget}
+                onChange={(e) => setCrewTaskTarget(Math.max(5, Math.min(100, Number(e.target.value) || 15)))}
               />
             </Field>
           )}
@@ -409,9 +367,15 @@ export function SpyGame({
                 </Badge>
               )}
               <span className="text-sm text-slate-600 dark:text-slate-300">
-                {participants.length} / {presentStudents.length} trong phòng
+                {participants.length} / {sessionPresentCount || presentStudents.length} trong phòng
               </span>
             </div>
+
+            {session.status === 'lobby' && (
+              <p className="text-xs text-slate-500">
+                Điểm danh đã khóa vào phòng — sửa bằng &quot;Đồng bộ theo người đã vào&quot; bên dưới nếu tick thừa.
+              </p>
+            )}
 
             <div className="flex flex-wrap gap-2">
               {portalLink && (
@@ -620,11 +584,71 @@ export function SpyGame({
           )}
 
           {session.status === 'lobby' && (
-            <div>
-              <Button onClick={handleStart} loading={busy} disabled={participants.length < impostorCount + 2}>
-                <Play className="h-4 w-4" />
-                {session.mode === 'crew' ? 'Bắt đầu mode Phi hành đoàn' : 'Bắt đầu ván — phát từ cho học sinh'}
-              </Button>
+            <div className="card space-y-3 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  Sẵn sàng bắt đầu
+                </p>
+                <Badge tone={lobbyRosterReady ? 'green' : 'amber'}>
+                  {participants.length}/{sessionPresentCount} đã vào
+                </Badge>
+              </div>
+              {missingJoiners.length > 0 ? (
+                <div className="space-y-1">
+                  <p className="text-xs font-medium text-amber-800 dark:text-amber-200">
+                    Có mặt nhưng chưa vào:
+                  </p>
+                  <ul className="text-sm text-slate-700 dark:text-slate-200">
+                    {missingJoiners.map((row) => (
+                      <li key={row.id}>· {row.name}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <p className="text-sm text-emerald-700 dark:text-emerald-300">
+                  Đã vào: mọi người trong danh sách có mặt đều đã vào phòng.
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={handleStart}
+                  loading={busy}
+                  disabled={!canStartLobby}
+                >
+                  <Play className="h-4 w-4" />
+                  {session.mode === 'crew' ? 'Bắt đầu mode Phi hành đoàn' : 'Bắt đầu ván — phát từ cho học sinh'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={busy || participants.length < impostorCount + 2}
+                  onClick={() => runAction(
+                    () => syncSpyPresentRosterToJoined(sessionId),
+                    'Đã đồng bộ điểm danh theo người đã vào phòng.',
+                  )}
+                >
+                  <Users className="h-4 w-4" />
+                  Đồng bộ theo người đã vào
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={busy || presentIds.length < impostorCount + 2}
+                  onClick={() => runAction(
+                    () => updateSpyPresentRoster(sessionId, [
+                      ...new Set([...(session.presentStudentIds || []), ...presentIds]),
+                    ]),
+                    'Đã cập nhật roster từ điểm danh hub (giữ người đã vào).',
+                  )}
+                >
+                  Cập nhật từ hub
+                </Button>
+              </div>
+              {!canStartLobby && (
+                <p className="text-xs text-slate-500">
+                  Start khi đủ người tick đã vào, hoặc bấm Đồng bộ nếu đã tick thừa người vắng.
+                </p>
+              )}
             </div>
           )}
 

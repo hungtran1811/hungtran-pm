@@ -28,8 +28,8 @@ import {
   updateClass,
 } from '../../services/classes.service.js';
 import { markAllStudentsCompletedForClass } from '../../services/students.service.js';
+import { invalidateAdminSnapshots, loadFeedbackByClassCodes } from '../../lib/adminPanelData.js';
 import { listCurriculumPrograms } from '../../services/curriculum.service.js';
-import { loadFeedbackByClassCodes } from '../../lib/adminPanelData.js';
 import { averageUnderstanding } from '../../lib/classAnalytics.js';
 import { UnderstandingDots } from '../../ui/components/SubmissionDisplay.jsx';
 import { useSettings } from '../../state/settings.store.jsx';
@@ -107,6 +107,7 @@ export function ClassesPage() {
     setDeleting(true);
     try {
       await deleteClass(deleteTarget.classCode);
+      invalidateAdminSnapshots();
       toast.success('Đã xoá lớp.');
       setDeleteTarget(null);
       setClasses((prev) => prev.filter((c) => c.classCode !== deleteTarget.classCode));
@@ -120,6 +121,7 @@ export function ClassesPage() {
   const handleStatusChange = async (cls, status) => {
     try {
       await setClassStatus(cls.classCode, status, cls.status);
+      invalidateAdminSnapshots();
       if (status === 'completed') {
         const count = await markAllStudentsCompletedForClass(cls.classCode);
         toast.success(
@@ -498,9 +500,11 @@ function ClassFormModal({ initial, programs, onClose, onSaved }) {
       };
       if (isEdit) {
         await updateClass(initial.classCode, payload);
+        invalidateAdminSnapshots();
         toast.success('Đã cập nhật lớp.');
       } else {
         await createClass(form.classCode, payload);
+        invalidateAdminSnapshots();
         toast.success('Đã tạo lớp mới.');
       }
       await onSaved();
@@ -578,7 +582,7 @@ function ClassFormModal({ initial, programs, onClose, onSaved }) {
             <GroupedProgramSelect
               programs={programs}
               value={form.curriculumProgramId}
-              onChange={(e) => handleProgramChange(e.target.value)}
+              onChange={handleProgramChange}
               includeEmpty
             />
           </Field>

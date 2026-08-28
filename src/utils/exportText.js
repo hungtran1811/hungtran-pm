@@ -10,9 +10,10 @@ export async function copyToClipboard(text) {
   await navigator.clipboard.writeText(text);
 }
 
-export function formatProgressReport(report) {
+export function formatProgressReport(report, { displayName } = {}) {
+  const studentName = displayName || report.studentName;
   return [
-    `Học sinh: ${report.studentName}`,
+    `Học sinh: ${studentName}`,
     `Dự án: ${report.projectName || '—'}`,
     `Tiến độ: ${report.progressPercent}% - ${report.stage} - ${report.status}`,
     `Đã làm: ${report.doneToday}`,

@@ -58,9 +58,6 @@ export const STATUS_TONES = {
   'Hoàn thành': 'green',
 };
 
-/** Buổi học ưu tiên không gian làm bài kiểm tra — ẩn form phản hồi */
-export const QUIZ_FOCUS_SESSIONS = [5, 9];
-
 export const UNDERSTANDING_LEVELS = [
   { value: 1, label: '1 - Chưa hiểu' },
   { value: 2, label: '2 - Hiểu ít' },

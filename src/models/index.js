@@ -1,4 +1,9 @@
 import { toDate } from '../lib/firestore.js';
+import {
+  htmlLooksRenderable,
+  isFullHtmlDocument,
+  resolveLessonPresentationPreset,
+} from '../lib/lessonHtml.js';
 import { DEFAULT_STAGE, DEFAULT_STATUS } from '../constants/index.js';
 
 export function toClassModel(snapshot) {
@@ -125,86 +130,6 @@ export function toFeedbackSummaryModel(snapshot) {
   };
 }
 
-export function toQuizAttemptModel(snapshot) {
-  const data = snapshot.data() || {};
-  return {
-    id: snapshot.id,
-    attemptId: data.attemptId ?? snapshot.id,
-    classCode: data.classCode ?? '',
-    studentId: data.studentId ?? '',
-    studentName: data.studentName ?? '',
-    programId: data.programId ?? '',
-    lessonId: data.lessonId ?? '',
-    curriculumProgramId: data.curriculumProgramId ?? '',
-    sessionNumber: Number(data.sessionNumber ?? 0),
-    answers: data.answers && typeof data.answers === 'object' ? data.answers : {},
-    submittedAt: toDate(data.submittedAt),
-    createdAt: toDate(data.createdAt),
-  };
-}
-
-export function toPracticeQuizSubmissionModel(snapshot) {
-  const data = snapshot.data() || {};
-  return {
-    id: snapshot.id,
-    submissionId: data.submissionId ?? snapshot.id,
-    classCode: data.classCode ?? '',
-    studentId: data.studentId ?? '',
-    studentName: data.studentName ?? '',
-    programId: data.programId ?? '',
-    lessonId: data.lessonId ?? '',
-    curriculumProgramId: data.curriculumProgramId ?? '',
-    sessionNumber: Number(data.sessionNumber ?? 0),
-    quizTitle: data.quizTitle ?? '',
-    lessonTitle: data.lessonTitle ?? '',
-    attemptCount: Number(data.attemptCount ?? 1),
-    responses: Array.isArray(data.responses) ? data.responses : [],
-    mcqCorrect: Number(data.mcqCorrect ?? 0),
-    mcqTotal: Number(data.mcqTotal ?? 0),
-    mcqPercent: Number(data.mcqPercent ?? 0),
-    gradingStatus: data.gradingStatus ?? 'complete',
-    source: data.source ?? 'practice-quiz-v1',
-    submittedAt: toDate(data.submittedAt),
-    updatedAt: toDate(data.updatedAt),
-  };
-}
-
-export function toStudentQuizSubmissionModel(snapshot) {
-  const data = snapshot.data() || {};
-  return {
-    id: snapshot.id,
-    classCode: data.classCode ?? '',
-    studentId: data.studentId ?? '',
-    studentName: data.studentName ?? '',
-    programId: data.programId ?? '',
-    lessonId: data.lessonId ?? '',
-    curriculumProgramId: data.curriculumProgramId ?? '',
-    sessionNumber: Number(data.sessionNumber ?? 0),
-    quizTitle: data.quizTitle ?? '',
-    lessonTitle: data.lessonTitle ?? '',
-    attemptNumber: Number(data.attemptNumber ?? 1),
-    maxAttempts: Number(data.maxAttempts ?? 0),
-    timeLimitMinutes: Number(data.timeLimitMinutes ?? 0),
-    startedAtMs: data.startedAtMs ?? null,
-    durationSeconds: Number(data.durationSeconds ?? 0),
-    responses: Array.isArray(data.responses) ? data.responses : [],
-    mcqCorrect: Number(data.mcqCorrect ?? 0),
-    mcqTotal: Number(data.mcqTotal ?? 0),
-    mcqPercent: Number(data.mcqPercent ?? 0),
-    codeCorrect: Number(data.codeCorrect ?? 0),
-    codeGraded: Number(data.codeGraded ?? 0),
-    gradedCorrect: Number(data.gradedCorrect ?? 0),
-    gradedTotal: Number(data.gradedTotal ?? 0),
-    gradedPercent: Number(data.gradedPercent ?? 0),
-    unansweredCount: Number(data.unansweredCount ?? 0),
-    gradingStatus: data.gradingStatus ?? 'complete',
-    timedOut: Boolean(data.timedOut ?? false),
-    submitReason: data.submitReason ?? 'manual',
-    submittedAt: toDate(data.submittedAt),
-    createdAt: toDate(data.createdAt),
-  };
-}
-
 export function toKnowledgeReportModel(snapshot) {
   const data = snapshot.data() || {};
   return {
@@ -240,22 +165,58 @@ function normalizeImageRecord(input) {
   };
 }
 
-// The stored lesson schema uses lectureMarkdown/exerciseMarkdown and image
-// objects (bannerImage/images/coverImage). We map them to display-friendly
-// fields and keep `_raw` so saving back never drops unknown fields.
+function resolveLessonPartRenderFormat({ contentFormat, html, markdown }) {
+  if (contentFormat !== 'html' || typeof html !== 'string') return 'markdown';
+  if (!String(markdown).trim()) return 'html';
+  return htmlLooksRenderable(html) ? 'html' : 'markdown';
+}
+
+// Lesson content is dual-format while HTML rolls out. New records use
+// lectureHtml/exerciseHtml; legacy records keep their Markdown fields. `_raw`
+// is retained so saving a lesson never drops rollback data or unknown fields.
 export function normalizeLesson(lesson = {}, index = 0) {
   const bannerImage = normalizeImageRecord(lesson.bannerImage);
   const images = Array.isArray(lesson.images)
     ? lesson.images.map(normalizeImageRecord).filter(Boolean)
     : [];
   const coverImage = images[0] || normalizeImageRecord(lesson.coverImage);
+  const hasAnyHtmlSource =
+    typeof lesson.lectureHtml === 'string' || typeof lesson.exerciseHtml === 'string';
+  const contentFormat = lesson.contentFormat === 'html' && hasAnyHtmlSource ? 'html' : 'markdown';
+  const htmlSources = [lesson.lectureHtml, lesson.exerciseHtml].filter(
+    (value) => typeof value === 'string',
+  );
+  const presentationSource =
+    htmlSources.find((value) => isFullHtmlDocument(value)) ?? htmlSources[0] ?? '';
+  const presentationPreset = resolveLessonPresentationPreset(
+    presentationSource,
+    lesson.presentationPreset,
+  );
+  const markdownContent = lesson.lectureMarkdown ?? lesson.contentMarkdown ?? lesson.content ?? '';
+  const markdownExercise = lesson.exerciseMarkdown ?? lesson.exercise ?? '';
+  const contentRenderFormat = resolveLessonPartRenderFormat({
+    contentFormat,
+    html: lesson.lectureHtml,
+    markdown: markdownContent,
+  });
+  const exerciseRenderFormat = resolveLessonPartRenderFormat({
+    contentFormat,
+    html: lesson.exerciseHtml,
+    markdown: markdownExercise,
+  });
+  const content = contentRenderFormat === 'html' ? lesson.lectureHtml : markdownContent;
+  const exercise = exerciseRenderFormat === 'html' ? lesson.exerciseHtml : markdownExercise;
 
   return {
     id: lesson.id ?? `lesson-${index + 1}`,
     sessionNumber: Number(lesson.sessionNumber ?? index + 1),
     title: lesson.title ?? '',
-    content: lesson.lectureMarkdown ?? lesson.contentMarkdown ?? lesson.content ?? '',
-    exercise: lesson.exerciseMarkdown ?? lesson.exercise ?? '',
+    contentFormat,
+    presentationPreset,
+    contentRenderFormat,
+    exerciseRenderFormat,
+    content,
+    exercise,
     exerciseVisible: Boolean(lesson.exerciseVisible ?? false),
     summary: lesson.summary ?? '',
     teacherNote: lesson.teacherNote ?? '',
@@ -276,9 +237,9 @@ export function toCurriculumProgramModel(snapshot, lessonsOverride = null) {
     lessonsOverride !== null
       ? lessonsOverride
       : Array.isArray(data.lessons)
-        ? data.lessons.map((lesson, index) => normalizeLesson(lesson, index)).sort(
-            (a, b) => a.sessionNumber - b.sessionNumber,
-          )
+        ? data.lessons
+            .map((lesson, index) => normalizeLesson(lesson, index))
+            .sort((a, b) => a.sessionNumber - b.sessionNumber)
         : [];
 
   return {

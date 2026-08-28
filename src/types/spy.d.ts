@@ -37,6 +37,10 @@
  * @property {SpyMode} mode
  * @property {number} taskPerPlayer
  * @property {number} crewTaskTarget
+ * @property {number} crewTeamCompleted
+ * @property {number} spyHintLevel
+ * @property {string} spyHintText
+ * @property {string} spyHintSpyId
  * @property {boolean} sabotageActive
  * @property {string} sabotageById
  * @property {import('firebase/firestore').Timestamp | Date | null} sabotageAt

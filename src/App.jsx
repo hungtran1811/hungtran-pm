@@ -5,7 +5,13 @@ import { FullPageLoader } from './ui/components/Spinner.jsx';
 import { LoginPage } from './pages/admin/Login.jsx';
 import { ForbiddenPage } from './pages/admin/Forbidden.jsx';
 import { HomePage } from './pages/Home.jsx';
-import { StudentPortalPage } from './pages/student/StudentPortal.jsx';
+import {
+  StudentPortalPage,
+  StudentPhaseHome,
+  StudentLearnRoute,
+  StudentProjectRoute,
+  StudentLessonsReviewRoute,
+} from './pages/student/StudentPortal.jsx';
 import { NotFoundPage } from './pages/NotFound.jsx';
 import { ErrorBoundary } from './ui/components/ErrorBoundary.jsx';
 import { FEATURE_PROGRESS_REPORTS_ENABLED } from './config/features.js';
@@ -35,9 +41,6 @@ const LessonsPage = lazy(() =>
 const AnalyticsPage = lazy(() =>
   import('./pages/admin/AnalyticsPage.jsx').then((m) => ({ default: m.AnalyticsPage })),
 );
-const ScoresHubPage = lazy(() =>
-  import('./pages/admin/ScoresHub.jsx').then((m) => ({ default: m.ScoresHubPage })),
-);
 const SettingsPage = lazy(() =>
   import('./pages/admin/Settings.jsx').then((m) => ({ default: m.SettingsPage })),
 );
@@ -56,15 +59,6 @@ function LegacyReportsRedirect() {
   return <Navigate to="/admin/analytics" replace />;
 }
 
-function LegacyQuizRedirect() {
-  const { search } = useLocation();
-  const params = new URLSearchParams(search);
-  params.set('tab', 'quiz');
-  return <Navigate to={`/admin/scores?${params.toString()}`} replace />;
-}
-
-const SCORES_TABS = new Set(['quiz', 'practice', 'scores']);
-
 function AdminSuspense({ children }) {
   return (
     <ProtectedRoute>
@@ -77,10 +71,10 @@ function AnalyticsEntry() {
   const { search } = useLocation();
   const params = new URLSearchParams(search);
   const legacyTab = params.get('tab');
-  if (legacyTab && SCORES_TABS.has(legacyTab)) {
-    const scoresTab = legacyTab === 'scores' ? 'quiz' : legacyTab;
-    params.set('tab', scoresTab);
-    return <Navigate to={`/admin/scores?${params.toString()}`} replace />;
+  if (legacyTab && ['quiz', 'practice', 'scores'].includes(legacyTab)) {
+    params.delete('tab');
+    const query = params.toString();
+    return <Navigate to={query ? `/admin/analytics?${query}` : '/admin/analytics'} replace />;
   }
   if (legacyTab && ['overview', 'compare', 'classes'].includes(legacyTab)) {
     params.set('tab', 'active');
@@ -104,7 +98,12 @@ export default function App() {
             <StudentPortalPage />
           </ErrorBoundary>
         }
-      />
+      >
+        <Route index element={<StudentPhaseHome />} />
+        <Route path="learn" element={<StudentLearnRoute />} />
+        <Route path="project" element={<StudentProjectRoute />} />
+        <Route path="lessons" element={<StudentLessonsReviewRoute />} />
+      </Route>
 
       <Route
         path="/present/:sessionId"
@@ -186,14 +185,6 @@ export default function App() {
       />
       <Route path="/admin/analytics" element={<AnalyticsEntry />} />
       <Route
-        path="/admin/scores"
-        element={
-          <AdminSuspense>
-            <ScoresHubPage />
-          </AdminSuspense>
-        }
-      />
-      <Route
         path="/admin/settings"
         element={
           <AdminSuspense>
@@ -201,7 +192,8 @@ export default function App() {
           </AdminSuspense>
         }
       />
-      <Route path="/admin/quiz" element={<LegacyQuizRedirect />} />
+      <Route path="/admin/quiz" element={<Navigate to="/admin/analytics" replace />} />
+      <Route path="/admin/scores" element={<Navigate to="/admin/analytics" replace />} />
 
       <Route path="/404" element={<NotFoundPage />} />
       <Route path="*" element={<Navigate to="/404" replace />} />

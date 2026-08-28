@@ -1,5 +1,15 @@
-import { useEffect, useState } from 'react';
-import { BookOpen, ClipboardList, FileText, HelpCircle, Plus, Settings2, Trash2 } from 'lucide-react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  BookOpen,
+  FileText,
+  Monitor,
+  Plus,
+  Settings2,
+  Smartphone,
+  Tablet,
+  Trash2,
+  Upload,
+} from 'lucide-react';
 import { AppShell } from '../../ui/components/AppShell.jsx';
 import { Button } from '../../ui/components/Button.jsx';
 import { Badge } from '../../ui/components/Badge.jsx';
@@ -10,13 +20,15 @@ import { SkeletonRows } from '../../ui/components/Skeleton.jsx';
 import { GroupedProgramSelect } from '../../ui/components/GroupedProgramSelect.jsx';
 import { Field, Input, Textarea } from '../../ui/components/Field.jsx';
 import { Select } from '../../ui/components/Field.jsx';
-import { Markdown } from '../../ui/components/Markdown.jsx';
+import { LessonContent } from '../../ui/components/LessonContent.jsx';
 import { ImageUpload } from '../../ui/components/ImageUpload.jsx';
 import { ImageGalleryUpload } from '../../ui/components/ImageGalleryUpload.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import {
   createProgram,
   getCurriculumProgram,
+  getProgramLesson,
+  isSlimLesson,
   listCurriculumPrograms,
   saveProgramLessons,
   updateProgramMeta,
@@ -24,18 +36,49 @@ import {
 import { CURRICULUM_FINAL_MODES } from '../../constants/index.js';
 import { getErrorMessage } from '../../lib/firestore.js';
 import {
-  emptyQuiz,
-  loadQuizForEditor,
-  makeQuizQuestion,
-  syncAllQuizBanks,
-} from '../../services/quiz.service.js';
+  LEVEL_FORM_OPTIONS,
+  SUBJECT_FORM_OPTIONS,
+  canonicalProgramLevelValue,
+  canonicalProgramSubjectValue,
+  resolveProgramLevelMeta,
+  resolveProgramSubjectMeta,
+} from '../../lib/subjectGroups.js';
+import { renderSafeMarkdown } from '../../lib/markdown.js';
 import {
-  emptyPracticeQuiz,
-  loadPracticeQuizForEditor,
-  makePracticeQuestion,
-  syncAllPracticeQuizBanks,
-} from '../../services/practiceQuiz.service.js';
-import { Spinner } from '../../ui/components/Spinner.jsx';
+  LESSON_PRESENTATION_PRESET_LEGACY,
+  hasRenderableLessonHtml,
+  sanitizeLessonHtml,
+} from '../../lib/lessonHtml.js';
+const LESSON_HTML_IMPORT_MAX_BYTES = 750 * 1024;
+
+function markdownToLessonHtml(content = '') {
+  return content ? sanitizeLessonHtml(renderSafeMarkdown(content)) : '';
+}
+
+function hasRelativeImageUrl(source = '') {
+  return [...String(source).matchAll(/<img\b[^>]*\bsrc\s*=\s*(["'])(.*?)\1/gi)].some(
+    ([, , url]) => !/^(?:https?:)?\/\//i.test(url.trim()) && !/^data:image\//i.test(url.trim()),
+  );
+}
+
+function prepareLessonForHtmlEditor(lesson) {
+  const contentSourceFormat = lesson.contentRenderFormat ?? lesson.contentFormat;
+  const exerciseSourceFormat = lesson.exerciseRenderFormat ?? lesson.contentFormat;
+  const content =
+    contentSourceFormat === 'html' ? lesson.content : markdownToLessonHtml(lesson.content);
+  const exercise =
+    exerciseSourceFormat === 'html' ? lesson.exercise : markdownToLessonHtml(lesson.exercise);
+
+  return {
+    ...lesson,
+    contentFormat: 'html',
+    contentRenderFormat: 'html',
+    exerciseRenderFormat: 'html',
+    presentationPreset: LESSON_PRESENTATION_PRESET_LEGACY,
+    content,
+    exercise,
+  };
+}
 
 function makeLessonId() {
   return `lesson-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -51,12 +94,13 @@ export function LessonsPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingLesson, setEditingLesson] = useState(null);
-  const [editorInitialMode, setEditorInitialMode] = useState('lesson');
   const [showEditor, setShowEditor] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [dirty, setDirty] = useState(false);
   const [programForm, setProgramForm] = useState(null);
   const [savingProgram, setSavingProgram] = useState(false);
+  const [openingLessonId, setOpeningLessonId] = useState(null);
+  const openEditorGeneration = useRef(0);
 
   const reloadPrograms = async (selectId) => {
     const list = await listCurriculumPrograms();
@@ -84,27 +128,52 @@ export function LessonsPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedProgramId) return;
+    if (!selectedProgramId) return undefined;
+    let cancelled = false;
     (async () => {
       setLoading(true);
       try {
-        const prog = await getCurriculumProgram(selectedProgramId);
+        const prog = await getCurriculumProgram(selectedProgramId, { full: false });
+        if (cancelled) return;
         setProgram(prog);
         setLessons(prog?.lessons ?? []);
         setDirty(false);
       } catch (error) {
-        toast.error(getErrorMessage(error));
+        if (!cancelled) toast.error(getErrorMessage(error));
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProgramId]);
 
-  const openEditor = (lesson, mode = 'lesson') => {
-    setEditingLesson({ ...lesson });
-    setEditorInitialMode(mode);
-    setShowEditor(true);
+  const openEditor = async (lesson) => {
+    const generation = ++openEditorGeneration.current;
+    if (lesson._isNew) {
+      setEditingLesson(prepareLessonForHtmlEditor({ ...lesson }));
+      setShowEditor(true);
+      return;
+    }
+    setOpeningLessonId(lesson.id);
+    try {
+      const full = isSlimLesson(lesson)
+        ? await getProgramLesson(selectedProgramId, lesson.id)
+        : lesson;
+      if (generation !== openEditorGeneration.current) return;
+      if (!full) {
+        toast.error('Không tải được bài giảng này.');
+        return;
+      }
+      setEditingLesson(prepareLessonForHtmlEditor({ ...full, _slim: false }));
+      setShowEditor(true);
+    } catch (error) {
+      if (generation === openEditorGeneration.current) toast.error(getErrorMessage(error));
+    } finally {
+      if (generation === openEditorGeneration.current) setOpeningLessonId(null);
+    }
   };
 
   const openNew = () => {
@@ -113,6 +182,8 @@ export function LessonsPage() {
         id: makeLessonId(),
         sessionNumber: (lessons.at(-1)?.sessionNumber ?? 0) + 1,
         title: '',
+        contentFormat: 'html',
+        presentationPreset: LESSON_PRESENTATION_PRESET_LEGACY,
         content: '',
         exercise: '',
         exerciseVisible: false,
@@ -125,15 +196,16 @@ export function LessonsPage() {
         _raw: {},
         _isNew: true,
       },
-      'lesson',
     );
   };
 
   const applyLesson = (lesson) => {
+    const nextLesson = { ...lesson, _slim: false };
+    delete nextLesson._isNew;
     setLessons((prev) => {
-      const next = prev.some((l) => l.id === lesson.id)
-        ? prev.map((l) => (l.id === lesson.id ? lesson : l))
-        : [...prev, lesson];
+      const next = prev.some((l) => l.id === nextLesson.id)
+        ? prev.map((l) => (l.id === nextLesson.id ? nextLesson : l))
+        : [...prev, nextLesson];
       return next.sort((a, b) => a.sessionNumber - b.sessionNumber);
     });
     setDirty(true);
@@ -150,8 +222,6 @@ export function LessonsPage() {
     setSaving(true);
     try {
       await saveProgramLessons(selectedProgramId, lessons);
-      await syncAllQuizBanks(selectedProgramId, lessons);
-      await syncAllPracticeQuizBanks(selectedProgramId, lessons);
       toast.success('Đã lưu bài giảng.');
       setDirty(false);
     } catch (error) {
@@ -181,8 +251,8 @@ export function LessonsPage() {
     setProgramForm({
       id: program.id,
       name: program.name,
-      subject: program.subject,
-      level: program.level,
+      subject: canonicalProgramSubjectValue(program),
+      level: canonicalProgramLevelValue(program),
       description: program.description,
       totalSessionCount: program.totalSessionCount,
       knowledgePhaseEndSession: program.knowledgePhaseEndSession,
@@ -216,7 +286,7 @@ export function LessonsPage() {
         await updateProgramMeta(form.id, form);
         toast.success('Đã cập nhật chương trình.');
         const list = await reloadPrograms();
-        const refreshed = await getCurriculumProgram(form.id);
+        const refreshed = await getCurriculumProgram(form.id, { full: false });
         setProgram(refreshed);
         void list;
       }
@@ -260,14 +330,20 @@ export function LessonsPage() {
         />
       ) : (
         <>
-          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2 sm:w-96">
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex min-w-0 flex-1 items-end gap-2 sm:max-w-xl">
               <GroupedProgramSelect
                 programs={programs}
                 value={selectedProgramId}
-                onChange={(e) => setSelectedProgramId(e.target.value)}
+                onChange={setSelectedProgramId}
+                className="min-w-0 flex-1"
               />
-              <Button size="sm" variant="ghost" onClick={openEditProgram} title="Sửa thông tin chương trình">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={openEditProgram}
+                title="Sửa thông tin chương trình"
+              >
                 <Settings2 className="h-4 w-4" />
               </Button>
             </div>
@@ -279,7 +355,11 @@ export function LessonsPage() {
 
           {program && (
             <p className="mb-4 text-sm text-slate-500">
-              {program.subject} · {program.level} · {lessons.length} bài giảng
+              {resolveProgramSubjectMeta(program.id, program).label}
+              {' · '}
+              {resolveProgramLevelMeta(program).label}
+              {' · '}
+              {lessons.length} bài giảng
             </p>
           )}
 
@@ -323,25 +403,11 @@ export function LessonsPage() {
                     <Button
                       size="sm"
                       variant="secondary"
-                      onClick={() => openEditor(lesson, 'lesson')}
+                      onClick={() => openEditor(lesson)}
+                      loading={openingLessonId === lesson.id}
+                      disabled={Boolean(openingLessonId)}
                     >
                       Bài giảng
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => openEditor(lesson, 'practice')}
-                    >
-                      <HelpCircle className="h-4 w-4" />
-                      Ôn tập
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => openEditor(lesson, 'quiz')}
-                    >
-                      <ClipboardList className="h-4 w-4" />
-                      Quiz
                     </Button>
                     <Button
                       size="sm"
@@ -373,8 +439,6 @@ export function LessonsPage() {
       {showEditor && (
         <LessonEditor
           lesson={editingLesson}
-          programId={selectedProgramId}
-          initialMode={editorInitialMode}
           onClose={() => setShowEditor(false)}
           onApply={applyLesson}
         />
@@ -437,10 +501,30 @@ function ProgramFormModal({ initial, saving, onClose, onSave }) {
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Môn học">
-            <Input value={form.subject} onChange={(e) => update('subject', e.target.value)} />
+            <Select value={form.subject} onChange={(e) => update('subject', e.target.value)}>
+              <option value="">— Chọn môn —</option>
+              {SUBJECT_FORM_OPTIONS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+              {form.subject && !SUBJECT_FORM_OPTIONS.some((option) => option.id === form.subject) && (
+                <option value={form.subject}>{form.subject}</option>
+              )}
+            </Select>
           </Field>
           <Field label="Trình độ">
-            <Input value={form.level} onChange={(e) => update('level', e.target.value)} />
+            <Select value={form.level} onChange={(e) => update('level', e.target.value)}>
+              <option value="">— Chọn trình độ —</option>
+              {LEVEL_FORM_OPTIONS.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+              {form.level && !LEVEL_FORM_OPTIONS.some((option) => option.id === form.level) && (
+                <option value={form.level}>{form.level}</option>
+              )}
+            </Select>
           </Field>
         </div>
         <Field label="Mô tả">
@@ -497,422 +581,266 @@ function ProgramFormModal({ initial, saving, onClose, onSave }) {
 
 function LessonPreviewPane({ form }) {
   const gallery = Array.isArray(form.images) ? form.images.filter((img) => img?.secureUrl) : [];
+  const heroUrl = form.bannerImage?.secureUrl || form.coverImage?.secureUrl;
   return (
-    <div className="max-h-[65vh] overflow-y-auto rounded-xl border border-slate-200 p-5 dark:border-slate-700">
-      {(form.bannerImage?.secureUrl || form.coverImage?.secureUrl) && (
-        <img
-          src={form.bannerImage?.secureUrl || form.coverImage?.secureUrl}
-          alt=""
-          className="mb-4 aspect-[2/1] w-full rounded-xl object-cover"
-        />
-      )}
-      {gallery.length > 0 && (
-        <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {gallery.map((img, i) => (
-            <img
-              key={img.secureUrl || i}
-              src={img.secureUrl}
-              alt={img.alt || ''}
-              className="aspect-video w-full rounded-xl object-contain bg-slate-100 dark:bg-slate-800"
-            />
-          ))}
-        </div>
-      )}
-      <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">{form.title || 'Chưa có tiêu đề'}</h2>
-      <Markdown content={form.content} className="mt-3" />
-      {form.exercise && form.exerciseVisible && (
-        <div className="mt-5 rounded-xl bg-amber-50 p-4 dark:bg-amber-500/10">
-          <p className="mb-2 font-semibold text-amber-700 dark:text-amber-300">Bài tập</p>
-          <Markdown content={form.exercise} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function PracticeQuizEditorPanel({ quiz, onChange }) {
-  const updateQuiz = (patch) => onChange({ ...quiz, ...patch });
-
-  const updateQuestion = (index, patch) => {
-    const questions = [...quiz.questions];
-    questions[index] = { ...questions[index], ...patch };
-    updateQuiz({ questions });
-  };
-
-  const updateOption = (qIndex, oIndex, value) => {
-    const questions = [...quiz.questions];
-    const options = [...questions[qIndex].options];
-    options[oIndex] = value;
-    questions[qIndex] = { ...questions[qIndex], options };
-    updateQuiz({ questions });
-  };
-
-  return (
-    <div className="space-y-3 rounded-xl border border-emerald-200 p-4 dark:border-emerald-500/30">
-      <label className="flex items-center gap-2.5">
-        <input
-          type="checkbox"
-          checked={quiz.enabled}
-          onChange={(e) => updateQuiz({ enabled: e.target.checked })}
-          className="h-4 w-4 rounded border-slate-300 text-brand-600"
-        />
-        <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-          Bật câu hỏi ôn tập dưới bài giảng
-        </span>
-      </label>
-      {quiz.enabled && (
-        <>
-          <Field label="Tiêu đề ôn tập">
-            <Input value={quiz.title} onChange={(e) => updateQuiz({ title: e.target.value })} />
-          </Field>
-          <p className="text-xs text-slate-500">
-            Học sinh làm lại được nhiều lần và thấy điểm ngay. Chỉ dùng câu trắc nghiệm.
-          </p>
-          <div className="space-y-4">
-            {quiz.questions.map((q, qi) => (
-              <div key={q.id} className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800/50">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <span className="text-xs font-semibold text-slate-500">Câu {qi + 1}</span>
-                  <button
-                    type="button"
-                    onClick={() => updateQuiz({ questions: quiz.questions.filter((_, i) => i !== qi) })}
-                    className="text-slate-400 hover:text-red-500"
-                    aria-label="Xoá câu"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-                <Input
-                  value={q.prompt}
-                  onChange={(e) => updateQuestion(qi, { prompt: e.target.value })}
-                  placeholder="Câu hỏi..."
-                />
-                <div className="mt-2 space-y-1.5">
-                  {(q.options ?? []).map((opt, oi) => (
-                    <label key={oi} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="radio"
-                        name={`practice-correct-${q.id}`}
-                        checked={q.correctIndex === oi}
-                        onChange={() => updateQuestion(qi, { correctIndex: oi })}
-                      />
-                      <Input
-                        value={opt}
-                        onChange={(e) => updateOption(qi, oi, e.target.value)}
-                        placeholder={`Đáp án ${oi + 1}`}
-                        className="flex-1"
-                      />
-                    </label>
-                  ))}
-                </div>
-              </div>
+    <div className="max-h-[65vh] overflow-y-auto rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-950">
+      <div className="border-b border-slate-200 px-4 py-4 dark:border-slate-700 sm:px-5">
+        <Badge tone="brand">Buổi {form.sessionNumber || 1}</Badge>
+        <h1 className="mt-2 text-xl font-bold text-slate-800 dark:text-slate-50 sm:text-2xl">
+          {form.title || 'Chưa có tiêu đề'}
+        </h1>
+      </div>
+      <div className="p-4 sm:p-5">
+        {heroUrl && (
+          <img
+            src={heroUrl}
+            alt=""
+            className="mb-4 aspect-[2/1] h-auto w-full rounded-xl bg-slate-100 object-contain dark:bg-slate-800"
+          />
+        )}
+        {gallery.length > 0 && (
+          <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {gallery.map((img, i) => (
+              <img
+                key={img.secureUrl || i}
+                src={img.secureUrl}
+                alt={img.alt || ''}
+                className="aspect-video w-full rounded-xl bg-slate-100 object-contain dark:bg-slate-800"
+              />
             ))}
           </div>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => updateQuiz({ questions: [...quiz.questions, makePracticeQuestion()] })}
-          >
-            <Plus className="h-4 w-4" />
-            Thêm câu trắc nghiệm
-          </Button>
-        </>
-      )}
+        )}
+        <LessonContent
+          format={form.contentRenderFormat ?? form.contentFormat}
+          content={form.content}
+        />
+        {form.exercise && form.exerciseVisible && (
+          <div className="mt-5 rounded-xl bg-amber-50 p-4 dark:bg-amber-500/10">
+            <p className="mb-2 font-semibold text-amber-700 dark:text-amber-300">Bài tập</p>
+            <LessonContent
+              format={form.exerciseRenderFormat ?? form.contentFormat}
+              content={form.exercise}
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-function QuizEditorPanel({ quiz, onChange }) {
-  const updateQuiz = (patch) => onChange({ ...quiz, ...patch });
+const PREVIEW_VIEWPORTS = Object.freeze([
+  { value: '375', label: '375', Icon: Smartphone, widthClass: 'w-[375px]' },
+  { value: '768', label: '768', Icon: Tablet, widthClass: 'w-[768px]' },
+  { value: '1200', label: '1200', Icon: Monitor, widthClass: 'w-[1200px]' },
+  { value: 'full', label: 'Toàn vùng', Icon: Monitor, widthClass: 'w-full' },
+]);
 
-  const updateQuestion = (index, patch) => {
-    const questions = [...quiz.questions];
-    questions[index] = { ...questions[index], ...patch };
-    updateQuiz({ questions });
-  };
+function LessonPreviewWorkspace({ form }) {
+  const [viewport, setViewport] = useState('full');
+  const selectedViewport =
+    PREVIEW_VIEWPORTS.find((option) => option.value === viewport) ?? PREVIEW_VIEWPORTS.at(-1);
 
-  const updateOption = (qIndex, oIndex, value) => {
-    const questions = [...quiz.questions];
-    const options = [...questions[qIndex].options];
-    options[oIndex] = value;
-    questions[qIndex] = { ...questions[qIndex], options };
-    updateQuiz({ questions });
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-medium text-slate-600 dark:text-slate-300">Xem trước học sinh</p>
+        <div
+          className="flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800"
+          role="group"
+          aria-label="Kích thước vùng xem trước"
+        >
+          {PREVIEW_VIEWPORTS.map(({ value, label, Icon }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setViewport(value)}
+              aria-pressed={viewport === value}
+              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
+                viewport === value
+                  ? 'bg-white text-slate-800 shadow-sm dark:bg-slate-900 dark:text-slate-100'
+                  : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+              }`}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="overflow-x-auto rounded-xl bg-slate-100 p-2 sm:p-3 dark:bg-slate-800/60">
+        <div
+          className={`${selectedViewport.widthClass} mx-auto min-w-0 transition-[width] duration-200`}
+          data-preview-width={selectedViewport.value}
+        >
+          <LessonPreviewPane form={form} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function HtmlSourceField({ label, value, onChange, onImport, rows, placeholder }) {
+  const toast = useToast();
+  const textareaId = useId();
+  const fileInputRef = useRef(null);
+  const containsRelativeImageUrl = useMemo(() => hasRelativeImageUrl(value), [value]);
+
+  const handleImport = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    const lowerName = file.name.toLowerCase();
+    if (!lowerName.endsWith('.html') && !lowerName.endsWith('.htm')) {
+      toast.error('Vui lòng chọn file .html hoặc .htm.');
+      return;
+    }
+    if (file.size > LESSON_HTML_IMPORT_MAX_BYTES) {
+      toast.error('File HTML vượt quá giới hạn 750 KiB.');
+      return;
+    }
+    try {
+      const source = await file.text();
+      if (!hasRenderableLessonHtml(source)) {
+        toast.error(
+          'File không có nội dung tĩnh có thể hiển thị. Hãy thêm nội dung trong <body>; script và iframe không được chạy.',
+        );
+        return;
+      }
+      onChange(source);
+      onImport?.(source);
+      toast.success(
+        `Đã đọc ${file.name}. Đang mở xem trước. Bấm Áp dụng, sau đó Lưu thay đổi để ghi lên hệ thống.`,
+      );
+      if (hasRelativeImageUrl(source)) {
+        toast.info(
+          'File có đường dẫn ảnh tương đối. Hãy dùng URL ảnh đầy đủ hoặc data:image; hệ thống không tự tải thư mục ảnh đi kèm.',
+          6500,
+        );
+      }
+    } catch {
+      toast.error('Không thể đọc file HTML này.');
+    }
   };
 
   return (
-    <div className="space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-      <label className="flex items-center gap-2.5">
-        <input
-          type="checkbox"
-          checked={quiz.enabled}
-          onChange={(e) => updateQuiz({ enabled: e.target.checked })}
-          className="h-4 w-4 rounded border-slate-300 text-brand-600"
-        />
-        <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Bật quiz buổi này</span>
-      </label>
-      {quiz.enabled && (
-        <>
-          <Field label="Tiêu đề quiz">
-            <Input value={quiz.title} onChange={(e) => updateQuiz({ title: e.target.value })} />
-          </Field>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Thời gian (phút, 0 = không giới hạn)">
-              <Input
-                type="number"
-                min={0}
-                value={quiz.timeLimitMinutes ?? 30}
-                onChange={(e) => updateQuiz({ timeLimitMinutes: Number(e.target.value) })}
-              />
-            </Field>
-            <Field label="Số lần làm tối đa">
-              <Input
-                type="number"
-                min={1}
-                max={20}
-                disabled={quiz.allowRetake === false}
-                value={quiz.allowRetake === false ? 1 : (quiz.maxAttempts ?? 3)}
-                onChange={(e) =>
-                  updateQuiz({ maxAttempts: Math.min(20, Math.max(1, Number(e.target.value) || 1)) })
-                }
-              />
-            </Field>
-          </div>
-          <label className="flex items-center gap-2.5">
-            <input
-              type="checkbox"
-              checked={quiz.allowRetake !== false}
-              onChange={(e) =>
-                updateQuiz({
-                  allowRetake: e.target.checked,
-                  maxAttempts: e.target.checked ? (quiz.maxAttempts ?? 3) : 1,
-                })
-              }
-              className="h-4 w-4 rounded border-slate-300 text-brand-600"
-            />
-            <span className="text-sm text-slate-700 dark:text-slate-200">
-              Cho phép làm lại (tắt = chỉ 1 lần)
-            </span>
-          </label>
-          <div className="space-y-4">
-            {quiz.questions.map((q, qi) => {
-              const isCode = q.type === 'code';
-              return (
-                <div key={q.id} className="rounded-lg bg-slate-50 p-3 dark:bg-slate-800/50">
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold text-slate-500">Câu {qi + 1}</span>
-                      <select
-                        value={q.type || 'mcq'}
-                        onChange={(e) => {
-                          const type = e.target.value;
-                          if (type === 'code') {
-                            updateQuestion(qi, {
-                              type: 'code',
-                              starterCode: q.starterCode ?? '',
-                              referenceCode: q.referenceCode ?? '',
-                              options: undefined,
-                              correctIndex: undefined,
-                            });
-                          } else {
-                            updateQuestion(qi, {
-                              type: 'mcq',
-                              options: q.options?.length ? q.options : ['', '', '', ''],
-                              correctIndex: q.correctIndex ?? 0,
-                            });
-                          }
-                        }}
-                        className="rounded border border-slate-200 bg-white px-2 py-0.5 text-xs dark:border-slate-600 dark:bg-slate-800"
-                      >
-                        <option value="mcq">Trắc nghiệm</option>
-                        <option value="code">Viết code</option>
-                      </select>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateQuiz({ questions: quiz.questions.filter((_, i) => i !== qi) })
-                      }
-                      className="text-slate-400 hover:text-red-500"
-                      aria-label="Xoá câu"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <Input
-                    value={q.prompt}
-                    onChange={(e) => updateQuestion(qi, { prompt: e.target.value })}
-                    placeholder="Câu hỏi..."
-                  />
-                  {isCode ? (
-                    <div className="mt-2 space-y-2">
-                      <Field label="Code mẫu (hiện cho HS khi bắt đầu)">
-                        <textarea
-                          value={q.starterCode ?? ''}
-                          onChange={(e) => updateQuestion(qi, { starterCode: e.target.value })}
-                          rows={4}
-                          className="w-full rounded-lg border border-slate-200 bg-slate-950 px-3 py-2 font-mono text-xs text-green-400 dark:border-slate-600"
-                        />
-                      </Field>
-                      <Field label="Đáp án đúng (admin, tự chấm code)">
-                        <p className="mb-1.5 text-xs text-slate-400">
-                          Nhiều đáp án khác nhau: phân tách bằng dòng{' '}
-                          <code className="rounded bg-slate-100 px-1 dark:bg-slate-800">---</code>
-                        </p>
-                        <textarea
-                          value={q.referenceCode ?? ''}
-                          onChange={(e) => updateQuestion(qi, { referenceCode: e.target.value })}
-                          rows={6}
-                          spellCheck={false}
-                          className="w-full rounded-lg border border-slate-200 bg-slate-950 px-3 py-2 font-mono text-xs text-green-400 dark:border-slate-600"
-                          placeholder={'print("Hello")\n---\nprint(\'Hello\')'}
-                        />
-                      </Field>
-                    </div>
-                  ) : (
-                    <div className="mt-2 space-y-1.5">
-                      {(q.options ?? []).map((opt, oi) => (
-                        <label key={oi} className="flex items-center gap-2 text-sm">
-                          <input
-                            type="radio"
-                            name={`correct-${q.id}`}
-                            checked={q.correctIndex === oi}
-                            onChange={() => updateQuestion(qi, { correctIndex: oi })}
-                          />
-                          <Input
-                            value={opt}
-                            onChange={(e) => updateOption(qi, oi, e.target.value)}
-                            placeholder={`Đáp án ${oi + 1}`}
-                            className="flex-1"
-                          />
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => updateQuiz({ questions: [...quiz.questions, makeQuizQuestion('mcq')] })}
-            >
-              <Plus className="h-4 w-4" />
-              Câu trắc nghiệm
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() => updateQuiz({ questions: [...quiz.questions, makeQuizQuestion('code')] })}
-            >
-              <Plus className="h-4 w-4" />
-              Câu viết code
-            </Button>
-          </div>
-        </>
+    <div>
+      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+        <label htmlFor={textareaId} className="label-base mb-0">
+          {label}
+        </label>
+        <Button size="sm" onClick={() => fileInputRef.current?.click()}>
+          <Upload className="h-3.5 w-3.5" />
+          Nhập file HTML
+        </Button>
+      </div>
+      <Textarea
+        id={textareaId}
+        rows={rows}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="font-mono text-sm"
+        spellCheck={false}
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".html,.htm,text/html"
+        className="hidden"
+        onChange={handleImport}
+      />
+      <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+        Nhập một file <code>.html</code> hoàn chỉnh rồi mở tab Xem trước. SVG/màu, CSS
+        HTTPS và nút xem đáp án được giữ; <code>&lt;script&gt;</code>/iframe vẫn bị loại. Ảnh
+        đi kèm thư mục không tự tải — dùng URL https, SVG nhúng, hoặc <code>data:image</code>.
+      </p>
+      {containsRelativeImageUrl && (
+        <p
+          role="note"
+          className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+        >
+          Có đường dẫn ảnh tương đối (kể cả file .svg). Hãy dùng URL https đầy đủ, nhúng
+          <code>&lt;svg&gt;</code> trực tiếp, hoặc <code>data:image</code> (PNG/JPEG/SVG);
+          hệ thống chỉ nhập một file HTML và không tải thư mục ảnh đi kèm.
+        </p>
       )}
     </div>
   );
 }
 
-function LessonEditor({ lesson, programId, initialMode = 'lesson', onClose, onApply }) {
+function LessonEditor({ lesson, onClose, onApply }) {
+  const toast = useToast();
   const [form, setForm] = useState({
     ...lesson,
-    quiz: lesson.quiz ?? emptyQuiz(),
-    practiceQuiz: lesson.practiceQuiz ?? emptyPracticeQuiz(),
+    presentationPreset: LESSON_PRESENTATION_PRESET_LEGACY,
   });
-  const [editorMode, setEditorMode] = useState(initialMode);
   const [previewTab, setPreviewTab] = useState('edit');
-  const [loadingQuiz, setLoadingQuiz] = useState(true);
   const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
-  useEffect(() => {
-    setEditorMode(initialMode);
-  }, [initialMode, lesson.id]);
+  const handleApply = () => {
+    if (String(form.content || '').trim() && !hasRenderableLessonHtml(form.content)) {
+      toast.error(
+        'Bài giảng không còn nội dung tĩnh sau khi loại script/iframe. Chưa áp dụng thay đổi.',
+      );
+      return;
+    }
+    if (String(form.exercise || '').trim() && !hasRenderableLessonHtml(form.exercise)) {
+      toast.error(
+        'Bài tập không còn nội dung tĩnh sau khi loại script/iframe. Chưa áp dụng thay đổi.',
+      );
+      return;
+    }
+    onApply({
+      ...form,
+      contentFormat: 'html',
+      contentRenderFormat: 'html',
+      exerciseRenderFormat: 'html',
+      presentationPreset: LESSON_PRESENTATION_PRESET_LEGACY,
+      content: form.content,
+      exercise: form.exercise,
+      sessionNumber: Number(form.sessionNumber) || 1,
+    });
+  };
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoadingQuiz(true);
-      try {
-        const [quiz, practiceQuiz] = await Promise.all([
-          loadQuizForEditor(programId, lesson.id, lesson.sessionNumber),
-          loadPracticeQuizForEditor(programId, lesson.id, lesson.sessionNumber),
-        ]);
-        if (!cancelled) setForm((prev) => ({ ...prev, quiz, practiceQuiz }));
-      } catch {
-        if (!cancelled) {
-          setForm((prev) => ({ ...prev, quiz: emptyQuiz(), practiceQuiz: emptyPracticeQuiz() }));
-        }
-      } finally {
-        if (!cancelled) setLoadingQuiz(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [lesson.id, programId, lesson.sessionNumber]);
+  const handleHtmlImport = () => {
+    update('presentationPreset', LESSON_PRESENTATION_PRESET_LEGACY);
+    setPreviewTab('preview');
+  };
 
   const editFields = (
     <div className="space-y-4">
-      <Field label="Nội dung bài giảng (Markdown)">
-        <Textarea
-          rows={18}
-          value={form.content}
-          onChange={(e) => update('content', e.target.value)}
-          placeholder="# Tiêu đề&#10;Nội dung bài học bằng Markdown..."
-          className="font-mono text-sm"
-        />
-      </Field>
-      <Field label="Bài tập (Markdown)">
-        <Textarea
-          rows={10}
-          value={form.exercise}
-          onChange={(e) => update('exercise', e.target.value)}
-          className="font-mono text-sm"
-        />
-      </Field>
+      <HtmlSourceField
+        label="Nội dung bài giảng (HTML)"
+        rows={18}
+        value={form.content}
+        onChange={(value) => update('content', value)}
+        onImport={() => handleHtmlImport()}
+        placeholder="Nhập file .html hoặc dán HTML vào đây."
+      />
+      <HtmlSourceField
+        label="Bài tập (HTML)"
+        rows={10}
+        value={form.exercise}
+        onChange={(value) => update('exercise', value)}
+        onImport={() => handleHtmlImport()}
+        placeholder="Nhập file .html bài tập hoặc dán HTML vào đây."
+      />
     </div>
   );
-
-  const modalTitle =
-    editorMode === 'quiz'
-      ? lesson._isNew
-        ? 'Soạn quiz kiểm tra'
-        : `Quiz · Buổi ${form.sessionNumber}`
-      : editorMode === 'practice'
-        ? lesson._isNew
-          ? 'Soạn ôn tập'
-          : `Ôn tập · Buổi ${form.sessionNumber}`
-        : lesson._isNew
-          ? 'Thêm bài giảng'
-          : 'Soạn bài giảng';
 
   return (
     <Modal
       open
       onClose={onClose}
-      title={modalTitle}
+      title={lesson._isNew ? 'Thêm bài giảng' : 'Soạn bài giảng'}
       size="full"
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
             Huỷ
           </Button>
-          <Button
-            onClick={() =>
-              onApply({
-                ...form,
-                sessionNumber: Number(form.sessionNumber) || 1,
-                quiz: form.quiz,
-                practiceQuiz: form.practiceQuiz,
-              })
-            }
-            disabled={loadingQuiz}
-          >
-            Áp dụng
-          </Button>
+          <Button onClick={handleApply}>Áp dụng</Button>
         </>
       }
     >
@@ -931,113 +859,61 @@ function LessonEditor({ lesson, programId, initialMode = 'lesson', onClose, onAp
         </Field>
       </div>
 
-      <div className="mb-5 flex gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
-        <button
-          type="button"
-          onClick={() => setEditorMode('lesson')}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${
-            editorMode === 'lesson'
-              ? 'bg-white text-slate-800 shadow-sm dark:bg-slate-900 dark:text-slate-100'
-              : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
-        >
-          <BookOpen className="h-4 w-4" />
-          Bài giảng
-        </button>
-        <button
-          type="button"
-          onClick={() => setEditorMode('practice')}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${
-            editorMode === 'practice'
-              ? 'bg-white text-slate-800 shadow-sm dark:bg-slate-900 dark:text-slate-100'
-              : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
-        >
-          <HelpCircle className="h-4 w-4" />
-          Ôn tập
-        </button>
-        <button
-          type="button"
-          onClick={() => setEditorMode('quiz')}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${
-            editorMode === 'quiz'
-              ? 'bg-white text-slate-800 shadow-sm dark:bg-slate-900 dark:text-slate-100'
-              : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-          }`}
-        >
-          <ClipboardList className="h-4 w-4" />
-          Quiz kiểm tra
-        </button>
-      </div>
-
-      {editorMode === 'lesson' ? (
-        <div className="grid gap-6 lg:grid-cols-[minmax(220px,1fr)_minmax(0,2fr)]">
-          <div className="space-y-4">
-            <ImageUpload label="Ảnh banner" value={form.bannerImage} onChange={(v) => update('bannerImage', v)} />
-            <ImageUpload label="Ảnh bìa" value={form.coverImage} onChange={(v) => update('coverImage', v)} />
-            <ImageGalleryUpload
-              label="Ảnh minh họa"
-              value={form.images}
-              onChange={(v) => update('images', v)}
+      <div className="space-y-5">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <ImageUpload
+            label="Ảnh banner"
+            value={form.bannerImage}
+            onChange={(v) => update('bannerImage', v)}
+          />
+          <ImageUpload
+            label="Ảnh bìa"
+            value={form.coverImage}
+            onChange={(v) => update('coverImage', v)}
+          />
+          <ImageGalleryUpload
+            label="Ảnh minh họa"
+            value={form.images}
+            onChange={(v) => update('images', v)}
+          />
+          <label className="flex items-center gap-2.5 rounded-xl border border-slate-200 px-3.5 py-3 dark:border-slate-700">
+            <input
+              type="checkbox"
+              checked={form.exerciseVisible}
+              onChange={(e) => update('exerciseVisible', e.target.checked)}
+              className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
             />
-            <label className="flex items-center gap-2.5 rounded-xl border border-slate-200 px-3.5 py-3 dark:border-slate-700">
-              <input
-                type="checkbox"
-                checked={form.exerciseVisible}
-                onChange={(e) => update('exerciseVisible', e.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-              />
-              <span className="text-sm text-slate-700 dark:text-slate-200">Hiển thị bài tập cho học sinh</span>
-            </label>
+            <span className="text-sm text-slate-700 dark:text-slate-200">
+              Hiển thị bài tập cho học sinh
+            </span>
+          </label>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">
+            <button
+              type="button"
+              onClick={() => setPreviewTab('edit')}
+              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                previewTab === 'edit' ? 'bg-white shadow-sm dark:bg-slate-900' : 'text-slate-500'
+              }`}
+            >
+              Soạn nội dung
+            </button>
+            <button
+              type="button"
+              onClick={() => setPreviewTab('preview')}
+              className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                previewTab === 'preview' ? 'bg-white shadow-sm dark:bg-slate-900' : 'text-slate-500'
+              }`}
+            >
+              Xem trước
+            </button>
           </div>
 
-          <div>
-            <div className="mb-2 flex items-center gap-1 rounded-lg bg-slate-100 p-1 xl:hidden dark:bg-slate-800">
-              <button
-                type="button"
-                onClick={() => setPreviewTab('edit')}
-                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                  previewTab === 'edit' ? 'bg-white shadow-sm dark:bg-slate-900' : 'text-slate-500'
-                }`}
-              >
-                Soạn nội dung
-              </button>
-              <button
-                type="button"
-                onClick={() => setPreviewTab('preview')}
-                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                  previewTab === 'preview' ? 'bg-white shadow-sm dark:bg-slate-900' : 'text-slate-500'
-                }`}
-              >
-                Xem trước
-              </button>
-            </div>
-
-            <div className="hidden xl:grid xl:grid-cols-2 xl:gap-4">
-              {editFields}
-              <div>
-                <p className="mb-2 text-sm font-medium text-slate-600 dark:text-slate-300">Xem trước</p>
-                <LessonPreviewPane form={form} />
-              </div>
-            </div>
-
-            <div className="xl:hidden">
-              {previewTab === 'edit' ? editFields : <LessonPreviewPane form={form} />}
-            </div>
-          </div>
+          {previewTab === 'edit' ? editFields : <LessonPreviewWorkspace form={form} />}
         </div>
-      ) : loadingQuiz ? (
-        <div className="flex justify-center py-16">
-          <Spinner />
-        </div>
-      ) : editorMode === 'practice' ? (
-        <PracticeQuizEditorPanel
-          quiz={form.practiceQuiz}
-          onChange={(practiceQuiz) => update('practiceQuiz', practiceQuiz)}
-        />
-      ) : (
-        <QuizEditorPanel quiz={form.quiz} onChange={(quiz) => update('quiz', quiz)} />
-      )}
+      </div>
     </Modal>
   );
 }

@@ -5,24 +5,21 @@
 ## Verification
 
 - [ ] `npm ci`
-- [ ] `npm test`
-- [ ] `npm run test:rules`
-- [ ] `npm run build`
-- [ ] `npm run audit:security:gate`
+- [ ] `npm run ci` (lint, test, test:migration, test:rules, build, audit gate)
 - [ ] `npm run audit:security:full` reviewed; known moderate tooling items only
 
 ## Smoke Test
 
 - [ ] Results recorded in `docs/SMOKE_TEST_RESULTS.md`
 - [ ] Admin login, Dashboard, Settings health, backup JSON
-- [ ] Student portal, lesson Markdown/lightbox, feedback reload
-- [ ] Practice quiz and exam quiz submit/reload
-- [ ] Project report flow
-- [ ] Showdown and Spy checked with admin + student tabs
+- [ ] Student portal: `/learn` auto-open lesson; final/project nav **Dự án | Bài giảng** + `/lessons`
+- [ ] HTML lesson preview in admin Bài giảng
+- [ ] Project report flow (final/project)
+- [ ] Spy checked with admin + student tabs (Showdown if flag enabled)
 
 ## Firestore / Deploy Notes
 
 - [ ] No Firestore schema change
-- [ ] No route change
+- [ ] Route changes documented (if any)
 - [ ] No production deploy performed from this PR
 - [ ] If rules/indexes changed, deploy plan is documented

@@ -13,6 +13,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '../config/firebase.js';
+import { hasRenderableLessonHtml, resolveLessonPresentationPreset } from '../lib/lessonHtml.js';
 import { normalizeLesson, toCurriculumProgramModel } from '../models/index.js';
 
 const programsRef = collection(db, 'curriculumPrograms');
@@ -45,23 +46,16 @@ export function programDocIdCandidates(programId) {
   add(programId);
   add(resolveProgramId(programId));
   for (const [legacy, canonical] of Object.entries(PROGRAM_ID_ALIASES)) {
-    if (legacy === programId || canonical === programId || canonical === resolveProgramId(programId)) {
+    if (
+      legacy === programId ||
+      canonical === programId ||
+      canonical === resolveProgramId(programId)
+    ) {
       add(legacy);
       add(canonical);
     }
   }
   return ids;
-}
-
-/** Các doc ID cho quiz/ôn tập banks: {programId}__{lessonId}. */
-export function quizBankIdCandidates(programId, lessonId) {
-  if (!programId || !lessonId) return [];
-  return programDocIdCandidates(programId).map((id) => `${id}__${lessonId}`);
-}
-
-/** Prefix khi ghi quiz banks — canonical ID, khớp dữ liệu hiện có (python-basic__…). */
-export function quizBankStoragePrefix(programId) {
-  return resolveProgramId(programId);
 }
 
 function lessonsCollection(programDocId) {
@@ -116,31 +110,99 @@ function collectLessonGalleryImages(lesson) {
   return list;
 }
 
-function serializeLesson(lesson) {
+export const LESSON_DOCUMENT_MAX_BYTES = 750 * 1024;
+
+export function lessonDocumentSizeBytes(value) {
+  return new TextEncoder().encode(JSON.stringify(value)).byteLength;
+}
+
+function normalizeHtmlPartForStorage(source, label) {
+  const rawSource = typeof source === 'string' ? source : source == null ? '' : String(source);
+  if (rawSource.trim() && !hasRenderableLessonHtml(rawSource)) {
+    throw new Error(
+      `${label} không có nội dung HTML tĩnh có thể hiển thị sau khi loại script/iframe.`,
+    );
+  }
+  return rawSource;
+}
+
+function serializeHtmlPart(lesson, raw, { field, renderFormatField, value, label }) {
+  const rawHtml = raw[field];
+  const isRetainedMarkdownFallback =
+    lesson[renderFormatField] === 'markdown' && raw.contentFormat === 'html';
+  // A broken historic HTML value may currently be falling back to retained
+  // Markdown. Preserve that raw value when another lesson in the program is
+  // saved; opening this lesson in the editor converts the fallback explicitly.
+  if (isRetainedMarkdownFallback) return typeof rawHtml === 'string' ? rawHtml : '';
+  return normalizeHtmlPartForStorage(value, label);
+}
+
+export function serializeLesson(lesson) {
   const raw = lesson._raw && typeof lesson._raw === 'object' ? lesson._raw : {};
+  const hasRawContent = Object.prototype.hasOwnProperty.call(raw, 'content');
+  const hasRawExercise = Object.prototype.hasOwnProperty.call(raw, 'exercise');
   const banner = imageToStore(lesson.bannerImage);
   const cover = imageToStore(lesson.coverImage);
   const images = collectLessonGalleryImages(lesson);
+  const contentFormat = lesson.contentFormat === 'html' ? 'html' : 'markdown';
+  const presentationSource = (
+    contentFormat === 'html'
+      ? [lesson.content, lesson.exercise, raw.lectureHtml, raw.exerciseHtml]
+      : [raw.lectureHtml, raw.exerciseHtml]
+  )
+    .filter((value) => typeof value === 'string')
+    .join('\n');
+  const presentationPreset = resolveLessonPresentationPreset(
+    presentationSource,
+    lesson.presentationPreset ?? raw.presentationPreset,
+  );
 
   const next = {
     ...raw,
     id: lesson.id,
     sessionNumber: Number(lesson.sessionNumber) || 1,
     title: lesson.title ?? '',
-    lectureMarkdown: lesson.content ?? '',
-    contentMarkdown: lesson.content ?? '',
-    exerciseMarkdown: lesson.exercise ?? '',
+    contentFormat,
+    presentationPreset,
     exerciseVisible: Boolean(lesson.exerciseVisible),
     archived: Boolean(lesson.archived),
     bannerImage: banner,
     coverImage: cover,
     images,
   };
+  if (contentFormat === 'html') {
+    next.lectureHtml = serializeHtmlPart(lesson, raw, {
+      field: 'lectureHtml',
+      renderFormatField: 'contentRenderFormat',
+      value: lesson.content,
+      label: 'Nội dung bài giảng',
+    });
+    next.exerciseHtml = serializeHtmlPart(lesson, raw, {
+      field: 'exerciseHtml',
+      renderFormatField: 'exerciseRenderFormat',
+      value: lesson.exercise,
+      label: 'Nội dung bài tập',
+    });
+  } else {
+    next.lectureMarkdown = lesson.content ?? '';
+    next.contentMarkdown = lesson.content ?? '';
+    next.exerciseMarkdown = lesson.exercise ?? '';
+  }
   delete next._raw;
   delete next.bannerImageUrl;
   delete next.coverImageUrl;
   delete next.content;
   delete next.exercise;
+  // `content`/`exercise` are also legacy Markdown aliases. Keep the raw values
+  // when they came from Firestore; the normalized editor fields must never
+  // overwrite them with HTML, but rollback still needs the original text.
+  if (hasRawContent) next.content = raw.content;
+  if (hasRawExercise) next.exercise = raw.exercise;
+  if (lessonDocumentSizeBytes(next) > LESSON_DOCUMENT_MAX_BYTES) {
+    throw new Error(
+      'Bài giảng vượt quá giới hạn 750 KiB. Hãy rút gọn HTML hoặc bớt nội dung nhúng.',
+    );
+  }
   return next;
 }
 
@@ -153,25 +215,46 @@ function toSlimLessonIndex(lesson) {
     title: lesson.title ?? '',
     archived: Boolean(lesson.archived),
     exerciseVisible: Boolean(lesson.exerciseVisible),
+    presentationPreset: resolveLessonPresentationPreset('', lesson.presentationPreset),
     bannerImage: banner,
     coverImage: cover,
     images: collectLessonGalleryImages(lesson),
   };
 }
 
+function lessonIndexFields(lesson = {}) {
+  return {
+    id: lesson.id,
+    sessionNumber: lesson.sessionNumber,
+    title: lesson.title,
+    archived: lesson.archived,
+    exerciseVisible: lesson.exerciseVisible,
+    presentationPreset: lesson.presentationPreset,
+    bannerImage: lesson.bannerImage,
+    coverImage: lesson.coverImage,
+    images: lesson.images,
+    contentFormat: lesson.contentFormat,
+  };
+}
+
+export function isSlimLesson(lesson) {
+  return Boolean(lesson?._slim);
+}
+
 function slimLessonsFromIndex(lessonIndex = []) {
   return lessonIndex
-    .map((row, index) =>
-      normalizeLesson(
+    .map((row, index) => ({
+      ...normalizeLesson(
         {
-          ...row,
+          ...lessonIndexFields(row),
           lectureMarkdown: '',
           contentMarkdown: '',
           exerciseMarkdown: '',
         },
         index,
       ),
-    )
+      _slim: true,
+    }))
     .sort((a, b) => a.sessionNumber - b.sessionNumber);
 }
 
@@ -194,20 +277,18 @@ async function loadLessonsFromSubcollection(programDocId) {
 async function resolveLessonsForProgram(data, programDocId, { full = true } = {}) {
   if (data.lessonsStorage === 'subcollection') {
     if (full) return loadLessonsFromSubcollection(programDocId);
-    return slimLessonsFromIndex(data.lessonIndex || []);
+    const index = Array.isArray(data.lessonIndex) ? data.lessonIndex : [];
+    if (index.length) return slimLessonsFromIndex(index);
+    const stored = await loadLessonsFromSubcollection(programDocId);
+    return slimLessonsFromIndex(stored.map(toSlimLessonIndex));
   }
 
   const embedded = Array.isArray(data.lessons) ? data.lessons : [];
-  const normalized = embedded
+  if (!full) return slimLessonsFromIndex(embedded);
+
+  return embedded
     .map((lesson, index) => normalizeLesson(lesson, index))
     .sort((a, b) => a.sessionNumber - b.sessionNumber);
-
-  if (full) return normalized;
-  return normalized.map((lesson) => ({
-    ...lesson,
-    content: '',
-    exercise: '',
-  }));
 }
 
 async function readProgramSnapshot(programId) {
@@ -254,7 +335,7 @@ export async function listCurriculumPrograms() {
   return snapshot.docs.map((snap) => toCurriculumProgramModel(snap, []));
 }
 
-/** full=false: chỉ metadata + lessonIndex (học sinh — không tải markdown). */
+/** full=false: chỉ metadata + lessonIndex (học sinh — không tải nội dung bài). */
 export async function getCurriculumProgram(programId, { full = true } = {}) {
   const snapshot = await readProgramSnapshot(programId);
   if (!snapshot) return null;
@@ -265,18 +346,23 @@ export async function getCurriculumProgram(programId, { full = true } = {}) {
 export async function getProgramLesson(programId, lessonId) {
   if (!programId || !lessonId) return null;
   const snapshot = await readProgramSnapshot(programId);
-  if (snapshot) {
-    for (const candidateId of programDocIdCandidates(snapshot.id)) {
-      const lessonSnap = await getDoc(
-        doc(db, 'curriculumPrograms', candidateId, 'lessons', lessonId),
-      );
-      if (lessonSnap.exists()) {
-        return normalizeLesson({ ...lessonSnap.data(), id: lessonSnap.id }, 0);
-      }
+  if (!snapshot) return null;
+
+  for (const candidateId of programDocIdCandidates(snapshot.id)) {
+    const lessonSnap = await getDoc(
+      doc(db, 'curriculumPrograms', candidateId, 'lessons', lessonId),
+    );
+    if (lessonSnap.exists()) {
+      return normalizeLesson({ ...lessonSnap.data(), id: lessonSnap.id }, 0);
     }
   }
-  const program = await getCurriculumProgram(programId, { full: true });
-  return program?.lessons?.find((lesson) => lesson.id === lessonId) ?? null;
+
+  const embedded = snapshot.data()?.lessons;
+  if (Array.isArray(embedded)) {
+    const found = embedded.find((lesson, index) => (lesson.id || `lesson-${index + 1}`) === lessonId);
+    if (found) return normalizeLesson({ ...found, id: found.id || lessonId }, 0);
+  }
+  return null;
 }
 
 export function subscribeCurriculumProgram(programId, onData, onError) {
@@ -333,11 +419,10 @@ export async function saveProgramLessons(programId, lessons) {
 
   const batch = writeBatch(db);
   lessons.forEach((lesson) => {
-    batch.set(
-      doc(db, 'curriculumPrograms', docId, 'lessons', lesson.id),
-      serializeLesson(lesson),
-      { merge: true },
-    );
+    if (isSlimLesson(lesson)) return;
+    batch.set(doc(db, 'curriculumPrograms', docId, 'lessons', lesson.id), serializeLesson(lesson), {
+      merge: true,
+    });
   });
   existing.docs.forEach((lessonDoc) => {
     if (!nextIds.has(lessonDoc.id)) {

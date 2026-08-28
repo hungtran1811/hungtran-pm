@@ -16,8 +16,9 @@
   --color-brand-900: #1a318e;
   --color-brand-950: #151f56;
 
-  --font-sans: 'Exo 2', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
+  --font-sans:
+    'Exo 2', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
 
   /* Nhẹ hơn mặc định Tailwind — tránh chữ đậm quá */
   --font-weight-semibold: 550;
@@ -90,7 +91,23 @@
   }
 
   .student-main-with-nav {
-    padding-bottom: calc(var(--student-bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 1rem);
+    padding-bottom: calc(
+      var(--student-bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 1rem
+    );
+  }
+
+  .student-portal:has(.student-game-join-notice) .student-main {
+    padding-bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .student-portal:has(.student-game-join-notice) .student-main-with-nav {
+    padding-bottom: calc(
+      var(--student-bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 6.5rem
+    );
+  }
+
+  .student-portal:has(.student-game-join-notice) .student-back-to-top {
+    bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
   }
 
   .student-bottom-nav {
@@ -545,14 +562,13 @@
   inset: 0.35rem;
   border-radius: 0.5rem;
   border: 1px dashed rgba(255, 255, 255, 0.2);
-  background:
-    repeating-linear-gradient(
-      45deg,
-      rgba(255, 255, 255, 0.04) 0,
-      rgba(255, 255, 255, 0.04) 2px,
-      transparent 2px,
-      transparent 8px
-    );
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.04) 0,
+    rgba(255, 255, 255, 0.04) 2px,
+    transparent 2px,
+    transparent 8px
+  );
 }
 
 .game-card-front {
@@ -1173,28 +1189,56 @@
 }
 
 @keyframes crew-tap-pulse-kf {
-  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgb(49 111 253 / 0.5); }
-  50% { transform: scale(1.06); box-shadow: 0 0 0 10px rgb(49 111 253 / 0); }
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgb(49 111 253 / 0.5);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow: 0 0 0 10px rgb(49 111 253 / 0);
+  }
 }
 
 @keyframes crew-zone-glow-kf {
-  0%, 100% { opacity: 0.75; }
-  50% { opacity: 1; }
+  0%,
+  100% {
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 @keyframes crew-count-flash-kf {
-  0% { transform: scale(0.95); opacity: 0.5; }
-  100% { transform: scale(1); opacity: 1; }
+  0% {
+    transform: scale(0.95);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 @keyframes crew-options-in-kf {
-  from { transform: translateY(8px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 @keyframes crew-task-success-kf {
-  0% { box-shadow: 0 0 0 0 rgb(16 185 129 / 0.5); }
-  100% { box-shadow: 0 0 0 12px rgb(16 185 129 / 0); }
+  0% {
+    box-shadow: 0 0 0 0 rgb(16 185 129 / 0.5);
+  }
+  100% {
+    box-shadow: 0 0 0 12px rgb(16 185 129 / 0);
+  }
 }
 
 .crew-tap-pulse {
@@ -1261,8 +1305,14 @@
 }
 
 @keyframes crew-feedback-pop-kf {
-  from { opacity: 0; transform: scale(0.92); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .crew-task-done {
@@ -1274,8 +1324,15 @@
 }
 
 @keyframes crew-sabotage-pulse-kf {
-  0%, 100% { transform: scale(1); filter: brightness(1); }
-  50% { transform: scale(1.015); filter: brightness(1.08); }
+  0%,
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  50% {
+    transform: scale(1.015);
+    filter: brightness(1.08);
+  }
 }
 
 .crew-odd-tile:hover:not(:disabled) {
@@ -1286,3 +1343,18 @@
   background: linear-gradient(90deg, rgb(49 111 253 / 0.4), rgb(16 185 129 / 0.4));
 }
 
+.lesson-document-frame {
+  display: block;
+  inline-size: 100%;
+  min-block-size: 8rem;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  scrollbar-width: none;
+}
+
+.lesson-document-frame::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}

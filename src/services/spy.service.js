@@ -19,12 +19,46 @@ import {
   SPY_ACTIVE_STATUSES,
   SPY_BLANK_VOTE_ID,
   SPY_CREW_VOTE_RESOLVE_SECONDS,
-  SPY_MAX_SPY_ASSIGNMENTS_PER_PLAYER,
+  SPY_CREW_TASK_PROGRESS_CAP,
   SPY_SABOTAGE_COOLDOWN_MAX_SECONDS,
   SPY_SABOTAGE_COOLDOWN_MIN_SECONDS,
   SPY_TIE_DEBATE_SECONDS,
 } from '../lib/spyConstants.js';
 import { validateWordPair } from '../data/spyWordBank.js';
+import { advanceSpyHint } from '../lib/spyHints.js';
+import {
+  assertSpyLobbyRosterMatched,
+  bumpSpyAssignmentCounts,
+  checkCrewTaskWin,
+  checkSpyWinOutcome,
+  fisherYatesShuffle,
+  getActiveParticipants,
+  normalizeSpyAssignmentCounts,
+  pickCrewSabotageVictim,
+  pickFairSpyIds,
+  shouldSkipSpyVoteRound,
+  tallySpyVotes,
+  validateSpyPresentRosterChange,
+  votesChangedFromBaseline,
+} from '../lib/spyGameLogic.js';
+
+export {
+  checkCrewTaskWin,
+  evaluateSpyOutcome,
+  getActiveParticipants,
+  getCurrentSpeaker,
+  getDescribeRoundTotal,
+  getTieDebateEndsAtMs,
+  getTieDebateSpeakerName,
+  isSpyLobbyRosterReady,
+  pickCrewSabotageVictim,
+  pickFairSpyIds,
+  rankCrewMvp,
+  shouldSkipSpyVoteRound,
+  tallySpyVotes,
+  validateSpyPresentRosterChange,
+  votesChangedFromBaseline,
+} from '../lib/spyGameLogic.js';
 
 const SESSIONS = 'spySessions';
 
@@ -66,62 +100,6 @@ function classDocRef(classCode) {
 
 function sessionBump(fields = {}) {
   return { ...fields, stateVersion: increment(1) };
-}
-
-function fisherYatesShuffle(ids) {
-  const arr = [...ids];
-  for (let i = arr.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
-function normalizeSpyAssignmentCounts(raw) {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
-  const counts = {};
-  for (const [studentId, value] of Object.entries(raw)) {
-    const n = Number(value);
-    if (studentId && Number.isFinite(n) && n > 0) counts[studentId] = Math.floor(n);
-  }
-  return counts;
-}
-
-/** Chọn gián điệp — không chọn quá 3 lần/người trừ khi không còn lựa chọn khác. */
-export function pickFairSpyIds(participantIds, impostorCount, assignmentCounts = {}) {
-  const need = Math.max(1, Number(impostorCount) || 1);
-  const ids = [...new Set(participantIds.filter(Boolean))];
-  if (!ids.length) return [];
-
-  const counts = normalizeSpyAssignmentCounts(assignmentCounts);
-  let eligible = ids.filter((id) => (counts[id] || 0) < SPY_MAX_SPY_ASSIGNMENTS_PER_PLAYER);
-  if (eligible.length < need) {
-    const minCount = Math.min(...ids.map((id) => counts[id] || 0));
-    eligible = ids.filter((id) => (counts[id] || 0) <= minCount);
-  }
-
-  return fisherYatesShuffle(eligible).slice(0, need);
-}
-
-function bumpSpyAssignmentCounts(assignmentCounts, spyIds) {
-  const next = { ...normalizeSpyAssignmentCounts(assignmentCounts) };
-  for (const id of spyIds) {
-    next[id] = (next[id] || 0) + 1;
-  }
-  return next;
-}
-
-export function shouldSkipSpyVoteRound(votes = [], participants = [], eliminatedIds = []) {
-  const blankCount = votes.filter((vote) => vote.targetStudentId === SPY_BLANK_VOTE_ID).length;
-  if (!blankCount) return false;
-  const { tally } = tallySpyVotes(votes, participants, eliminatedIds);
-  const topPlayerCount = tally[0]?.count ?? 0;
-  return blankCount >= topPlayerCount;
-}
-
-export function getActiveParticipants(participants = [], eliminatedIds = []) {
-  const eliminated = new Set(eliminatedIds || []);
-  return participants.filter((p) => !eliminated.has(p.id) && !p.eliminated);
 }
 
 function normalizeTieRevoteBaseline(raw) {
@@ -179,13 +157,10 @@ export function normalizeSpySession(id, data) {
     mode: data.mode === 'crew' ? 'crew' : 'word',
     taskPerPlayer: Number(data.taskPerPlayer) || 5,
     crewTaskTarget: Number(data.crewTaskTarget) || 0,
-    crewTaskExtraById: data.crewTaskExtraById && typeof data.crewTaskExtraById === 'object'
-      ? Object.fromEntries(
-        Object.entries(data.crewTaskExtraById)
-          .filter(([k, v]) => typeof k === 'string' && Number(v) > 0)
-          .map(([k, v]) => [k, Number(v)]),
-      )
-      : {},
+    crewTeamCompleted: Number(data.crewTeamCompleted) || 0,
+    spyHintLevel: Number(data.spyHintLevel) || 0,
+    spyHintText: data.spyHintText || '',
+    spyHintSpyId: data.spyHintSpyId || '',
     sabotageActive: Boolean(data.sabotageActive),
     sabotageById: data.sabotageById || '',
     sabotageAt: data.sabotageAt || null,
@@ -203,22 +178,6 @@ export function normalizeSpySession(id, data) {
     startedAt: data.startedAt || null,
     finishedAt: data.finishedAt || null,
   };
-}
-
-export function votesChangedFromBaseline(votes = [], baseline = {}) {
-  const current = {};
-  for (const vote of votes) {
-    if (vote?.voterId && vote?.targetStudentId) {
-      current[vote.voterId] = vote.targetStudentId;
-    }
-  }
-  const baselineKeys = Object.keys(baseline || {});
-  const currentKeys = Object.keys(current);
-  if (baselineKeys.length !== currentKeys.length) return true;
-  for (const voterId of baselineKeys) {
-    if (current[voterId] !== baseline[voterId]) return true;
-  }
-  return false;
 }
 
 function clearTieFields() {
@@ -270,66 +229,31 @@ function withPostVoteSabotageCooldown(fields) {
   };
 }
 
-/** @param {Array<{ id: string }>} activeParticipants */
-export function pickCrewSabotageVictim(activeParticipants, spyId) {
-  const candidates = activeParticipants.filter((p) => p.id !== spyId);
-  if (!candidates.length) return null;
-  return candidates[Math.floor(Math.random() * candidates.length)];
-}
-
-/**
- * Chia nhiệm vụ còn lại của người bị loại đều cho dân thường còn sống.
- * @returns {{ studentId: string, extra: number }[]}
- */
-export function planCrewTaskRedistribution({
-  eliminatedId,
+/** Crew → playing + cooldown; word → describe (thứ tự mới). */
+function buildPostVoteContinueFields(session, {
   participants = [],
-  progressRows = [],
   eliminatedIds = [],
-  taskPerPlayer = 5,
-  existingExtras = {},
-}) {
-  const progressById = new Map((progressRows || []).map((row) => [row.id, row]));
-  const victimProgress = progressById.get(eliminatedId);
-  const victimExtra = Number(existingExtras?.[eliminatedId] || 0);
-  const victimTotal = Number(
-    victimProgress?.total
-    || (Number(taskPerPlayer) || 5) + victimExtra,
-  );
-  const unfinished = Math.max(0, victimTotal - Number(victimProgress?.completedCount || 0));
-  if (unfinished <= 0) return [];
-
-  const eliminated = new Set(eliminatedIds || []);
-  const receivers = (participants || []).filter(
-    (p) => !p.isSpy && !eliminated.has(p.id) && !p.eliminated,
-  );
-  if (!receivers.length) return [];
-
-  const base = Math.floor(unfinished / receivers.length);
-  let remainder = unfinished % receivers.length;
-  return receivers.map((p) => {
-    const extra = base + (remainder > 0 ? 1 : 0);
-    if (remainder > 0) remainder -= 1;
-    return { studentId: p.id, extra };
-  }).filter((row) => row.extra > 0);
-}
-
-export function mergeCrewTaskExtras(existingExtras = {}, additions = []) {
-  const next = { ...(existingExtras || {}) };
-  for (const row of additions) {
-    if (!row?.studentId || !row.extra) continue;
-    next[row.studentId] = Number(next[row.studentId] || 0) + Number(row.extra || 0);
+  fields = {},
+} = {}) {
+  const tieClear = clearTieFields();
+  if (session.mode === 'crew') {
+    return withPostVoteSabotageCooldown({
+      status: 'playing',
+      ...fields,
+      ...clearCrewRoundFields(),
+      ...tieClear,
+    });
   }
-  return next;
-}
-
-export function getCrewTaskTotalForStudent(session, studentId, progressRow = null) {
-  const base = Number(progressRow?.total)
-    || Number(session?.taskPerPlayer || 5)
-    || 5;
-  const extra = Number(session?.crewTaskExtraById?.[studentId] || 0);
-  // progress.total có thể đã được ghi khi extra tăng; lấy max để không bị tụt.
-  return Math.max(base, Number(session?.taskPerPlayer || 5) + extra);
+  const remaining = getActiveParticipants(participants, eliminatedIds);
+  return {
+    status: 'describe',
+    activePlayerIds: remaining.map((p) => p.id),
+    describeOrder: fisherYatesShuffle(remaining.map((p) => p.id)),
+    describeIndex: 0,
+    describeRoundCurrent: 1,
+    ...fields,
+    ...tieClear,
+  };
 }
 
 export function normalizeSpyParticipant(id, data) {
@@ -364,19 +288,6 @@ export function normalizeSpyTaskProgress(id, data) {
   };
 }
 
-function checkSpyWinOutcome(activeParticipants) {
-  return evaluateSpyOutcome(activeParticipants);
-}
-
-export function evaluateSpyOutcome(activeParticipants) {
-  const spies = activeParticipants.filter((p) => p.isSpy);
-  const civilians = activeParticipants.filter((p) => !p.isSpy);
-  if (spies.length === 0) return 'civilians';
-  if (civilians.length <= spies.length) return 'spies';
-  return null;
-}
-
-
 async function setClassActiveSpyPointer(classCode, sessionId) {
   if (!classCode) return;
   try {
@@ -405,6 +316,7 @@ export async function createSpySession({
   describeRoundTotal = 1,
   mode = 'word',
   taskPerPlayer = 5,
+  crewTaskTarget = 15,
 }) {
   if (!classCode) throw new Error('Chọn lớp trước.');
   const present = [...new Set(presentStudentIds || [])];
@@ -438,7 +350,13 @@ export async function createSpySession({
     tieRevoteBaseline: {},
     lastTieBreak: null,
     taskPerPlayer: Math.min(20, Math.max(1, Number(taskPerPlayer) || 5)),
-    crewTaskTarget: 0,
+    crewTaskTarget: mode === 'crew'
+      ? Math.min(100, Math.max(5, Number(crewTaskTarget) || 15))
+      : 0,
+    crewTeamCompleted: 0,
+    spyHintLevel: 0,
+    spyHintText: '',
+    spyHintSpyId: '',
     sabotageActive: false,
     sabotageById: '',
     sabotageAt: null,
@@ -461,6 +379,41 @@ export async function openSpyLobby(sessionId) {
   if (!snap.exists()) throw new Error('Không tìm thấy phòng.');
   await updateDoc(sessionRef(sessionId), sessionBump({ status: 'lobby' }));
   await setClassActiveSpyPointer(snap.data().classCode, sessionId);
+}
+
+/** Cập nhật điểm danh đã freeze — chỉ khi còn lobby. */
+export async function updateSpyPresentRoster(sessionId, presentStudentIds) {
+  const [sessionSnap, partsSnap] = await Promise.all([
+    getDoc(sessionRef(sessionId)),
+    getDocs(participantsRef(sessionId)),
+  ]);
+  if (!sessionSnap.exists()) throw new Error('Không tìm thấy phòng.');
+  const session = normalizeSpySession(sessionSnap.id, sessionSnap.data());
+  const joinedIds = partsSnap.docs.map((d) => d.id);
+  const present = [...new Set((presentStudentIds || []).filter(Boolean))];
+  const error = validateSpyPresentRosterChange({
+    status: session.status,
+    impostorCount: session.impostorCount,
+    presentStudentIds: present,
+    joinedIds,
+  });
+  if (error) throw new Error(error);
+
+  await updateDoc(sessionRef(sessionId), sessionBump({ presentStudentIds: present }));
+  return { presentStudentIds: present };
+}
+
+/** Đặt presentStudentIds = người đã vào lobby — giải over-attendance. */
+export async function syncSpyPresentRosterToJoined(sessionId) {
+  const [sessionSnap, partsSnap] = await Promise.all([
+    getDoc(sessionRef(sessionId)),
+    getDocs(participantsRef(sessionId)),
+  ]);
+  if (!sessionSnap.exists()) throw new Error('Không tìm thấy phòng.');
+  const session = normalizeSpySession(sessionSnap.id, sessionSnap.data());
+  if (session.status !== 'lobby') throw new Error('Chỉ đồng bộ khi đang ở lobby.');
+  const joinedIds = partsSnap.docs.map((d) => d.id);
+  return updateSpyPresentRoster(sessionId, joinedIds);
 }
 
 export async function syncSpyClassPointer(sessionId) {
@@ -507,17 +460,8 @@ export async function startSpyGame(sessionId, { civilianWord, spyWord }) {
 
   const partsSnap = await getDocs(participantsRef(sessionId));
   const participantIds = partsSnap.docs.map((d) => d.id);
-  const minPlayers = Number(session.impostorCount) + 2;
-  if (participantIds.length < minPlayers) {
-    throw new Error(`Cần ít nhất ${minPlayers} học sinh vào phòng.`);
-  }
+  assertSpyLobbyRosterMatched(participantIds, session.presentStudentIds, session.impostorCount);
 
-  const presentSet = new Set(session.presentStudentIds || []);
-  if (!participantIds.every((id) => presentSet.has(id))) {
-    throw new Error('Có người chơi không nằm trong danh sách có mặt.');
-  }
-
-  const shuffled = fisherYatesShuffle(participantIds);
   const spyIds = new Set(pickFairSpyIds(participantIds, session.impostorCount, session.spyAssignmentCounts));
   const describeOrder = fisherYatesShuffle(participantIds);
 
@@ -544,6 +488,9 @@ export async function startSpyGame(sessionId, { civilianWord, spyWord }) {
     civilianWord: validated.civilian,
     spyWord: validated.spy,
     revealedSpyIds: [],
+    spyHintLevel: 0,
+    spyHintText: '',
+    spyHintSpyId: '',
     spyAssignmentCounts: bumpSpyAssignmentCounts(session.spyAssignmentCounts, [...spyIds]),
     ...clearTieFields(),
     lastTieBreak: null,
@@ -561,15 +508,7 @@ export async function startCrewGame(sessionId) {
 
   const partsSnap = await getDocs(participantsRef(sessionId));
   const participantIds = partsSnap.docs.map((d) => d.id);
-  const minPlayers = Number(session.impostorCount) + 2;
-  if (participantIds.length < minPlayers) {
-    throw new Error(`Cần ít nhất ${minPlayers} học sinh vào phòng.`);
-  }
-
-  const presentSet = new Set(session.presentStudentIds || []);
-  if (!participantIds.every((id) => presentSet.has(id))) {
-    throw new Error('Có người chơi không nằm trong danh sách có mặt.');
-  }
+  assertSpyLobbyRosterMatched(participantIds, session.presentStudentIds, session.impostorCount);
 
   const spyIds = new Set(pickFairSpyIds(participantIds, session.impostorCount, session.spyAssignmentCounts));
   const civilianCount = participantIds.length - spyIds.size;
@@ -583,7 +522,7 @@ export async function startCrewGame(sessionId) {
       eliminated: false,
     });
     batch.set(taskProgressRef(sessionId, partDoc.id), {
-      total: session.taskPerPlayer,
+      total: SPY_CREW_TASK_PROGRESS_CAP,
       completedCount: 0,
       updatedAt: serverTimestamp(),
     });
@@ -603,8 +542,14 @@ export async function startCrewGame(sessionId) {
     spyWord: '',
     revealedSpyIds: [],
     taskPerPlayer: session.taskPerPlayer,
-    crewTaskTarget: civilianCount * session.taskPerPlayer,
-    crewTaskExtraById: {},
+    crewTaskTarget: Math.max(
+      5,
+      Number(session.crewTaskTarget) || civilianCount * session.taskPerPlayer,
+    ),
+    crewTeamCompleted: 0,
+    spyHintLevel: 0,
+    spyHintText: '',
+    spyHintSpyId: '',
     sabotageCooldownUntil: null,
     reportedByIds: [],
     spyAssignmentCounts: bumpSpyAssignmentCounts(session.spyAssignmentCounts, [...spyIds]),
@@ -728,67 +673,24 @@ export async function submitSpyVote(sessionId, { voterId, targetStudentId }) {
   }
 }
 
-export function tallySpyVotes(votes = [], participants = [], eliminatedIds = []) {
-  const eliminated = new Set(eliminatedIds || []);
-  const activeIds = new Set(
-    participants.filter((p) => !eliminated.has(p.id)).map((p) => p.id),
-  );
-  const counts = new Map();
-  let blankCount = 0;
-  for (const vote of votes) {
-    const id = vote.targetStudentId;
-    if (id === SPY_BLANK_VOTE_ID) {
-      blankCount += 1;
-      continue;
-    }
-    if (!activeIds.has(id)) continue;
-    counts.set(id, (counts.get(id) || 0) + 1);
-  }
-  const nameById = new Map(participants.map((p) => [p.id, p.studentName]));
-  const tally = [...counts.entries()]
-    .map(([studentId, count]) => ({
-      studentId,
-      studentName: nameById.get(studentId) || studentId,
-      count,
-    }))
-    .sort((a, b) => b.count - a.count || a.studentName.localeCompare(b.studentName, 'vi'));
-
-  const topCount = tally[0]?.count ?? 0;
-  const topCandidates = topCount > 0
-    ? tally.filter((row) => row.count === topCount)
-    : [];
-
-  return { tally, topCandidates, topCount, blankCount };
-}
-
 async function skipSpyVoteRound(sessionId, { session, participants, votesSnap }) {
   const batch = writeBatch(db);
   votesSnap.docs.forEach((voteDoc) => batch.delete(voteDoc.ref));
-  const tieClear = clearTieFields();
   const announceUntil = Timestamp.fromMillis(Date.now() + SPY_CREW_VOTE_RESOLVE_SECONDS * 1000);
-
-  if (session.mode === 'crew') {
-    batch.update(sessionRef(sessionId), sessionBump(withPostVoteSabotageCooldown({
-      status: 'playing',
-      crewSkipVoteAnnounceUntil: announceUntil,
-      crewEliminationAnnounceUntil: null,
-      ...clearCrewRoundFields(),
-      ...tieClear,
+  const continueFields = buildPostVoteContinueFields(session, {
+    participants,
+    eliminatedIds: session.eliminatedIds,
+    fields: {
+      ...(session.mode === 'crew'
+        ? {
+          crewSkipVoteAnnounceUntil: announceUntil,
+          crewEliminationAnnounceUntil: null,
+        }
+        : {}),
       lastTieBreak: null,
-    })));
-  } else {
-    const remaining = getActiveParticipants(participants, session.eliminatedIds);
-    const describeOrder = fisherYatesShuffle(remaining.map((p) => p.id));
-    batch.update(sessionRef(sessionId), sessionBump({
-      status: 'describe',
-      activePlayerIds: remaining.map((p) => p.id),
-      describeOrder,
-      describeIndex: 0,
-      describeRoundCurrent: 1,
-      ...tieClear,
-      lastTieBreak: null,
-    }));
-  }
+    },
+  });
+  batch.update(sessionRef(sessionId), sessionBump(continueFields));
 
   await batch.commit();
   return {
@@ -974,14 +876,32 @@ export async function submitCrewTaskProgress(sessionId, {
     throw new Error('Chưa ở chế độ nhiệm vụ.');
   }
   if (!session.presentStudentIds.includes(studentId)) throw new Error('Bạn không có trong danh sách có mặt.');
-  const partSnap = await getDoc(participantRef(sessionId, studentId));
+  const [partSnap, progressSnap] = await Promise.all([
+    getDoc(participantRef(sessionId, studentId)),
+    getDoc(taskProgressRef(sessionId, studentId)),
+  ]);
   if (!partSnap.exists()) throw new Error('Bạn chưa vào phòng.');
   if (partSnap.data()?.eliminated) throw new Error('Bạn đã bị loại.');
-  await setDoc(taskProgressRef(sessionId, studentId), {
-    total: Math.max(1, Number(total) || session.taskPerPlayer || 1),
-    completedCount: Math.max(0, Number(completedCount) || 0),
+
+  const nextCompleted = Math.max(0, Number(completedCount) || 0);
+  const prevCompleted = Number(progressSnap.data()?.completedCount || 0);
+  const delta = Math.max(0, nextCompleted - prevCompleted);
+  const isSpy = Boolean(partSnap.data()?.isSpy);
+
+  const batch = writeBatch(db);
+  batch.set(taskProgressRef(sessionId, studentId), {
+    total: SPY_CREW_TASK_PROGRESS_CAP,
+    completedCount: nextCompleted,
     updatedAt: serverTimestamp(),
   }, { merge: true });
+  if (delta > 0 && !isSpy) {
+    batch.update(sessionRef(sessionId), {
+      crewTeamCompleted: increment(delta),
+      lastCrewProgressById: studentId,
+      stateVersion: increment(1),
+    });
+  }
+  await batch.commit();
 }
 
 export async function sabotageCrewSystem(sessionId, { spyId }) {
@@ -1001,14 +921,12 @@ export async function sabotageCrewSystem(sessionId, { spyId }) {
   const participantIds = session.activePlayerIds.length
     ? session.activePlayerIds
     : session.presentStudentIds;
-  const [participantSnaps, taskSnap] = await Promise.all([
+  const [participantSnaps] = await Promise.all([
     Promise.all(participantIds.map((studentId) => getDoc(participantRef(sessionId, studentId)))),
-    getDocs(taskProgressCollectionRef(sessionId)),
   ]);
   const participants = participantSnaps
     .filter((snap) => snap.exists())
     .map((snap) => normalizeSpyParticipant(snap.id, snap.data()));
-  const progressRows = taskSnap.docs.map((d) => normalizeSpyTaskProgress(d.id, d.data()));
   const active = getActiveParticipants(participants, session.eliminatedIds);
   const victim = pickCrewSabotageVictim(active, spyId);
   if (!victim) throw new Error('Không còn ai để loại.');
@@ -1017,14 +935,7 @@ export async function sabotageCrewSystem(sessionId, { spyId }) {
   const remaining = getActiveParticipants(participants, newEliminatedIds);
   const outcome = checkSpyWinOutcome(remaining);
   const tieClear = clearTieFields();
-  const redistribute = planCrewTaskRedistribution({
-    eliminatedId: victim.id,
-    participants,
-    progressRows,
-    eliminatedIds: newEliminatedIds,
-    taskPerPlayer: session.taskPerPlayer,
-    existingExtras: session.crewTaskExtraById,
-  });
+  const hintFields = advanceSpyHint({ participants, eliminatedIds: newEliminatedIds });
 
   const batch = writeBatch(db);
   // Không ghi participant.eliminated ở đây — học sinh không có quyền update participant.
@@ -1039,7 +950,7 @@ export async function sabotageCrewSystem(sessionId, { spyId }) {
     sabotageCooldownUntil: sabotageCooldownUntilFromNow(),
     meetingReporterId: '',
     meetingOpenedBy: '',
-    crewTaskExtraById: mergeCrewTaskExtras(session.crewTaskExtraById, redistribute),
+    ...hintFields,
     ...tieClear,
   };
 
@@ -1063,7 +974,6 @@ export async function sabotageCrewSystem(sessionId, { spyId }) {
     victimName: victim.studentName,
     outcome,
     phase: outcome ? 'reveal' : 'sabotage_alert',
-    redistributed: redistribute.reduce((sum, row) => sum + row.extra, 0),
   };
 }
 
@@ -1149,18 +1059,6 @@ export async function reportCrewMeeting(sessionId, { studentId }) {
   }));
 }
 
-export function checkCrewTaskWin(session, participants = [], progressRows = []) {
-  if (!session || session.mode !== 'crew') return false;
-  const progressById = new Map(progressRows.map((row) => [row.id, row]));
-  let total = 0;
-  for (const participant of participants) {
-    // Giữ tiến độ dân thường đã làm kể cả khi bị loại — phần còn lại đã chia lại cho đội.
-    if (participant.isSpy) continue;
-    total += Number(progressById.get(participant.id)?.completedCount || 0);
-  }
-  return total >= Number(session.crewTaskTarget || 0);
-}
-
 export async function resolveTieRevote(sessionId) {
   const [sessionSnap, partsSnap, votesSnap] = await Promise.all([
     getDoc(sessionRef(sessionId)),
@@ -1227,6 +1125,10 @@ async function applySpyElimination(sessionId, {
   const remaining = getActiveParticipants(participants, newEliminatedIds);
   const outcome = checkSpyWinOutcome(remaining);
   const tieClear = clearTieFields();
+  const eliminatedParticipant = participants.find((p) => p.id === eliminatedId);
+  const hintFields = eliminatedParticipant && !eliminatedParticipant.isSpy
+    ? advanceSpyHint({ participants, eliminatedIds: newEliminatedIds })
+    : {};
 
   if (outcome) {
     const revealedSpyIds = participants.filter((p) => p.isSpy).map((p) => p.id);
@@ -1236,6 +1138,7 @@ async function applySpyElimination(sessionId, {
       lastEliminatedId: eliminatedId,
       outcome,
       revealedSpyIds,
+      ...hintFields,
       ...tieClear,
       lastTieBreak,
     }));
@@ -1251,44 +1154,24 @@ async function applySpyElimination(sessionId, {
     };
   }
 
-  if (session.mode === 'crew') {
-    const taskSnap = await getDocs(taskProgressCollectionRef(sessionId));
-    const progressRows = taskSnap.docs.map((d) => normalizeSpyTaskProgress(d.id, d.data()));
-    const redistribute = planCrewTaskRedistribution({
-      eliminatedId,
-      participants,
-      progressRows,
-      eliminatedIds: newEliminatedIds,
-      taskPerPlayer: session.taskPerPlayer,
-      existingExtras: session.crewTaskExtraById,
-    });
-
-    batch.update(sessionRef(sessionId), sessionBump(withPostVoteSabotageCooldown({
-      status: 'playing',
+  batch.update(sessionRef(sessionId), sessionBump(buildPostVoteContinueFields(session, {
+    participants,
+    eliminatedIds: newEliminatedIds,
+    fields: {
       eliminatedIds: newEliminatedIds,
       lastEliminatedId: eliminatedId,
-      activePlayerIds: remaining.map((p) => p.id),
-      crewEliminationAnnounceUntil: Timestamp.fromMillis(Date.now() + SPY_CREW_VOTE_RESOLVE_SECONDS * 1000),
-      crewSkipVoteAnnounceUntil: null,
-      crewTaskExtraById: mergeCrewTaskExtras(session.crewTaskExtraById, redistribute),
-      ...clearCrewRoundFields(),
-      ...tieClear,
+      ...(session.mode === 'crew'
+        ? {
+          crewEliminationAnnounceUntil: Timestamp.fromMillis(
+            Date.now() + SPY_CREW_VOTE_RESOLVE_SECONDS * 1000,
+          ),
+          crewSkipVoteAnnounceUntil: null,
+        }
+        : {}),
+      ...hintFields,
       lastTieBreak,
-    })));
-  } else {
-    const describeOrder = fisherYatesShuffle(remaining.map((p) => p.id));
-    batch.update(sessionRef(sessionId), sessionBump({
-      status: 'describe',
-      eliminatedIds: newEliminatedIds,
-      lastEliminatedId: eliminatedId,
-      activePlayerIds: remaining.map((p) => p.id),
-      describeOrder,
-      describeIndex: 0,
-      describeRoundCurrent: 1,
-      ...tieClear,
-      lastTieBreak,
-    }));
-  }
+    },
+  })));
   await batch.commit();
 
   return {
@@ -1396,7 +1279,10 @@ export async function restartSpyRound(sessionId) {
     spyWord: '',
     revealedSpyIds: [],
     crewTaskTarget: 0,
-    crewTaskExtraById: {},
+    crewTeamCompleted: 0,
+    spyHintLevel: 0,
+    spyHintText: '',
+    spyHintSpyId: '',
     sabotageCooldownUntil: null,
     reportedByIds: [],
     ...clearCrewRoundFields(),
@@ -1508,37 +1394,6 @@ export function subscribeActiveSpyForClass(classCode, onData, onError) {
       .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0));
     onData(active[0] || null);
   }, onError);
-}
-
-export function getCurrentSpeaker(session) {
-  if (!session) return null;
-  if (session.status === 'describe') {
-    return session.describeOrder?.[session.describeIndex] || null;
-  }
-  if (session.status === 'tie_debate') {
-    return session.tieCandidateIds?.[session.tieDebateIndex] || null;
-  }
-  return null;
-}
-
-export function getTieDebateSpeakerName(session, participants = []) {
-  const speakerId = getCurrentSpeaker(session);
-  if (!speakerId) return '';
-  return participants.find((p) => p.id === speakerId)?.studentName || '';
-}
-
-export function getTieDebateEndsAtMs(session) {
-  const endsAt = session?.tieDebateEndsAt;
-  if (!endsAt) return null;
-  if (typeof endsAt.toMillis === 'function') return endsAt.toMillis();
-  if (endsAt instanceof Date) return endsAt.getTime();
-  if (typeof endsAt.seconds === 'number') return endsAt.seconds * 1000;
-  return null;
-}
-
-export function getDescribeRoundTotal(session) {
-  if (!session) return 1;
-  return session.voteRound === 0 ? session.describeRoundTotal : 1;
 }
 
 function publicBaseUrl() {

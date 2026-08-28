@@ -37,7 +37,7 @@ export function ProjectNameSetup({ student }) {
   };
 
   return (
-    <div className="sticky top-[4.25rem] z-20 mb-5">
+    <div className="mb-3">
       <div className="card overflow-hidden border-brand-200 shadow-md dark:border-brand-500/30">
         <div className="flex items-start gap-3 border-b border-brand-100 bg-gradient-to-r from-brand-50 to-white px-4 py-3 dark:border-brand-500/20 dark:from-brand-500/10 dark:to-slate-900">
           <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white">
@@ -116,7 +116,7 @@ export function ProjectNamePendingBanner({ student }) {
   if (!isProjectNameAwaitingReview(student)) return null;
   const name = projectNameAwaitingReview(student);
   return (
-    <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+    <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
       <p className="font-medium">Đề xuất dự án đang chờ giáo viên duyệt</p>
       <p className="mt-1">
         <em>{name}</em>

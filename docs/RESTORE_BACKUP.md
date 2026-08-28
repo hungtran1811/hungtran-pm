@@ -20,7 +20,7 @@ File backup có schema `hungtran-pm-admin-backup-v1` và thường gồm:
 5. Sau khi phục hồi, chạy smoke test:
    - Admin mở lớp/học sinh/bài giảng liên quan.
    - Student vào đúng lớp và mở bài hiện tại.
-   - Nếu khôi phục quiz/feedback/report, kiểm tra lại trang điểm số và báo cáo.
+   - Nếu khôi phục quiz/feedback/report, kiểm tra báo cáo HS; quiz/ôn tập không còn UI (collection legacy).
 
 ## Nguyên tắc khi viết script restore
 
@@ -35,3 +35,7 @@ File backup có schema `hungtran-pm-admin-backup-v1` và thường gồm:
 - Chưa thêm nút import/restore trong Admin UI.
 - Chưa tự động merge dữ liệu phức tạp giữa backup và production.
 - Chưa restore file upload ngoài Firestore.
+
+## Backup của migration lesson HTML
+
+`migrate:lessons:html:apply` và `migrate:lessons:html:rollback:apply` tạo snapshot JSON pre-write trong `.backups/`. File giữ raw program document và lesson subcollection để đối chiếu/phục hồi thủ công, được gitignore và không thay thế backup trên trang Cài đặt. Xem quy trình apply/rollback tại [`LESSON_HTML_MIGRATION.md`](LESSON_HTML_MIGRATION.md).

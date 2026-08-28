@@ -4,13 +4,13 @@ import { Button } from '../../ui/components/Button.jsx';
 import { Badge } from '../../ui/components/Badge.jsx';
 import { Spinner } from '../../ui/components/Spinner.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
-import { spyOutcomeLabel, spyStatusLabel, SPY_BLANK_VOTE_ID, SPY_CREW_FEEDBACK_FAIL_MS, SPY_CREW_FEEDBACK_SUCCESS_MS } from '../../lib/spyConstants.js';
+import { spyOutcomeLabel, spyRoleLabel, spyStatusLabel, SPY_BLANK_VOTE_ID, SPY_CREW_FEEDBACK_FAIL_MS, SPY_CREW_FEEDBACK_SUCCESS_MS } from '../../lib/spyConstants.js';
 import { CrewTaskPanel } from './CrewTaskPanel.jsx';
+import { SpyCrewMvpBoard } from '../admin/games/SpyCrewMvpBoard.jsx';
 import { getErrorMessage } from '../../lib/firestore.js';
 import {
   acknowledgeCrewSabotage,
   changeSpyVote,
-  getCrewTaskTotalForStudent,
   getCurrentSpeaker,
   getTieDebateEndsAtMs,
   joinSpySession,
@@ -50,6 +50,7 @@ export function SpyStudentView({ sessionId, classCode, student, classStudents = 
   const [ackBusy, setAckBusy] = useState(false);
   const [wordVisible, setWordVisible] = useState(false);
   const [taskProgress, setTaskProgress] = useState(null);
+  const [allTaskProgress, setAllTaskProgress] = useState([]);
 
   useEffect(() => {
     if (!sessionId) return undefined;
@@ -81,9 +82,11 @@ export function SpyStudentView({ sessionId, classCode, student, classStudents = 
   useEffect(() => {
     if (!sessionId || !student?.id || session?.mode !== 'crew') {
       setTaskProgress(null);
+      setAllTaskProgress([]);
       return undefined;
     }
     return subscribeCrewTaskProgress(sessionId, (rows) => {
+      setAllTaskProgress(rows);
       setTaskProgress(rows.find((row) => row.id === student.id) || null);
     }, () => {});
   }, [sessionId, student?.id, session?.mode]);
@@ -151,7 +154,8 @@ export function SpyStudentView({ sessionId, classCode, student, classStudents = 
   const sabotageCooldownMs = session?.sabotageCooldownUntil?.toMillis?.() ?? 0;
   const sabotageCooldownLeft = useCountdown(sabotageCooldownMs);
   const completedCount = Number(taskProgress?.completedCount || 0);
-  const taskTotal = getCrewTaskTotalForStudent(session, student?.id, taskProgress);
+  const crewTarget = Number(session?.crewTaskTarget || 0);
+  const crewTeamCompleted = Number(session?.crewTeamCompleted || 0);
 
   const victimName = useMemo(() => {
     const id = session?.lastEliminatedId;
@@ -184,13 +188,12 @@ export function SpyStudentView({ sessionId, classCode, student, classStudents = 
     try {
       await submitCrewTaskProgress(sessionId, {
         studentId: student.id,
-        total: taskTotal,
         completedCount: next,
       });
     } catch (err) {
       toast.error(getErrorMessage(err));
     }
-  }, [sessionId, student.id, taskTotal, completedCount, toast]);
+  }, [sessionId, student.id, completedCount, toast]);
 
   const handleCrewTaskFeedback = useCallback((type) => {
     if (type === 'success') {
@@ -320,6 +323,15 @@ export function SpyStudentView({ sessionId, classCode, student, classStudents = 
         </div>
       )}
 
+      {session.spyHintText && session.status !== 'lobby' && session.status !== 'reveal' && session.status !== 'finished' && (
+        <div className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-900 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-100">
+          <p className="text-xs font-semibold uppercase tracking-wide text-violet-600 dark:text-violet-300">
+            Manh mối gián điệp
+          </p>
+          <p className="mt-1">{session.spyHintText}</p>
+        </div>
+      )}
+
       {session.status === 'lobby' && (
         <div className="card p-6 text-center">
           <Search className="mx-auto h-10 w-10 text-brand-500" />
@@ -355,12 +367,13 @@ export function SpyStudentView({ sessionId, classCode, student, classStudents = 
                   Vai trò
                 </button>
                 <p className="text-lg font-bold text-slate-900 dark:text-white">
-                  {roleVisible ? (self?.isSpy ? 'Gián điệp' : 'Phi hành đoàn') : '••••••••'}
+                  {roleVisible ? spyRoleLabel(session?.mode || 'crew', self?.isSpy) : '••••••••'}
                 </p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Badge tone="brand">{completedCount}/{taskTotal} nhiệm vụ</Badge>
+              <Badge tone="brand">Đội: {crewTeamCompleted}/{crewTarget}</Badge>
+              <Badge tone="slate">Bạn: {completedCount}</Badge>
               <Button
                 type="button"
                 variant="secondary"
@@ -384,10 +397,17 @@ export function SpyStudentView({ sessionId, classCode, student, classStudents = 
             )}
           </div>
 
+          <SpyCrewMvpBoard
+            session={session}
+            taskProgress={allTaskProgress}
+            nameById={new Map(classStudents.map((s) => [s.id, s.fullName]))}
+            compact
+            limit={3}
+          />
+
           <CrewTaskPanel
             sessionId={sessionId}
             studentId={student.id}
-            taskPerPlayer={taskTotal}
             completedCount={completedCount}
             onCompleteTask={handleCrewTaskComplete}
             onTaskFeedback={handleCrewTaskFeedback}

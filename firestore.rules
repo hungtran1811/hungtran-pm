@@ -1190,9 +1190,33 @@ service cloud.firestore {
         && request.resource.data.completedCount is int
         && request.resource.data.updatedAt == request.time
         && request.resource.data.total >= 1
-        && request.resource.data.total <= 40
+        && request.resource.data.total <= 999
         && request.resource.data.completedCount >= 0
         && request.resource.data.completedCount <= request.resource.data.total;
+    }
+
+    function isValidCrewTeamCompletedBump(sessionId) {
+      let studentId = request.resource.data.lastCrewProgressById;
+      let oldProg = get(/databases/$(database)/documents/spySessions/$(sessionId)/taskProgress/$(studentId));
+      let newProg = getAfter(/databases/$(database)/documents/spySessions/$(sessionId)/taskProgress/$(studentId));
+      let oldCount = oldProg.data.keys().hasAny(['completedCount']) ? oldProg.data.completedCount : 0;
+      let newCount = newProg.data.completedCount;
+      let delta = newCount - oldCount;
+      let oldTeam = resource.data.keys().hasAny(['crewTeamCompleted']) ? resource.data.crewTeamCompleted : 0;
+      return studentId is string
+        && studentId.size() > 0
+        && isSpyPlayingPhase(sessionId)
+        && spySessionDoc(sessionId).data.mode == 'crew'
+        && isOpenClass(spySessionDoc(sessionId).data.classCode)
+        && isActiveStudentInClass(studentId, spySessionDoc(sessionId).data.classCode)
+        && isSpyActiveParticipant(sessionId, studentId)
+        && spyParticipantDoc(sessionId, studentId).data.isSpy != true
+        && delta > 0
+        && delta <= 1
+        && request.resource.data.crewTeamCompleted == oldTeam + delta
+        && request.resource.data.lastCrewProgressById == studentId
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['crewTeamCompleted', 'lastCrewProgressById', 'stateVersion']);
     }
 
     function isValidCrewSabotageUpdate(sessionId, studentId) {
@@ -1231,6 +1255,7 @@ service cloud.firestore {
           !spyParticipantDoc(sessionId, victimId).data.keys().hasAny(['eliminated'])
           || spyParticipantDoc(sessionId, victimId).data.eliminated != true
         )
+        && spyParticipantDoc(sessionId, victimId).data.isSpy != true
         && (alertSabotage || revealSabotage)
         && request.resource.data.sabotageAt == request.time
         && reportedSame;
@@ -1288,7 +1313,8 @@ service cloud.firestore {
         || isValidCrewSabotageUpdate(sessionId, request.resource.data.sabotageById)
         || isValidCrewSabotageAcknowledge(sessionId, request.resource.data.crewSabotageAckById)
         || isValidCrewReportUpdate(sessionId, request.resource.data.meetingReporterId)
-        || isValidCrewVoteQuorumSchedule(sessionId, request.resource.data.crewVoteQuorumById);
+        || isValidCrewVoteQuorumSchedule(sessionId, request.resource.data.crewVoteQuorumById)
+        || isValidCrewTeamCompletedBump(sessionId);
 
       match /participants/{studentId} {
         allow get: if isAdmin()

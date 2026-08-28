@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Badge } from '../../../ui/components/Badge.jsx';
-import { spyOutcomeLabel } from '../../../lib/spyConstants.js';
+import { spyOutcomeLabel, spyRoleLabel } from '../../../lib/spyConstants.js';
 import {
   getActiveParticipants,
   getDescribeRoundTotal,
   getTieDebateSpeakerName,
 } from '../../../services/spy.service.js';
 import { SpyTieCountdown } from './SpyGmRoster.jsx';
+import { SpyCrewMvpBoard } from './SpyCrewMvpBoard.jsx';
 
 function useEndsInSeconds(endsAtField) {
   const endsAtMs = endsAtField?.toMillis?.() ?? 0;
@@ -35,6 +36,10 @@ export function SpyStage({
   hideWords = false,
   spyNames = [],
 }) {
+  const resolveCountdown = useEndsInSeconds(session?.crewVoteResolveEndsAt);
+  const announceCountdown = useEndsInSeconds(session?.crewEliminationAnnounceUntil);
+  const skipCountdown = useEndsInSeconds(session?.crewSkipVoteAnnounceUntil);
+
   if (!session) return null;
 
   const eliminatedSet = new Set(session.eliminatedIds || []);
@@ -57,9 +62,6 @@ export function SpyStage({
     ).map((row) => row.studentId),
   );
   const lastTieBreak = session.lastTieBreak;
-  const resolveCountdown = useEndsInSeconds(session.crewVoteResolveEndsAt);
-  const announceCountdown = useEndsInSeconds(session.crewEliminationAnnounceUntil);
-  const skipCountdown = useEndsInSeconds(session.crewSkipVoteAnnounceUntil);
   const showCrewElimination = session.mode === 'crew'
     && session.status === 'playing'
     && announceCountdown != null
@@ -80,11 +82,14 @@ export function SpyStage({
   const subText = presenting ? 'text-slate-300' : 'text-sm text-slate-500';
   const accentText = presenting ? 'text-2xl text-amber-200' : 'text-lg font-medium text-amber-700 dark:text-amber-300';
   const progressById = new Map(taskProgress.map((row) => [row.id, row]));
-  // Đếm mọi tiến độ dân thường (kể cả đã loại) — khớp checkCrewTaskWin.
-  const crewCompleted = participants
+  const crewCompletedFromProgress = participants
     .filter((p) => !p.isSpy)
     .reduce((sum, p) => sum + Number(progressById.get(p.id)?.completedCount || 0), 0);
   const crewTarget = Number(session.crewTaskTarget || 0);
+  const crewCompleted = Math.max(
+    Number(session.crewTeamCompleted || 0),
+    crewCompletedFromProgress,
+  );
   const crewPercent = crewTarget > 0 ? Math.min(100, Math.round((crewCompleted / crewTarget) * 100)) : 0;
 
   return (
@@ -104,6 +109,18 @@ export function SpyStage({
           {session.status === 'lobby' && 'Phòng chờ'}
         </h2>
       </div>
+
+      {session.spyHintText && session.status !== 'lobby' && session.status !== 'reveal' && session.status !== 'finished' && (
+        <div className={`mx-auto max-w-2xl rounded-2xl border px-4 py-4 ${
+          presenting
+            ? 'border-violet-400/40 bg-violet-950/50 text-violet-100'
+            : 'border-violet-200 bg-violet-50 text-violet-900 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-100'
+        }`}
+        >
+          <p className="text-xs font-bold uppercase tracking-[0.2em]">Manh mối gián điệp</p>
+          <p className={presenting ? 'mt-2 text-xl' : 'mt-2 text-sm'}>{session.spyHintText}</p>
+        </div>
+      )}
 
       {session.status === 'sabotage_alert' && session.mode === 'crew' && (
         <div className={`crew-sabotage-alert mx-auto max-w-2xl space-y-4 rounded-3xl border-2 px-6 py-8 ${
@@ -152,14 +169,23 @@ export function SpyStage({
             </div>
           )}
           {!showCrewElimination && !showCrewSkipVote && (
-            <div className="mx-auto max-w-xl space-y-2">
-              <p className={accentText}>Tiến độ đội: {crewPercent}%</p>
-              <div className={`h-4 overflow-hidden rounded-full ${presenting ? 'bg-slate-800' : 'bg-slate-200 dark:bg-slate-800'}`}>
-                <div className="h-full bg-emerald-500" style={{ width: `${crewPercent}%` }} />
+            <div className="mx-auto max-w-xl space-y-4">
+              <div className="space-y-2">
+                <p className={accentText}>Tiến độ đội: {crewPercent}%</p>
+                <div className={`h-4 overflow-hidden rounded-full ${presenting ? 'bg-slate-800' : 'bg-slate-200 dark:bg-slate-800'}`}>
+                  <div className="h-full bg-emerald-500" style={{ width: `${crewPercent}%` }} />
+                </div>
+                <p className={subText}>
+                  {crewCompleted}/{crewTarget} nhiệm vụ nhóm · {activeParticipants.length} người còn sống
+                </p>
               </div>
-              <p className={subText}>
-                {crewCompleted}/{crewTarget} nhiệm vụ phi hành đoàn · {activeParticipants.length} người còn sống
-              </p>
+              <SpyCrewMvpBoard
+                session={session}
+                participants={participants}
+                taskProgress={taskProgress}
+                presenting={presenting}
+                limit={presenting ? 5 : 3}
+              />
             </div>
           )}
         </div>
@@ -326,12 +352,12 @@ export function SpyStage({
         <div className="mx-auto max-w-xl space-y-4">
           <div className={`rounded-2xl border p-4 ${presenting ? 'border-emerald-500/40 bg-emerald-950/40' : 'border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10'}`}>
             <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
-              {session.mode === 'crew' ? 'Phi hành đoàn' : 'Dân thường'}
+              {spyRoleLabel(session.mode, false)}
             </p>
             <p className={`mt-1 font-bold ${presenting ? 'text-3xl text-white' : 'text-xl'}`}>{revealCivilian}</p>
           </div>
           <div className={`rounded-2xl border p-4 ${presenting ? 'border-red-500/40 bg-red-950/40' : 'border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10'}`}>
-            <p className="text-xs font-semibold uppercase tracking-wide text-red-600 dark:text-red-300">Gián điệp</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-red-600 dark:text-red-300">{spyRoleLabel(session.mode, true)}</p>
             <p className={`mt-1 font-bold ${presenting ? 'text-3xl text-white' : 'text-xl'}`}>{revealSpy}</p>
           </div>
           {(session.eliminatedIds || []).length > 0 && (

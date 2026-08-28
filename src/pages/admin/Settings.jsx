@@ -207,7 +207,7 @@ function DataSettings() {
         </Button>
       </div>
       <p className="mt-3 text-xs text-slate-500">
-        Backup gồm lớp, học sinh và chương trình/bài giảng. Bản nháp gồm bài quiz đang làm dở và câu trả lời tạm của mini game trên trình duyệt này.
+        Backup gồm lớp, học sinh và chương trình/bài giảng. Bản nháp gồm câu trả lời tạm của mini game trên trình duyệt này.
       </p>
     </SettingsSection>
   );

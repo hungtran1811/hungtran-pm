@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '../../../ui/components/Badge.jsx';
 import { getCurrentSpeaker, getTieDebateEndsAtMs } from '../../../services/spy.service.js';
+import { spyRoleLabel } from '../../../lib/spyConstants.js';
+import { SpyCrewMvpBoard } from './SpyCrewMvpBoard.jsx';
 
 function useCountdown(endsAtMs) {
   const [now, setNow] = useState(() => Date.now());
@@ -54,10 +56,17 @@ export function SpyGmRoster({
   const showRoles = Boolean(session?.startedAt) || ['describe', 'playing', 'vote', 'tie_debate', 'tie_revote', 'reveal'].includes(status);
 
   const rows = useMemo(() => {
-    const present = presentStudents.length
-      ? presentStudents
+    const presentIds = session?.presentStudentIds?.length
+      ? session.presentStudentIds
+      : presentStudents.map((s) => s.id);
+    const nameById = new Map([
+      ...presentStudents.map((s) => [s.id, s.fullName]),
+      ...participants.map((p) => [p.id, p.studentName]),
+    ]);
+    const list = presentIds.length
+      ? presentIds.map((id) => ({ id, fullName: nameById.get(id) || id }))
       : participants.map((p) => ({ id: p.id, fullName: p.studentName }));
-    return present.map((s) => {
+    return list.map((s) => {
       const part = participantById.get(s.id);
       return {
         id: s.id,
@@ -66,7 +75,7 @@ export function SpyGmRoster({
         part,
       };
     });
-  }, [presentStudents, participants, participantById]);
+  }, [session?.presentStudentIds, presentStudents, participants, participantById]);
 
   if (!session) return null;
 
@@ -123,9 +132,7 @@ export function SpyGmRoster({
                 {eliminated && <Badge tone="red">Đã loại</Badge>}
                 {showRoles && row.part && (
                   <Badge tone={row.part.isSpy ? 'red' : 'slate'}>
-                    {row.part.isSpy
-                      ? 'Gián điệp'
-                      : (session?.mode === 'crew' ? 'Phi hành đoàn' : 'Dân')}
+                    {spyRoleLabel(session?.mode, row.part.isSpy, { short: true })}
                   </Badge>
                 )}
               </div>
@@ -141,7 +148,7 @@ export function SpyGmRoster({
               )}
               {session.mode === 'crew' && progress && (
                 <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">
-                  Nhiệm vụ: {progress.completedCount}/{progress.total}
+                  Đóng góp: {progress.completedCount}
                 </p>
               )}
               {session.mode === 'crew' && (
@@ -153,6 +160,14 @@ export function SpyGmRoster({
           );
         })}
       </div>
+      {session.mode === 'crew' && session.status === 'playing' && (
+        <SpyCrewMvpBoard
+          session={session}
+          participants={participants}
+          taskProgress={taskProgress}
+          limit={5}
+        />
+      )}
     </div>
   );
 }

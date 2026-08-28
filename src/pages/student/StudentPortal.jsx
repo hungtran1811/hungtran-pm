@@ -1,41 +1,45 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
-import { ArrowRight, Ban, Search, Swords, UserRound, Users } from 'lucide-react';
+import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
+import { ArrowRight, Ban, UserRound, Users } from 'lucide-react';
 import { StudentShell } from './StudentShell.jsx';
+import { StudentGameJoinNotice } from './StudentGameJoinNotice.jsx';
 import { Button } from '../../ui/components/Button.jsx';
 import { Input } from '../../ui/components/Field.jsx';
 import { EmptyState } from '../../ui/components/EmptyState.jsx';
 import { FullPageLoader } from '../../ui/components/Spinner.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { subscribeClass } from '../../services/classes.service.js';
-import {
-  listActiveStudentsByClass,
-  subscribeStudent,
-} from '../../services/students.service.js';
+import { listActiveStudentsByClass, subscribeStudent } from '../../services/students.service.js';
 import { getCurriculumProgram } from '../../services/curriculum.service.js';
 import { getStudentFeedbackLessonIds } from '../../services/knowledgeReports.service.js';
 import { getErrorMessage } from '../../lib/firestore.js';
 import { ProjectNamePendingBanner, ProjectNameSetup } from './ProjectNameSetup.jsx';
 import {
-  classUsesProjectNames,
   isProjectNameApproved,
   isProjectNameAwaitingReview,
   needsProjectNameSetup,
   projectNameDisplay,
-  resolveFinalMode,
 } from '../../lib/classFinalMode.js';
 import {
   FEATURE_CODING_SHOWDOWN_ENABLED,
   FEATURE_KNOWLEDGE_FEEDBACK_ENABLED,
   FEATURE_SPY_GAME_ENABLED,
 } from '../../config/features.js';
+import {
+  studentLessonsPath,
+  studentProjectPath,
+  studentUsesProjectWorkspace,
+  studentWorkspaceHomePath,
+} from '../../lib/studentWorkspace.js';
 
 const LessonsViewLazy = lazy(() =>
   import('./LessonsView.jsx').then((m) => ({ default: m.LessonsView })),
 );
 
 const ShowdownStudentViewLazy = FEATURE_CODING_SHOWDOWN_ENABLED
-  ? lazy(() => import('./ShowdownStudentView.jsx').then((m) => ({ default: m.ShowdownStudentView })))
+  ? lazy(() =>
+      import('./ShowdownStudentView.jsx').then((m) => ({ default: m.ShowdownStudentView })),
+    )
   : null;
 
 const SpyStudentViewLazy = FEATURE_SPY_GAME_ENABLED
@@ -76,8 +80,9 @@ export function StudentPortalPage() {
   const [showdownSessionId, setShowdownSessionId] = useState(() => showdownParam || null);
   const [activeSpy, setActiveSpy] = useState(null);
   const [spySessionId, setSpySessionId] = useState(() => spyParam || null);
-  const [quizFocus, setQuizFocus] = useState(false);
   const [activeLessonSession, setActiveLessonSession] = useState(null);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     if (!classCode) return;
@@ -257,9 +262,9 @@ export function StudentPortalPage() {
           return;
         }
         if (
-          selectedStudent?.id
-          && Array.isArray(session.presentStudentIds)
-          && !session.presentStudentIds.includes(selectedStudent.id)
+          selectedStudent?.id &&
+          Array.isArray(session.presentStudentIds) &&
+          !session.presentStudentIds.includes(selectedStudent.id)
         ) {
           toast.error('Bạn không có mặt buổi này — không thể tham gia.');
           clearSpyParam();
@@ -301,9 +306,9 @@ export function StudentPortalPage() {
       return;
     }
     if (
-      selectedStudent?.id
-      && Array.isArray(activeSpy?.presentStudentIds)
-      && !activeSpy.presentStudentIds.includes(selectedStudent.id)
+      selectedStudent?.id &&
+      Array.isArray(activeSpy?.presentStudentIds) &&
+      !activeSpy.presentStudentIds.includes(selectedStudent.id)
     ) {
       toast.error('Bạn không có mặt buổi này — không thể tham gia.');
       return;
@@ -340,20 +345,17 @@ export function StudentPortalPage() {
   };
 
   const isFinalPhase = classDoc?.curriculumPhase === 'final';
-  const finalMode = resolveFinalMode(classDoc, program);
+  const usesProjectWorkspace = studentUsesProjectWorkspace(classDoc, program);
+  const workspaceHome = classCode ? studentWorkspaceHomePath(classCode, classDoc, program) : '';
+  const onProjectHome = location.pathname.endsWith('/project');
 
   const bottomNavItems = useMemo(() => {
-    if (isFinalPhase && finalMode === 'project') {
-      return [{ id: 'report', label: 'Dự án', sectionId: 'student-report' }];
-    }
+    if (!usesProjectWorkspace) return [];
     return [
-      {
-        id: 'lessons',
-        label: activeLessonSession != null ? `Buổi ${activeLessonSession}` : 'Bài giảng',
-        sectionId: 'student-lessons',
-      },
+      { id: 'project', label: 'Dự án', to: studentProjectPath(classCode) },
+      { id: 'lessons', label: 'Bài giảng', to: studentLessonsPath(classCode) },
     ];
-  }, [isFinalPhase, finalMode, activeLessonSession]);
+  }, [usesProjectWorkspace, classCode]);
 
   const shellSubtitle = useMemo(() => {
     const base = classDoc?.className || classDoc?.classCode || '';
@@ -369,9 +371,9 @@ export function StudentPortalPage() {
     ['lobby', 'playing', 'reveal'].includes(activeShowdown.status);
 
   const isPresentForSpy =
-    Boolean(selectedStudent?.id)
-    && Array.isArray(activeSpy?.presentStudentIds)
-    && activeSpy.presentStudentIds.includes(selectedStudent.id);
+    Boolean(selectedStudent?.id) &&
+    Array.isArray(activeSpy?.presentStudentIds) &&
+    activeSpy.presentStudentIds.includes(selectedStudent.id);
 
   const showSpyBanner =
     FEATURE_SPY_GAME_ENABLED &&
@@ -379,13 +381,19 @@ export function StudentPortalPage() {
     activeSpy &&
     selectedStudent &&
     isPresentForSpy &&
-    ['lobby', 'describe', 'playing', 'vote', 'tie_debate', 'tie_revote', 'reveal'].includes(activeSpy.status);
+    ['lobby', 'describe', 'playing', 'vote', 'tie_debate', 'tie_revote', 'reveal'].includes(
+      activeSpy.status,
+    );
   const isCrewSpyBanner = activeSpy?.mode === 'crew';
 
   const chooseStudent = (student) => {
     setSelectedStudentId(student.id);
     setSelectedStudent(student);
     localStorage.setItem(storageKey(classCode), student.id);
+    navigate(
+      { pathname: studentWorkspaceHomePath(classCode, classDoc, program), search: location.search },
+      { replace: true },
+    );
   };
 
   const clearStudent = () => {
@@ -393,6 +401,7 @@ export function StudentPortalPage() {
     setSelectedStudent(null);
     setActiveLessonSession(null);
     localStorage.removeItem(storageKey(classCode));
+    navigate(`/c/${encodeURIComponent(classCode)}`, { replace: true });
   };
 
   if (loading) return <FullPageLoader label="Đang tải lớp học..." />;
@@ -400,7 +409,11 @@ export function StudentPortalPage() {
   if (error) {
     return (
       <StudentShell>
-        <EmptyState icon={<Ban className="h-7 w-7" />} title="Không thể truy cập" description={error} />
+        <EmptyState
+          icon={<Ban className="h-7 w-7" />}
+          title="Không thể truy cập"
+          description={error}
+        />
       </StudentShell>
     );
   }
@@ -413,14 +426,6 @@ export function StudentPortalPage() {
     );
   }
 
-  const usesProjectNames = classUsesProjectNames(classDoc, program);
-  const awaitingProjectReview = isProjectNameAwaitingReview(selectedStudent);
-  const showProjectSetup = needsProjectNameSetup(selectedStudent, classDoc, program);
-  const showProjectNameSection = usesProjectNames && (
-    awaitingProjectReview
-    || selectedStudent.projectNameStatus === 'rejected'
-    || (isFinalPhase && showProjectSetup)
-  );
   const displayProject = projectNameDisplay(selectedStudent);
 
   if (FEATURE_SPY_GAME_ENABLED && spySessionId && selectedStudent && SpyStudentViewLazy) {
@@ -440,7 +445,12 @@ export function StudentPortalPage() {
     );
   }
 
-  if (FEATURE_CODING_SHOWDOWN_ENABLED && showdownSessionId && selectedStudent && ShowdownStudentViewLazy) {
+  if (
+    FEATURE_CODING_SHOWDOWN_ENABLED &&
+    showdownSessionId &&
+    selectedStudent &&
+    ShowdownStudentViewLazy
+  ) {
     const ShowdownStudentView = ShowdownStudentViewLazy;
     return (
       <StudentShell subtitle={`${classDoc.className || classDoc.classCode} · Coding Showdown`}>
@@ -456,106 +466,240 @@ export function StudentPortalPage() {
     );
   }
 
+  let gameJoin = null;
+  if (showSpyBanner) {
+    gameJoin = {
+      variant: 'spy',
+      crew: isCrewSpyBanner,
+      onJoin: () => enterSpy(activeSpy.id),
+    };
+  } else if (showShowdownBanner) {
+    gameJoin = {
+      variant: 'showdown',
+      onJoin: () => enterShowdown(activeShowdown.id),
+    };
+  }
+
   return (
     <StudentShell
       subtitle={shellSubtitle}
-      bottomNavItems={quizFocus ? [] : bottomNavItems}
+      activeLessonSession={activeLessonSession}
+      bottomNavItems={bottomNavItems}
+      compactMain={onProjectHome}
+      notice={
+        gameJoin ? (
+          <StudentGameJoinNotice
+            variant={gameJoin.variant}
+            crew={gameJoin.crew}
+            onJoin={gameJoin.onJoin}
+          />
+        ) : null
+      }
       right={
-        <Button variant="subtle" size="sm" onClick={clearStudent} className="shadow-sm">
-          <UserRound className="h-4 w-4" />
-          <span className="hidden sm:inline">Đổi tên</span>
-        </Button>
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          {usesProjectWorkspace && (
+            <nav className="hidden items-center gap-0.5 sm:flex" aria-label="Trang học sinh">
+              <NavLink
+                to={studentProjectPath(classCode)}
+                className={({ isActive }) =>
+                  `rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
+                    isActive
+                      ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300'
+                      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200'
+                  }`
+                }
+              >
+                Dự án
+              </NavLink>
+              <NavLink
+                to={studentLessonsPath(classCode)}
+                className={({ isActive }) =>
+                  `rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
+                    isActive
+                      ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300'
+                      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200'
+                  }`
+                }
+              >
+                Bài giảng
+              </NavLink>
+            </nav>
+          )}
+          <div className="min-w-0 text-right">
+            <Link
+              to={workspaceHome}
+              className="block max-w-[5.5rem] truncate text-sm font-semibold text-slate-800 hover:text-brand-700 sm:max-w-[14rem] dark:text-slate-100 dark:hover:text-brand-300"
+              title={selectedStudent.fullName}
+            >
+              {selectedStudent.fullName}
+            </Link>
+            {displayProject && isProjectNameApproved(selectedStudent) && (
+              <p
+                className="hidden max-w-[14rem] truncate text-xs text-slate-500 sm:block dark:text-slate-400"
+                title={displayProject}
+              >
+                {displayProject}
+              </p>
+            )}
+          </div>
+          <Button
+            variant="subtle"
+            size="md"
+            onClick={clearStudent}
+            className="min-h-11 shadow-sm"
+            title="Đổi tên học sinh"
+          >
+            <UserRound className="h-5 w-5" />
+            Đổi tên
+          </Button>
+        </div>
       }
     >
-      <div className="mb-5 rounded-2xl bg-gradient-to-r from-brand-600 to-brand-500 px-5 py-4 text-white shadow-sm">
-        <p className="text-xl font-bold sm:text-2xl">{selectedStudent.fullName}</p>
-        {displayProject && isProjectNameApproved(selectedStudent) && (
-          <p className="mt-0.5 text-sm text-brand-100">{displayProject}</p>
-        )}
-      </div>
-
-      {showProjectNameSection && (
-        showProjectSetup && !awaitingProjectReview ? (
-          <ProjectNameSetup student={selectedStudent} />
-        ) : (
-          <ProjectNamePendingBanner student={selectedStudent} />
-        )
-      )}
-
-      {showSpyBanner && (
-        <div className="mb-5 flex flex-col gap-3 rounded-2xl border-2 border-violet-400/50 bg-gradient-to-r from-violet-500/10 to-purple-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <Search className="mt-0.5 h-6 w-6 shrink-0 text-violet-600 dark:text-violet-400" />
-            <div>
-              <p className="font-bold text-slate-800 dark:text-slate-100">
-                {isCrewSpyBanner ? 'Phi hành đoàn đang diễn ra!' : 'Truy tìm gián điệp đang diễn ra!'}
-              </p>
-              <p className="text-sm text-slate-600 dark:text-slate-300">
-                {isCrewSpyBanner
-                  ? 'Giáo viên đã mở phòng — tham gia để làm nhiệm vụ, Report hoặc phá hệ thống.'
-                  : 'Giáo viên đã mở phòng — tham gia ngay để nhận từ khóa và tìm gián điệp.'}
-              </p>
-            </div>
-          </div>
-          <Button onClick={() => enterSpy(activeSpy.id)} className="min-h-12 shrink-0">
-            Tham gia
-          </Button>
-        </div>
-      )}
-
-      {showShowdownBanner && (
-        <div className="mb-5 flex flex-col gap-3 rounded-2xl border-2 border-cyan-400/50 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-start gap-3">
-            <Swords className="mt-0.5 h-6 w-6 shrink-0 text-cyan-600 dark:text-cyan-400" />
-            <div>
-              <p className="font-bold text-slate-800 dark:text-slate-100">Coding Showdown đang diễn ra!</p>
-              <p className="text-sm text-slate-600 dark:text-slate-300">
-                Giáo viên đã mở phòng thi đấu — tham gia ngay để ghi điểm cùng lớp.
-              </p>
-            </div>
-          </div>
-          <Button onClick={() => enterShowdown(activeShowdown.id)} className="min-h-12 shrink-0">
-            Tham gia Showdown
-          </Button>
-        </div>
-      )}
-
-      {isFinalPhase && finalMode === 'project' && (
-        <section id="student-report" className="mt-8 scroll-mt-[4.5rem]">
-          <Suspense fallback={<FullPageLoader label="Đang tải báo cáo dự án..." />}>
-            <FinalProjectStudentViewLazy
-              classDoc={classDoc}
-              program={program}
-              student={selectedStudent}
-              submittedLessonIds={submittedLessonIds}
-              onQuizFocusChange={setQuizFocus}
-              onFeedbackSubmitted={(lessonId) =>
-                setSubmittedLessonIds((prev) => (prev.includes(lessonId) ? prev : [...prev, lessonId]))
-              }
-            />
-          </Suspense>
-        </section>
-      )}
-
-      {!(isFinalPhase && finalMode === 'project') && (
-      <section id="student-lessons" className="scroll-mt-[4.5rem]">
-        <Suspense fallback={<FullPageLoader label="Đang tải bài học..." />}>
-          <LessonsViewLazy
-            classDoc={classDoc}
-            program={program}
-            student={selectedStudent}
-            submittedLessonIds={submittedLessonIds}
-            isFinalPhase={isFinalPhase}
-            onQuizFocusChange={setQuizFocus}
-            onActiveSessionChange={setActiveLessonSession}
-            onFeedbackSubmitted={(lessonId) =>
-              setSubmittedLessonIds((prev) => (prev.includes(lessonId) ? prev : [...prev, lessonId]))
-            }
-          />
-        </Suspense>
-      </section>
-      )}
+      <Outlet
+        context={{
+          classCode,
+          classDoc,
+          program,
+          student: selectedStudent,
+          submittedLessonIds,
+          isFinalPhase,
+          setActiveLessonSession,
+          setSubmittedLessonIds,
+        }}
+      />
     </StudentShell>
+  );
+}
+
+export function StudentPhaseHome() {
+  const { classCode, classDoc, program } = useOutletContext();
+  const location = useLocation();
+  return (
+    <Navigate
+      to={`${studentWorkspaceHomePath(classCode, classDoc, program)}${location.search}`}
+      replace
+    />
+  );
+}
+
+export function StudentLearnRoute() {
+  const {
+    classCode,
+    classDoc,
+    program,
+    student,
+    submittedLessonIds,
+    isFinalPhase,
+    setActiveLessonSession,
+    setSubmittedLessonIds,
+  } = useOutletContext();
+  const location = useLocation();
+  if (studentUsesProjectWorkspace(classDoc, program)) {
+    return <Navigate to={`${studentProjectPath(classCode)}${location.search}`} replace />;
+  }
+  return (
+    <Suspense fallback={<FullPageLoader label="Đang tải bài học..." />}>
+      <LessonsViewLazy
+        classDoc={classDoc}
+        program={program}
+        student={student}
+        submittedLessonIds={submittedLessonIds}
+        isFinalPhase={isFinalPhase}
+        hideLessonList
+        showBack={false}
+        autoOpenResume
+        onActiveSessionChange={setActiveLessonSession}
+        onFeedbackSubmitted={(lessonId) =>
+          setSubmittedLessonIds((prev) => (prev.includes(lessonId) ? prev : [...prev, lessonId]))
+        }
+      />
+    </Suspense>
+  );
+}
+
+export function StudentProjectRoute() {
+  const { classCode, classDoc, program, student } = useOutletContext();
+  const navigate = useNavigate();
+  const location = useLocation();
+  if (!studentUsesProjectWorkspace(classDoc, program)) {
+    return (
+      <Navigate
+        to={`${studentWorkspaceHomePath(classCode, classDoc, program)}${location.search}`}
+        replace
+      />
+    );
+  }
+  const awaitingProjectReview = isProjectNameAwaitingReview(student);
+  const showProjectSetup = needsProjectNameSetup(student, classDoc, program);
+  const showProjectNameSection =
+    awaitingProjectReview ||
+    student.projectNameStatus === 'rejected' ||
+    showProjectSetup;
+
+  return (
+    <div>
+      {showProjectNameSection &&
+        (showProjectSetup && !awaitingProjectReview ? (
+          <ProjectNameSetup student={student} />
+        ) : (
+          <ProjectNamePendingBanner student={student} />
+        ))}
+      <Suspense
+        fallback={
+          <div className="flex min-h-[8rem] items-center justify-center text-sm text-slate-500">
+            Đang tải báo cáo dự án...
+          </div>
+        }
+      >
+        <FinalProjectStudentViewLazy
+          classDoc={classDoc}
+          student={student}
+          onOpenLessons={() => navigate(studentLessonsPath(classCode))}
+        />
+      </Suspense>
+    </div>
+  );
+}
+
+export function StudentLessonsReviewRoute() {
+  const {
+    classCode,
+    classDoc,
+    program,
+    student,
+    submittedLessonIds,
+    setActiveLessonSession,
+    setSubmittedLessonIds,
+  } = useOutletContext();
+  const navigate = useNavigate();
+  const location = useLocation();
+  if (!studentUsesProjectWorkspace(classDoc, program)) {
+    return (
+      <Navigate
+        to={`${studentWorkspaceHomePath(classCode, classDoc, program)}${location.search}`}
+        replace
+      />
+    );
+  }
+  return (
+    <Suspense fallback={<FullPageLoader label="Đang tải bài học..." />}>
+      <LessonsViewLazy
+        classDoc={classDoc}
+        program={program}
+        student={student}
+        submittedLessonIds={submittedLessonIds}
+        isFinalPhase
+        hideLessonList
+        showBack
+        backLabel="Về dự án"
+        autoOpenResume
+        onExitReader={() => navigate(studentProjectPath(classCode))}
+        onActiveSessionChange={setActiveLessonSession}
+        onFeedbackSubmitted={(lessonId) =>
+          setSubmittedLessonIds((prev) => (prev.includes(lessonId) ? prev : [...prev, lessonId]))
+        }
+      />
+    </Suspense>
   );
 }
 
@@ -574,9 +718,7 @@ function StudentPicker({ students, onPick }) {
   }, [students, search]);
 
   if (students.length === 0) {
-    return (
-      <EmptyState icon={<Users className="h-7 w-7" />} title="Chưa có học sinh" />
-    );
+    return <EmptyState icon={<Users className="h-7 w-7" />} title="Chưa có học sinh" />;
   }
 
   return (

@@ -34,13 +34,8 @@ Các write từ cổng học sinh phải giữ đúng shape vì `firestore.rules
 - Báo cáo tiến độ dự án phải ghi cùng batch:
   - `reports/{generatedId}`
   - `students/{studentId}` với `latestReportId` trỏ đúng report mới
-- Quiz kiểm tra:
-  - Học sinh ghi `studentQuizSubmissions/{generatedId}` ở trạng thái pending
-  - Ghi/merge `studentQuizLatest/{classCode}__{studentId}__{lessonId}`
-  - Đáp án đúng chỉ nằm ở `quizQuestionBanks`, học sinh không đọc collection này
-- Ôn tập:
-  - Ghi `practiceQuizSubmissions/{classCode}__{studentId}__{lessonId}`
-  - Public bank ở `practiceQuizPublicBanks`, đáp án ở `practiceQuizAnswerBanks`
+- Quiz/ôn tập: collection legacy vẫn nằm trong `firestore.rules` để bài nộp cũ an toàn. App không còn UI ghi mới.
+- Mini-game **Vụ án** đã bỏ khỏi app; không còn rules `caseSessions` (feature chưa từng deploy production).
 
 ## Refactor Rules
 
@@ -52,3 +47,11 @@ Các write từ cổng học sinh phải giữ đúng shape vì `firestore.rules
 ## Backup Nhẹ
 
 Trang `Cài đặt` có nút tải backup JSON gồm lớp, học sinh và chương trình/bài giảng. Đây là bản xuất dữ liệu để đối chiếu/phục hồi thủ công, chưa phải cơ chế restore tự động.
+
+## Migration bài giảng HTML
+
+- Dùng [`LESSON_HTML_MIGRATION.md`](LESSON_HTML_MIGRATION.md) làm runbook chính thức.
+- Lệnh migration mặc định dry-run, bắt buộc `FIREBASE_PROJECT_ID`, abort toàn bộ apply nếu plan có lỗi và tạo `.backups/*.json` trước mọi write.
+- Không xóa trường Markdown trong chu kỳ rollout đầu; rollback chỉ chuyển `contentFormat` về `markdown` cho lesson còn nguồn Markdown và không làm trống bài HTML-only.
+- Chạy `npm run test:migration` cùng bộ kiểm tra trước deploy.
+- Bài mới trong trang Bài giảng để trống HTML; nhập file `.html` rồi xem trước đúng như file gốc. Không viết migration để bọc lại HTML cũ thành skeleton.

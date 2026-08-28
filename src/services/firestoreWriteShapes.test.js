@@ -103,8 +103,6 @@ vi.mock('firebase/firestore', () => ({
 }));
 
 import { submitKnowledgeReport } from './knowledgeReports.service.js';
-import { submitPracticeQuiz } from './practiceQuiz.service.js';
-import { submitQuizSubmission } from './quiz.service.js';
 import { submitProgressReport } from './reports.service.js';
 
 const student = {
@@ -202,84 +200,6 @@ describe('student Firestore write shapes', () => {
       currentProgressPercent: 45,
       latestReportId: 'generated-1',
       progressStalledCount: 0,
-    });
-  });
-
-  it('writes a pending quiz submission and latest-attempt pointer without exposing answer keys', async () => {
-    await submitQuizSubmission({
-      student,
-      classDoc,
-      lesson,
-      programId: 'python-basic',
-      quiz: {
-        title: 'Quiz buổi 2',
-        timeLimitMinutes: 20,
-        maxAttempts: 3,
-        questions: [
-          { id: 'q1', type: 'mcq', prompt: '2 + 2?', options: ['3', '4'] },
-          { id: 'q2', type: 'code', prompt: 'In số 1', starterCode: 'print()' },
-        ],
-      },
-      answers: { q1: 1, q2: 'print(1)' },
-      startedAtMs: 1000,
-      durationSeconds: 42,
-    });
-
-    expect(firestoreMock.state.batchOps).toHaveLength(2);
-    const [submissionOp, latestOp] = firestoreMock.state.batchOps;
-    expect(submissionOp.ref.path).toBe('studentQuizSubmissions/generated-1');
-    expect(submissionOp.data).toMatchObject({
-      classCode: 'PY101',
-      studentId: 'student-1',
-      attemptNumber: 1,
-      gradingStatus: 'pending',
-      mcqCorrect: 0,
-      mcqTotal: 1,
-      codeGraded: 0,
-      source: 'student-quiz-v2',
-    });
-    expect(submissionOp.data.responses).toEqual([
-      expect.objectContaining({ questionId: 'q1', selectedIndex: 1, isCorrect: null }),
-      expect.objectContaining({ questionId: 'q2', codeAnswer: 'print(1)', isCorrect: null }),
-    ]);
-    expect(latestOp.ref.path).toBe('studentQuizLatest/PY101__student-1__lesson-2');
-    expect(latestOp.options).toEqual({ merge: true });
-    expect(latestOp.data).toMatchObject({
-      submissionId: 'generated-1',
-      attemptNumber: 1,
-    });
-  });
-
-  it('grades practice quiz submissions when the public answer bank is readable', async () => {
-    candidateMock.firstExistingDoc = firestoreMock.snapshot(
-      { answers: { p1: 0 } },
-      'python-basic__lesson-2',
-    );
-
-    const result = await submitPracticeQuiz({
-      student,
-      classDoc,
-      lesson,
-      programId: 'python-basic',
-      quiz: {
-        title: 'Ôn tập buổi 2',
-        questions: [{ id: 'p1', prompt: 'Chọn đúng', options: ['A', 'B'] }],
-      },
-      answers: { p1: 0 },
-    });
-
-    expect(result).toMatchObject({ mcqCorrect: 1, mcqTotal: 1, mcqPercent: 100 });
-    expect(firestoreMock.state.setDocOps).toHaveLength(1);
-    const op = firestoreMock.state.setDocOps[0];
-    expect(op.ref.path).toBe('practiceQuizSubmissions/PY101__student-1__lesson-2');
-    expect(op.options).toEqual({ merge: true });
-    expect(op.data).toMatchObject({
-      classCode: 'PY101',
-      studentId: 'student-1',
-      attemptCount: 1,
-      gradingStatus: 'complete',
-      mcqPercent: 100,
-      source: 'practice-quiz-v1',
     });
   });
 });

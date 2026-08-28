@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { CircleDot, Dices, Gift, Hash, Layers, Search, Swords } from 'lucide-react';
+import { Dices, Gift, Hash, Layers, Search, Sparkles, Compass } from 'lucide-react';
 import { AppShell } from '../../ui/components/AppShell.jsx';
 import { SkeletonRows } from '../../ui/components/Skeleton.jsx';
 import { Spinner } from '../../ui/components/Spinner.jsx';
@@ -24,7 +24,6 @@ import {
 import {
   FEATURE_CODING_SHOWDOWN_ENABLED,
   FEATURE_SPY_GAME_ENABLED,
-  FEATURE_WHEEL_OF_FORTUNE_ENABLED,
 } from '../../config/features.js';
 
 const RandomStudentPicker = lazy(() =>
@@ -39,36 +38,45 @@ const CardFlipGame = lazy(() =>
 const MysteryBoxGame = lazy(() =>
   import('./games/MysteryBoxGame.jsx').then((m) => ({ default: m.MysteryBoxGame })),
 );
-const WheelOfFortuneGame = lazy(() =>
-  import('./games/WheelOfFortuneGame.jsx').then((m) => ({ default: m.WheelOfFortuneGame })),
-);
 const SpyGame = lazy(() => import('./games/SpyGame.jsx').then((m) => ({ default: m.SpyGame })));
-const CodingShowdownGame = lazy(() =>
-  import('./games/CodingShowdownGame.jsx').then((m) => ({ default: m.CodingShowdownGame })),
-);
+const CodingShowdownGame = FEATURE_CODING_SHOWDOWN_ENABLED
+  ? lazy(() =>
+    import('./games/CodingShowdownGame.jsx').then((m) => ({ default: m.CodingShowdownGame })),
+  )
+  : null;
 
-const GAMES = [
-  { id: 'random-student', title: 'Quay tên', icon: Dices },
-  { id: 'number-guess', title: 'Đoán số', icon: Hash },
-  { id: 'card-flip', title: 'Lật bài', icon: Layers },
-  { id: 'mystery-box', title: 'Hộp bí ẩn', icon: Gift },
-  ...(FEATURE_WHEEL_OF_FORTUNE_ENABLED
-    ? [{ id: 'wheel-of-fortune', title: 'Chiếc nón kỳ diệu', icon: CircleDot }]
-    : []),
-  ...(FEATURE_SPY_GAME_ENABLED
-    ? [{ id: 'spy-game', title: 'Truy tìm gián điệp', icon: Search }]
-    : []),
-  ...(FEATURE_CODING_SHOWDOWN_ENABLED
-    ? [{ id: 'coding-showdown', title: 'Coding Showdown', icon: Swords }]
-    : []),
-];
+const GAME_GROUPS = [
+  {
+    id: 'random',
+    title: 'Ngẫu nhiên',
+    icon: Sparkles,
+    games: [
+      { id: 'random-student', title: 'Quay tên', icon: Dices },
+      { id: 'card-flip', title: 'Lật bài', icon: Layers },
+      { id: 'mystery-box', title: 'Hộp bí ẩn', icon: Gift },
+      { id: 'number-guess', title: 'Đoán số', icon: Hash },
+    ],
+  },
+  {
+    id: 'adventure',
+    title: 'Phiêu lưu',
+    icon: Compass,
+    games: [
+      ...(FEATURE_SPY_GAME_ENABLED
+        ? [{ id: 'spy-game', title: 'Truy tìm gián điệp', icon: Search }]
+        : []),
+      ...(FEATURE_CODING_SHOWDOWN_ENABLED
+        ? [{ id: 'coding-showdown', title: 'Coding Showdown', icon: Search }]
+        : []),
+    ],
+  },
+].filter((g) => g.games.length > 0);
 
 const GAMES_WITH_ATTENDANCE = new Set([
   'random-student',
   'number-guess',
   'card-flip',
   'mystery-box',
-  'wheel-of-fortune',
   'spy-game',
 ]);
 
@@ -105,7 +113,8 @@ export function MiniGamesPage() {
   const [classes, setClasses] = useState([]);
   const [programs, setPrograms] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeGame, setActiveGame] = useState('random-student');
+  const [activeGroup, setActiveGroup] = useState(GAME_GROUPS[0]?.id || 'random');
+  const [activeGame, setActiveGame] = useState(GAME_GROUPS[0]?.games[0]?.id || 'random-student');
   const [selectedClass, setSelectedClass] = useState('');
   const [students, setStudents] = useState([]);
   const [presentStudentIds, setPresentStudentIds] = useState(() => new Set());
@@ -117,7 +126,21 @@ export function MiniGamesPage() {
     [classes],
   );
 
+  const currentGroup = useMemo(
+    () => GAME_GROUPS.find((g) => g.id === activeGroup) || GAME_GROUPS[0],
+    [activeGroup],
+  );
+
   const showAttendance = GAMES_WITH_ATTENDANCE.has(activeGame) && Boolean(selectedClass);
+
+  const selectGroup = (groupId) => {
+    const group = GAME_GROUPS.find((g) => g.id === groupId);
+    if (!group) return;
+    setActiveGroup(groupId);
+    if (!group.games.some((g) => g.id === activeGame)) {
+      setActiveGame(group.games[0]?.id || '');
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = subscribeClasses(
@@ -237,28 +260,53 @@ export function MiniGamesPage() {
 
   return (
     <AppShell title="Mini game">
-      <div className="mb-5 flex flex-wrap gap-2">
-        {GAMES.map((game) => {
-          const Icon = game.icon;
-          const active = game.id === activeGame;
+      <div className="mb-3 flex flex-wrap gap-2">
+        {GAME_GROUPS.map((group) => {
+          const Icon = group.icon;
+          const active = group.id === activeGroup;
           return (
             <button
-              key={game.id}
+              key={group.id}
               type="button"
               aria-selected={active}
-              onClick={() => setActiveGame(game.id)}
-              className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold transition ${
+              onClick={() => selectGroup(group.id)}
+              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${
                 active
-                  ? 'bg-brand-600 text-white shadow-sm'
-                  : 'border border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:text-brand-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-brand-500/40 dark:hover:text-brand-300'
+                  ? 'bg-slate-900 text-white shadow-sm dark:bg-slate-100 dark:text-slate-900'
+                  : 'border border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:text-brand-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
               }`}
             >
               <Icon className="h-4 w-4" />
-              {game.title}
+              {group.title}
             </button>
           );
         })}
       </div>
+
+      {currentGroup && (
+        <div className="mb-5 flex flex-wrap gap-2">
+          {currentGroup.games.map((game) => {
+            const Icon = game.icon;
+            const active = game.id === activeGame;
+            return (
+              <button
+                key={game.id}
+                type="button"
+                aria-selected={active}
+                onClick={() => setActiveGame(game.id)}
+                className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold transition ${
+                  active
+                    ? 'bg-brand-600 text-white shadow-sm'
+                    : 'border border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:text-brand-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-brand-500/40 dark:hover:text-brand-300'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {game.title}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {loading ? (
         <SkeletonRows count={5} />
@@ -289,7 +337,14 @@ export function MiniGamesPage() {
                   minPresent={activeGame === 'spy-game' ? 3 : 2}
                   minPresentHint={
                     activeGame === 'spy-game'
-                      ? 'Cần ít nhất 3 học sinh có mặt (2 dân thường + 1 gián điệp).'
+                      ? (presentStudentIds.size === 0
+                        ? 'Chọn đủ học sinh có mặt trước khi tạo phòng (ít nhất 3).'
+                        : 'Cần ít nhất 3 học sinh có mặt (2 dân thường + 1 gián điệp).')
+                      : undefined
+                  }
+                  lockedHint={
+                    activeGame === 'spy-game'
+                      ? 'Sau khi tạo phòng, điểm danh khóa vào session — sửa trong Lobby nếu cần.'
                       : undefined
                   }
                   disabled={loadingStudents}
@@ -318,17 +373,12 @@ export function MiniGamesPage() {
               <MysteryBoxGame {...gameProps} />
             </GameSuspense>
           )}
-          {activeGame === 'wheel-of-fortune' && FEATURE_WHEEL_OF_FORTUNE_ENABLED && (
-            <GameSuspense label="Đang tải Chiếc nón kỳ diệu...">
-              <WheelOfFortuneGame {...gameProps} />
-            </GameSuspense>
-          )}
           {activeGame === 'spy-game' && FEATURE_SPY_GAME_ENABLED && (
             <GameSuspense label="Đang tải Truy tìm gián điệp...">
               <SpyGame {...gameProps} />
             </GameSuspense>
           )}
-          {activeGame === 'coding-showdown' && FEATURE_CODING_SHOWDOWN_ENABLED && (
+          {activeGame === 'coding-showdown' && FEATURE_CODING_SHOWDOWN_ENABLED && CodingShowdownGame && (
             <GameSuspense label="Đang tải Coding Showdown...">
               <CodingShowdownGame
                 classes={classes}

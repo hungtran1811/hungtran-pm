@@ -304,12 +304,6 @@ export function DashboardPage() {
                 />
               )}
               <QuickAction
-                to="/admin/scores"
-                icon={<GraduationCap className="h-6 w-6" />}
-                title="Chấm điểm"
-                description="Quiz, ôn tập — xem điểm theo lớp & buổi."
-              />
-              <QuickAction
                 to="/admin/games"
                 icon={<Gamepad2 className="h-6 w-6" />}
                 title="Mini game"
@@ -325,7 +319,7 @@ export function DashboardPage() {
                 to="/admin/lessons"
                 icon={<BookOpen className="h-6 w-6" />}
                 title="Bài giảng"
-                description="Nội dung buổi, quiz và bài tập thực hành."
+                description="Nội dung buổi học và bài tập thực hành."
               />
               <QuickAction
                 to="/admin/analytics"

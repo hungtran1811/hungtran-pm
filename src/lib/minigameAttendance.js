@@ -3,21 +3,20 @@ const storageKey = (classCode) => `minigame-present:${classCode}`;
 export function normalizePresentIds(allStudentIds, storedIds) {
   if (!allStudentIds?.length) return new Set();
   const allowed = new Set(allStudentIds);
-  if (!storedIds?.length) return new Set(allStudentIds);
-  const restored = storedIds.filter((id) => allowed.has(id));
-  return restored.length ? new Set(restored) : new Set(allStudentIds);
+  if (!storedIds?.length) return new Set();
+  return new Set(storedIds.filter((id) => allowed.has(id)));
 }
 
 export function loadPresentStudentIds(classCode, allStudentIds) {
-  if (!classCode || !allStudentIds?.length) return new Set(allStudentIds || []);
+  if (!classCode || !allStudentIds?.length) return new Set();
   try {
     const raw = sessionStorage.getItem(storageKey(classCode));
-    if (!raw) return new Set(allStudentIds);
+    if (!raw) return new Set();
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return new Set(allStudentIds);
+    if (!Array.isArray(parsed)) return new Set();
     return normalizePresentIds(allStudentIds, parsed);
   } catch {
-    return new Set(allStudentIds);
+    return new Set();
   }
 }
 

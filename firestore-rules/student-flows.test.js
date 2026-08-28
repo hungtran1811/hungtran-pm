@@ -11,8 +11,17 @@ import 'firebase/compat/firestore';
 const PROJECT_ID = 'demo-hungtran-pm-rules';
 const CLASS_CODE = 'PY101';
 const FINAL_CLASS_CODE = 'FINAL101';
+const PROPOSAL_CLASS_CODE = 'PROJECT101';
+const INACTIVE_PROPOSAL_CLASS_CODE = 'PROJECT-INACTIVE';
+const HIDDEN_PROPOSAL_CLASS_CODE = 'PROJECT-HIDDEN';
+const EXAM_CLASS_CODE = 'EXAM101';
 const STUDENT_ID = 'student-1';
 const FINAL_STUDENT_ID = 'student-final';
+const PROPOSAL_STUDENT_ID = 'student-project';
+const INACTIVE_PROPOSAL_STUDENT_ID = 'student-project-inactive';
+const INACTIVE_CLASS_STUDENT_ID = 'student-inactive-class';
+const HIDDEN_CLASS_STUDENT_ID = 'student-hidden-class';
+const EXAM_CLASS_STUDENT_ID = 'student-exam-class';
 const STUDENT_NAME = 'An Nguyen';
 const FINAL_STUDENT_NAME = 'Binh Tran';
 const PROGRAM_ID = 'python-basic';
@@ -126,6 +135,32 @@ function practiceSubmission(overrides = {}) {
   };
 }
 
+function projectProposalSubmission(overrides = {}) {
+  return {
+    projectNameSubmission: 'Classroom library',
+    projectNameStatus: 'pending',
+    projectNameReviewNote: '',
+    projectNameSubmittedAt: serverTimestamp(),
+    projectTopic: 'Classroom books',
+    projectProblemSolution: 'Students need a simple way to find and borrow classroom books.',
+    projectPlannedFeatures: 'Search books, track loans, and show return dates.',
+    updatedAt: serverTimestamp(),
+    ...overrides,
+  };
+}
+
+function proposalStudent(classId, active = true) {
+  return {
+    fullName: 'Project Student',
+    classId,
+    active,
+    projectName: '',
+    projectNameSubmission: '',
+    projectNameStatus: '',
+    projectNameReviewNote: '',
+  };
+}
+
 async function seedBaseline() {
   await testEnv.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
@@ -147,6 +182,30 @@ async function seedBaseline() {
         curriculumPhase: 'final',
         finalMode: 'project',
       }),
+      db.doc(`classes/${PROPOSAL_CLASS_CODE}`).set({
+        classCode: PROPOSAL_CLASS_CODE,
+        status: 'active',
+        hidden: false,
+        finalMode: 'project',
+      }),
+      db.doc(`classes/${INACTIVE_PROPOSAL_CLASS_CODE}`).set({
+        classCode: INACTIVE_PROPOSAL_CLASS_CODE,
+        status: 'archived',
+        hidden: false,
+        finalMode: 'project',
+      }),
+      db.doc(`classes/${HIDDEN_PROPOSAL_CLASS_CODE}`).set({
+        classCode: HIDDEN_PROPOSAL_CLASS_CODE,
+        status: 'active',
+        hidden: true,
+        finalMode: 'project',
+      }),
+      db.doc(`classes/${EXAM_CLASS_CODE}`).set({
+        classCode: EXAM_CLASS_CODE,
+        status: 'active',
+        hidden: false,
+        finalMode: 'exam',
+      }),
       db.doc(`students/${STUDENT_ID}`).set({
         id: STUDENT_ID,
         fullName: STUDENT_NAME,
@@ -163,6 +222,17 @@ async function seedBaseline() {
         projectName: 'Final learning app',
         projectNameStatus: 'approved',
       }),
+      db.doc(`students/${PROPOSAL_STUDENT_ID}`).set(proposalStudent(PROPOSAL_CLASS_CODE)),
+      db
+        .doc(`students/${INACTIVE_PROPOSAL_STUDENT_ID}`)
+        .set(proposalStudent(PROPOSAL_CLASS_CODE, false)),
+      db
+        .doc(`students/${INACTIVE_CLASS_STUDENT_ID}`)
+        .set(proposalStudent(INACTIVE_PROPOSAL_CLASS_CODE)),
+      db
+        .doc(`students/${HIDDEN_CLASS_STUDENT_ID}`)
+        .set(proposalStudent(HIDDEN_PROPOSAL_CLASS_CODE)),
+      db.doc(`students/${EXAM_CLASS_STUDENT_ID}`).set(proposalStudent(EXAM_CLASS_CODE)),
       db.doc(`curriculumPrograms/${PROGRAM_ID}`).set({
         id: PROGRAM_ID,
         active: true,
@@ -269,6 +339,80 @@ describe('student-facing Firestore rules', () => {
     await assertSucceeds(batch.commit());
   });
 
+  it('allows a complete four-field project proposal in an active project class', async () => {
+    const db = publicDb();
+
+    await assertSucceeds(
+      db.doc(`students/${PROPOSAL_STUDENT_ID}`).update(projectProposalSubmission()),
+    );
+  });
+
+  it.each([
+    'projectNameSubmission',
+    'projectTopic',
+    'projectProblemSolution',
+    'projectPlannedFeatures',
+  ])('denies a project proposal missing %s', async (field) => {
+    const db = publicDb();
+    const submission = projectProposalSubmission();
+    delete submission[field];
+
+    await assertFails(db.doc(`students/${PROPOSAL_STUDENT_ID}`).update(submission));
+  });
+
+  it.each([
+    ['projectNameSubmission', 'ab'],
+    ['projectTopic', 'ab'],
+    ['projectProblemSolution', '123456789'],
+    ['projectPlannedFeatures', '123456789'],
+  ])('denies a project proposal when %s is too short', async (field, value) => {
+    const db = publicDb();
+
+    await assertFails(
+      db
+        .doc(`students/${PROPOSAL_STUDENT_ID}`)
+        .update(projectProposalSubmission({ [field]: value })),
+    );
+  });
+
+  it.each([
+    ['projectNameSubmission', 81],
+    ['projectTopic', 121],
+    ['projectProblemSolution', 801],
+    ['projectPlannedFeatures', 801],
+  ])('denies a project proposal when %s is too long', async (field, length) => {
+    const db = publicDb();
+
+    await assertFails(
+      db
+        .doc(`students/${PROPOSAL_STUDENT_ID}`)
+        .update(projectProposalSubmission({ [field]: 'x'.repeat(length) })),
+    );
+  });
+
+  it('denies a project proposal that changes an extra student field', async () => {
+    const db = publicDb();
+
+    await assertFails(
+      db.doc(`students/${PROPOSAL_STUDENT_ID}`).update(
+        projectProposalSubmission({
+          currentStage: 'Unexpected change',
+        }),
+      ),
+    );
+  });
+
+  it.each([
+    ['an inactive student', INACTIVE_PROPOSAL_STUDENT_ID],
+    ['an inactive class', INACTIVE_CLASS_STUDENT_ID],
+    ['a hidden class', HIDDEN_CLASS_STUDENT_ID],
+    ['an exam class', EXAM_CLASS_STUDENT_ID],
+  ])('denies a project proposal from %s', async (_scenario, studentId) => {
+    const db = publicDb();
+
+    await assertFails(db.doc(`students/${studentId}`).update(projectProposalSubmission()));
+  });
+
   it('allows progress report create with the matching student snapshot update', async () => {
     const db = publicDb();
     const reportId = 'report-1';
@@ -334,7 +478,10 @@ describe('student-facing Firestore rules', () => {
     const submissionId = 'quiz-submission-1';
     const batch = db.batch();
 
-    batch.set(db.doc(`studentQuizSubmissions/${submissionId}`), pendingQuizSubmission(submissionId));
+    batch.set(
+      db.doc(`studentQuizSubmissions/${submissionId}`),
+      pendingQuizSubmission(submissionId),
+    );
     batch.set(
       db.doc(`studentQuizLatest/${latestId}`),
       {

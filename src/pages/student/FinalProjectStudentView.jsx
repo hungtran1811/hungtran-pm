@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { BookOpen, CircleHelp, ClipboardList, GitBranch } from 'lucide-react';
+import { CircleHelp, ClipboardList, GitBranch } from 'lucide-react';
 import { ProgressReportView } from './ProgressReportView.jsx';
-import { LessonsView } from './LessonsView.jsx';
 import { GUIDE_SECTIONS, ProjectSubmissionGuide } from './ProjectSubmissionGuide.jsx';
 import { ProductWaterfallPanel } from './ProductWaterfallPanel.jsx';
 import { Badge } from '../../ui/components/Badge.jsx';
@@ -11,19 +10,10 @@ import { STAGES } from '../../constants/index.js';
 const FINAL_PROJECT_TABS = [
   { id: 'process', label: 'Quy trình', icon: GitBranch },
   { id: 'report', label: 'Báo cáo', icon: ClipboardList },
-  { id: 'lessons', label: 'Bài giảng', icon: BookOpen },
   { id: 'guide', label: 'Hướng dẫn nộp', icon: CircleHelp },
 ];
 
-export function FinalProjectStudentView({
-  classDoc,
-  program,
-  student,
-  submittedLessonIds,
-  onFeedbackSubmitted,
-  onQuizFocusChange,
-  onUpdateStudent,
-}) {
+export function FinalProjectStudentView({ classDoc, student, onOpenLessons, onUpdateStudent }) {
   const [activeTab, setActiveTab] = useState('report');
   const [guideSection, setGuideSection] = useState(GUIDE_SECTIONS.overview);
   const [reportStagePrefill, setReportStagePrefill] = useState(null);
@@ -46,7 +36,7 @@ export function FinalProjectStudentView({
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div className="rounded-2xl border border-brand-200 bg-gradient-to-r from-brand-50 to-white px-4 py-3 dark:border-brand-500/30 dark:from-brand-500/10 dark:to-slate-900 sm:px-5">
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone="brand">Sản phẩm cuối khóa</Badge>
@@ -57,8 +47,9 @@ export function FinalProjectStudentView({
           )}
         </div>
         <p className="mt-2 text-sm leading-6 text-slate-700 dark:text-slate-200">
-          Bạn đang ở giai đoạn <strong>{currentStage}</strong>. Tab <strong>Báo cáo</strong> để cập nhật tiến độ;
-          mở <strong>Quy trình</strong> khi cần hướng dẫn làm sản phẩm; dùng <strong>Bài giảng</strong> để xem lại kiến thức.
+          Bạn đang ở giai đoạn <strong>{currentStage}</strong>. Tab <strong>Báo cáo</strong> để cập
+          nhật tiến độ; mở <strong>Quy trình</strong> khi cần hướng dẫn. Xem lại bài giảng từ thanh
+          trên.
         </p>
         {nameApproved && (student.projectTopic || student.projectProblemSolution) && (
           <div className="mt-3 space-y-1.5 rounded-xl bg-white/70 px-3 py-2.5 text-xs leading-5 text-slate-600 dark:bg-slate-950/40 dark:text-slate-300">
@@ -69,7 +60,8 @@ export function FinalProjectStudentView({
             )}
             {student.projectProblemSolution && (
               <p className="line-clamp-2">
-                <span className="font-semibold text-slate-500">Vấn đề:</span> {student.projectProblemSolution}
+                <span className="font-semibold text-slate-500">Vấn đề:</span>{' '}
+                {student.projectProblemSolution}
               </p>
             )}
           </div>
@@ -98,12 +90,12 @@ export function FinalProjectStudentView({
           })}
         </div>
 
-        <div className={activeTab === 'lessons' ? 'p-4 sm:p-5' : 'p-5 sm:p-6'}>
+        <div className="p-5 sm:p-6">
           {activeTab === 'process' && (
             <ProductWaterfallPanel
               student={student}
               onAdoptStage={adoptStage}
-              onOpenLessons={() => setActiveTab('lessons')}
+              onOpenLessons={onOpenLessons}
               onOpenSubmitGuide={() => openGuide(GUIDE_SECTIONS.overview)}
             />
           )}
@@ -121,18 +113,6 @@ export function FinalProjectStudentView({
           )}
           {activeTab === 'guide' && (
             <ProjectSubmissionGuide initialSection={guideSection} embedded />
-          )}
-          {activeTab === 'lessons' && (
-            <LessonsView
-              classDoc={classDoc}
-              program={program}
-              student={student}
-              submittedLessonIds={submittedLessonIds}
-              isFinalPhase
-              embedded
-              onFeedbackSubmitted={onFeedbackSubmitted}
-              onQuizFocusChange={onQuizFocusChange}
-            />
           )}
         </div>
       </article>

@@ -11,13 +11,13 @@ import {
   getActiveParticipants,
   getCurrentSpeaker,
   getDescribeRoundTotal,
-  mergeCrewTaskExtras,
+  isSpyLobbyRosterReady,
   normalizeSpySession,
   pickCrewSabotageVictim,
   pickFairSpyIds,
-  planCrewTaskRedistribution,
   shouldSkipSpyVoteRound,
   tallySpyVotes,
+  validateSpyPresentRosterChange,
   votesChangedFromBaseline,
 } from './spy.service.js';
 
@@ -239,7 +239,26 @@ describe('pickCrewSabotageVictim', () => {
     }
   });
 
-  it('returns null when only spy remains', () => {
+  it('never picks another spy', () => {
+    const active = [
+      { id: 'spy1', isSpy: true },
+      { id: 'spy2', isSpy: true },
+      { id: 'a', isSpy: false },
+    ];
+    for (let i = 0; i < 20; i += 1) {
+      const victim = pickCrewSabotageVictim(active, 'spy1');
+      expect(victim.isSpy).not.toBe(true);
+    }
+  });
+
+  it('returns null when only spies remain', () => {
+    expect(pickCrewSabotageVictim(
+      [{ id: 'spy1', isSpy: true }, { id: 'spy2', isSpy: true }],
+      'spy1',
+    )).toBeNull();
+  });
+
+  it('returns null when only sabotaging spy remains', () => {
     expect(pickCrewSabotageVictim([{ id: 'spy', isSpy: true }], 'spy')).toBeNull();
   });
 });
@@ -267,21 +286,33 @@ describe('checkCrewTaskWin', () => {
   });
 });
 
-describe('planCrewTaskRedistribution', () => {
-  it('splits unfinished tasks among remaining civilians', () => {
-    const plan = planCrewTaskRedistribution({
-      eliminatedId: 'c',
-      participants,
-      progressRows: [
-        { id: 'a', total: 5, completedCount: 1 },
-        { id: 'c', total: 5, completedCount: 2 },
-      ],
-      eliminatedIds: ['c', 'd'],
-      taskPerPlayer: 5,
-      existingExtras: {},
-    });
-    // unfinished = 3, receivers = a only (b is spy, d already out)
-    expect(plan).toEqual([{ studentId: 'a', extra: 3 }]);
-    expect(mergeCrewTaskExtras({}, plan)).toEqual({ a: 3 });
+describe('lobby roster readiness', () => {
+  it('is ready only when joined matches present exactly', () => {
+    expect(isSpyLobbyRosterReady(['a', 'b', 'c'], ['a', 'b', 'c'])).toBe(true);
+    expect(isSpyLobbyRosterReady(['a', 'b'], ['a', 'b', 'c'])).toBe(false);
+    expect(isSpyLobbyRosterReady([], ['a', 'b', 'c'])).toBe(false);
+  });
+
+  it('blocks roster edits outside lobby or when removing joined players', () => {
+    expect(validateSpyPresentRosterChange({
+      status: 'playing',
+      impostorCount: 1,
+      presentStudentIds: ['a', 'b', 'c'],
+      joinedIds: ['a'],
+    })).toMatch(/lobby/i);
+
+    expect(validateSpyPresentRosterChange({
+      status: 'lobby',
+      impostorCount: 1,
+      presentStudentIds: ['a', 'b', 'd'],
+      joinedIds: ['a', 'c'],
+    })).toMatch(/đã vào phòng/i);
+
+    expect(validateSpyPresentRosterChange({
+      status: 'lobby',
+      impostorCount: 1,
+      presentStudentIds: ['a', 'b', 'c'],
+      joinedIds: ['a', 'b'],
+    })).toBeNull();
   });
 });

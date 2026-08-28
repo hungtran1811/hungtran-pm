@@ -2,6 +2,7 @@ node_modules
 dist
 .firebase
 .vite
+.backups/
 
 # Env & secrets — không commit
 .env
@@ -21,3 +22,6 @@ __pycache__/
 # Logo nháp / bản HQ (production dùng logo.svg, logo-wordmark.svg, logo-icon.svg)
 public/logo_*_hq.svg
 public/logo_selected_reference*.svg
+
+# Local Netlify folder
+.netlify

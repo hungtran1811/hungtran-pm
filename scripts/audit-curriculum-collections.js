@@ -6,6 +6,8 @@
 import { initializeApp, applicationDefault } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
+import { summarizeLessonFormats } from './inspect-program-lessons.js';
+
 const projectId = process.env.FIREBASE_PROJECT_ID || 'hungtran-pm';
 const ALIASES = {
   'python-app-basic': 'python-basic',
@@ -30,14 +32,19 @@ async function auditProgram(docSnap) {
   const data = docSnap.data();
   const issues = [];
 
-  const embedded = Array.isArray(data.lessons) ? data.lessons.length : 0;
+  const embeddedLessons = Array.isArray(data.lessons) ? data.lessons : [];
+  const embedded = embeddedLessons.length;
   const indexLen = Array.isArray(data.lessonIndex) ? data.lessonIndex.length : 0;
   const storage = data.lessonsStorage ?? 'embedded';
 
   let subCount = 0;
+  let subcollectionLessons = [];
   for (const c of candidates(id)) {
     const snap = await db.collection('curriculumPrograms').doc(c).collection('lessons').get();
-    if (c === id) subCount = snap.size;
+    if (c === id) {
+      subCount = snap.size;
+      subcollectionLessons = snap.docs.map((lessonDoc) => lessonDoc.data());
+    }
     if (c !== id && snap.size > 0) {
       issues.push(`lessons ở path khác: curriculumPrograms/${c}/lessons (${snap.size} docs)`);
     }
@@ -51,6 +58,17 @@ async function auditProgram(docSnap) {
   }
   if (storage !== 'subcollection' && embedded === 0 && indexLen === 0 && subCount > 0) {
     issues.push(`có subcollection (${subCount}) nhưng lessonsStorage không phải subcollection`);
+  }
+
+  const embeddedFormats = summarizeLessonFormats(embeddedLessons);
+  const subcollectionFormats = summarizeLessonFormats(subcollectionLessons);
+  if (embeddedFormats.malformed > 0) {
+    issues.push(`embedded lessons có ${embeddedFormats.malformed} format record malformed`);
+  }
+  if (subcollectionFormats.malformed > 0) {
+    issues.push(
+      `subcollection lessons có ${subcollectionFormats.malformed} format record malformed`,
+    );
   }
 
   const lessonIds = new Set();
@@ -86,8 +104,14 @@ async function auditProgram(docSnap) {
     embedded,
     indexLen,
     subCount,
+    embeddedFormats,
+    subcollectionFormats,
     issues,
   };
+}
+
+function formatLessonCounts(counts) {
+  return `html=${counts.html} markdown=${counts.markdown} legacy=${counts.legacy} malformed=${counts.malformed}`;
 }
 
 async function main() {
@@ -102,6 +126,10 @@ async function main() {
     console.log(
       `   storage=${r.storage} embedded=${r.embedded} index=${r.indexLen} subcollection=${r.subCount}`,
     );
+    console.log(
+      `   formats embedded[${formatLessonCounts(r.embeddedFormats)}] ` +
+        `subcollection[${formatLessonCounts(r.subcollectionFormats)}]`,
+    );
     for (const issue of r.issues) {
       console.log(`   → ${issue}`);
       totalIssues += 1;
@@ -115,12 +143,17 @@ async function main() {
     const pid = c.data().curriculumProgramId;
     const prog = pid ? await db.collection('curriculumPrograms').doc(pid).get() : null;
     const canonical = ALIASES[pid] ?? pid;
-    const canonicalExists = canonical !== pid ? (await db.collection('curriculumPrograms').doc(canonical).get()).exists : false;
+    const canonicalExists =
+      canonical !== pid
+        ? (await db.collection('curriculumPrograms').doc(canonical).get()).exists
+        : false;
     if (pid && !prog?.exists) {
       console.log(`⚠ class ${c.id}: curriculumProgramId="${pid}" — doc MISSING`);
       totalIssues += 1;
     } else if (canonicalExists && pid && ALIASES[pid]) {
-      console.log(`ℹ class ${c.id}: dùng legacy id "${pid}" (canonical "${canonical}" cũng tồn tại)`);
+      console.log(
+        `ℹ class ${c.id}: dùng legacy id "${pid}" (canonical "${canonical}" cũng tồn tại)`,
+      );
     } else if (pid) {
       console.log(`✓ class ${c.id}: curriculumProgramId="${pid}"`);
     }

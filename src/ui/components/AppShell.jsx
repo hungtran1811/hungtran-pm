@@ -7,7 +7,6 @@ import {
   TrendingUp,
   BookOpen,
   BarChart3,
-  ClipboardList,
   Gamepad2,
   Menu,
   Settings,
@@ -27,7 +26,6 @@ const NAV_ITEMS = [
   FEATURE_PROGRESS_REPORTS_ENABLED
     ? { to: '/admin/reports', label: 'Báo cáo học sinh', icon: TrendingUp }
     : null,
-  { to: '/admin/scores', label: 'Điểm số', icon: ClipboardList },
   { to: '/admin/analytics', label: 'Thống kê', icon: BarChart3 },
   { to: '/admin/lessons', label: 'Bài giảng', icon: BookOpen },
   { to: '/admin/games', label: 'Mini game', icon: Gamepad2 },

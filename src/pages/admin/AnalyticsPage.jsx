@@ -336,7 +336,11 @@ export function AnalyticsPage() {
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <Link
-                          to={`/admin/scores?class=${encodeURIComponent(item.classCode)}`}
+                          to={
+                            FEATURE_PROGRESS_REPORTS_ENABLED
+                              ? `/admin/reports?tab=progress&class=${encodeURIComponent(item.classCode)}`
+                              : `/admin/students?class=${encodeURIComponent(item.classCode)}`
+                          }
                           className="font-semibold text-brand-600 hover:underline dark:text-brand-300"
                         >
                           {item.classCode}
@@ -352,10 +356,14 @@ export function AnalyticsPage() {
                       <p className="mt-1 text-xs text-slate-500">{item.detail}</p>
                     </div>
                     <Link
-                      to={`/admin/scores?class=${encodeURIComponent(item.classCode)}`}
+                      to={
+                        FEATURE_PROGRESS_REPORTS_ENABLED
+                          ? `/admin/reports?tab=progress&class=${encodeURIComponent(item.classCode)}`
+                          : `/admin/students?class=${encodeURIComponent(item.classCode)}`
+                      }
                       className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-slate-600 hover:text-brand-600 dark:text-slate-300"
                     >
-                      Điểm số
+                      {FEATURE_PROGRESS_REPORTS_ENABLED ? 'Báo cáo' : 'Học sinh'}
                       <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
                   </li>
@@ -377,7 +385,8 @@ export function AnalyticsPage() {
                     So sánh theo lớp
                   </h2>
                   <p className="text-xs text-slate-400">
-                    Bấm mã lớp để mở điểm số theo lớp
+                    Bấm mã lớp để mở {FEATURE_PROGRESS_REPORTS_ENABLED ? 'báo cáo' : 'danh sách học sinh'}
+                    theo lớp
                   </p>
                 </div>
               </div>
@@ -387,7 +396,7 @@ export function AnalyticsPage() {
                 showStatus={tab === 'all'}
                 showUnderstanding={FEATURE_KNOWLEDGE_FEEDBACK_ENABLED}
                 linkToReports={FEATURE_PROGRESS_REPORTS_ENABLED}
-                linkToScores={!FEATURE_PROGRESS_REPORTS_ENABLED}
+                linkToStudents={!FEATURE_PROGRESS_REPORTS_ENABLED}
               />
             </section>
           )}

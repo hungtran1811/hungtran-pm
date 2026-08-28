@@ -1,8 +1,5 @@
-/** Tạm ẩn Chiếc nón kỳ diệu — bật lại khi sẵn sàng. */
-export const FEATURE_WHEEL_OF_FORTUNE_ENABLED = false;
-
-/** Coding Showdown — gameshow Python Basic 3 vòng. Ship ẩn, bật khi ổn định. */
-export const FEATURE_CODING_SHOWDOWN_ENABLED = true;
+/** Coding Showdown — ẩn khỏi hub; giữ code để bật lại sau. */
+export const FEATURE_CODING_SHOWDOWN_ENABLED = false;
 
 /** Truy tìm gián điệp — game realtime theo lớp. */
 export const FEATURE_SPY_GAME_ENABLED = true;

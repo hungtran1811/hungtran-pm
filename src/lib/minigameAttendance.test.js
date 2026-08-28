@@ -7,7 +7,6 @@ import {
   normalizePresentIds,
   savePresentStudentIds,
 } from './minigameAttendance.js';
-import { responsesToPracticeAnswers, responsesToRawAnswers } from './quizResponses.js';
 
 describe('minigameAttendance', () => {
   it('maxSpyCount follows floor(present/3) rule', () => {
@@ -17,8 +16,8 @@ describe('minigameAttendance', () => {
     expect(maxSpyCount(9)).toBe(3);
   });
 
-  it('normalizePresentIds defaults to all when stored empty', () => {
-    expect([...normalizePresentIds(['a', 'b'], [])]).toEqual(['a', 'b']);
+  it('normalizePresentIds returns empty when stored empty', () => {
+    expect([...normalizePresentIds(['a', 'b'], [])]).toEqual([]);
   });
 
   it('filterPresentStudents keeps only checked ids', () => {
@@ -37,23 +36,8 @@ describe('minigameAttendance', () => {
     expect([...loadPresentStudentIds('test-class', ['a', 'b'])]).toEqual(['b']);
     sessionStorage.removeItem(key);
   });
-});
 
-describe('quizResponses', () => {
-  it('responsesToRawAnswers reconstructs mcq and code answers', () => {
-    const raw = responsesToRawAnswers([
-      { questionId: 'q1', questionType: 'mcq', selectedIndex: 2 },
-      { questionId: 'q2', questionType: 'code', codeAnswer: 'print(1)' },
-      { questionId: 'q3', questionType: 'code', codeAnswer: '(chưa trả lời)' },
-    ]);
-    expect(raw).toEqual({ q1: 2, q2: 'print(1)', q3: '' });
-  });
-
-  it('responsesToPracticeAnswers maps selected indices', () => {
-    const raw = responsesToPracticeAnswers([
-      { questionId: 'p1', selectedIndex: 0 },
-      { questionId: 'p2', selectedIndex: -1 },
-    ]);
-    expect(raw).toEqual({ p1: 0 });
+  it('loadPresentStudentIds returns empty when nothing stored', () => {
+    expect([...loadPresentStudentIds('empty-class', ['a', 'b'])]).toEqual([]);
   });
 });

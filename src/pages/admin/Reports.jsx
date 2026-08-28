@@ -196,7 +196,9 @@ export function ReportsPanel({
   }, [visible]);
 
   const reportsForCopy = useMemo(
-    () => visible.map((item) => item.report).filter((r) => r && !r.snapshotOnly),
+    () => visible
+      .filter((item) => item.report && !item.report.snapshotOnly)
+      .map((item) => ({ report: item.report, displayName: item.student.fullName })),
     [visible],
   );
 
@@ -232,7 +234,11 @@ export function ReportsPanel({
           const cls = classes.find((c) => c.classCode === selectedClass);
           return `BÁO CÁO TIẾN ĐỘ - ${selectedClass}${cls?.className ? ` (${cls.className})` : ''}`;
         })();
-    const text = buildClassExport(header, reportsForCopy, formatProgressReport);
+    const text = buildClassExport(
+      header,
+      reportsForCopy,
+      (item) => formatProgressReport(item.report, { displayName: item.displayName }),
+    );
     try {
       await copyToClipboard(text);
       toast.success(`Đã sao chép ${reportsForCopy.length} báo cáo.`);
@@ -417,7 +423,7 @@ function ReportGridCard({ report, student, showClass, isNewest = false, codeStat
       return;
     }
     try {
-      await copyToClipboard(formatProgressReport(report));
+      await copyToClipboard(formatProgressReport(report, { displayName: student.fullName }));
       toast.success('Đã sao chép nội dung báo cáo.');
     } catch {
       toast.error('Không sao chép được.');
@@ -443,7 +449,7 @@ function ReportGridCard({ report, student, showClass, isNewest = false, codeStat
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="truncate text-base font-semibold text-slate-800 dark:text-slate-100">
-            {report.studentName}
+            {student.fullName || report.studentName}
           </h3>
           <p className="mt-0.5 truncate text-xs text-slate-400">
             {showClass ? `${report.classCode} · ` : ''}

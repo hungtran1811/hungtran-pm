@@ -49,7 +49,7 @@ export const PRODUCT_WATERFALL = {
       'Commit / lưu phiên bản thường xuyên; ghi chú chỗ còn lỗi.',
       'Khi kẹt: xem lại bài giảng liên quan trước khi nhờ hỗ trợ.',
     ],
-    lessonsHint: 'Mở tab Bài giảng để xem lại cú pháp, vòng lặp, hàm, xử lý lỗi đã học.',
+    lessonsHint: 'Mở Bài giảng trên thanh trên để xem lại cú pháp, vòng lặp, hàm, xử lý lỗi đã học.',
     doneTodayPlaceholder:
       'Ví dụ: hoàn thành hàm thêm phần tử vào list; chương trình chạy được menu chọn 1–2...',
     nextGoalPlaceholder:
