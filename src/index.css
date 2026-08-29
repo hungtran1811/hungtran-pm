@@ -1343,6 +1343,13 @@
   background: linear-gradient(90deg, rgb(49 111 253 / 0.4), rgb(16 185 129 / 0.4));
 }
 
+.lesson-copy-protected,
+.lesson-copy-protected * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 .lesson-document-frame {
   display: block;
   inline-size: 100%;

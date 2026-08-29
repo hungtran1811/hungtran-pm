@@ -16,6 +16,7 @@ Chạy sau khi update dependency, sửa rules/indexes, hoặc refactor service/p
 
 - Vào `/c/{classCode}`, chọn học sinh.
 - **Phase học:** redirect `/learn`, mở thẳng bài resume/buổi hiện tại; không thấy lưới danh sách buổi mặc định; tab Bài giảng + Bài tập (không còn ôn tập/quiz).
+- **Chống copy:** trong vùng bài giảng/bài tập không select/copy (Ctrl+C, chuột phải); admin preview Bài giảng vẫn copy được.
 - **Phase final/project:** redirect `/project` — form đề xuất hoặc báo cáo; navbar **Dự án | Bài giảng** (desktop) và bottom nav (mobile) chuyển trang đúng.
 - **`/lessons`:** xem lại bài giảng; nút quay về **Dự án** hoạt động.
 - Phản hồi buổi học: chỉ test nếu `FEATURE_KNOWLEDGE_FEEDBACK_ENABLED = true` (hiện tắt UI).

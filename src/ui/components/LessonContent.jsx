@@ -12,11 +12,12 @@ import {
   measureLessonDocumentHeight,
   normalizeWheelDelta,
 } from '../../lib/lessonFrameScroll.js';
+import { attachLessonCopyGuard, protectLessonIframeDocument } from '../../lib/lessonCopyGuard.js';
 import { LESSON_PRESENTATION_PRESET_LEGACY, sanitizeLessonDocument } from '../../lib/lessonHtml.js';
 import { ImageLightbox, useImageLightbox } from './ImageLightbox.jsx';
 import { Markdown } from './Markdown.jsx';
 
-function HtmlDocumentContent({ content = '', className = '' }) {
+function HtmlDocumentContent({ content = '', className = '', protectCopy = false }) {
   const frameRef = useRef(null);
   const [loadVersion, setLoadVersion] = useState(0);
   const [frameHeight, setFrameHeight] = useState(null);
@@ -121,6 +122,7 @@ function HtmlDocumentContent({ content = '', className = '' }) {
     const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(scheduleSyncHeight) : null;
     observer?.observe(document.documentElement);
     if (document.body) observer?.observe(document.body);
+    const detachCopyProtect = protectCopy ? protectLessonIframeDocument(document) : null;
 
     return () => {
       if (measureRaf) cancelAnimationFrame(measureRaf);
@@ -129,17 +131,18 @@ function HtmlDocumentContent({ content = '', className = '' }) {
       if (onWheel) document.removeEventListener('wheel', onWheel);
       window.removeEventListener('resize', scheduleSyncHeight);
       observer?.disconnect();
+      detachCopyProtect?.();
       for (const image of lessonImages()) {
         image.removeEventListener('load', syncHeight);
       }
     };
-  }, [documentHtml, loadVersion, openLightbox]);
+  }, [documentHtml, loadVersion, openLightbox, protectCopy]);
 
   if (!content) return null;
 
   return (
     <>
-      <div className="lesson-content">
+      <div className={`lesson-content${protectCopy ? ' lesson-copy-protected' : ''}`}>
         <iframe
           ref={frameRef}
           className={`lesson-document-frame ${className}`}
@@ -164,12 +167,45 @@ function HtmlDocumentContent({ content = '', className = '' }) {
   );
 }
 
+function MarkdownLessonContent({ content = '', className = '', protectCopy = false }) {
+  const wrapperRef = useRef(null);
+
+  useEffect(() => {
+    if (!protectCopy || !wrapperRef.current) return undefined;
+    return attachLessonCopyGuard(wrapperRef.current);
+  }, [protectCopy, content]);
+
+  return (
+    <div
+      ref={wrapperRef}
+      className={protectCopy ? 'lesson-copy-protected' : undefined}
+    >
+      <Markdown content={content} className={className} />
+    </div>
+  );
+}
+
 /**
  * Renders safe static lessons. HTML is shown in a scriptless iframe so the
  * imported file keeps its own CSS, classes, and layout. Markdown still uses
  * the in-app reader.
  */
-export function LessonContent({ format = 'markdown', content = '', className = '' }) {
-  if (format !== 'html') return <Markdown content={content} className={className} />;
-  return <HtmlDocumentContent content={content} className={className} />;
+export function LessonContent({
+  format = 'markdown',
+  content = '',
+  className = '',
+  protectCopy = false,
+}) {
+  if (format !== 'html') {
+    return (
+      <MarkdownLessonContent
+        content={content}
+        className={className}
+        protectCopy={protectCopy}
+      />
+    );
+  }
+  return (
+    <HtmlDocumentContent content={content} className={className} protectCopy={protectCopy} />
+  );
 }
