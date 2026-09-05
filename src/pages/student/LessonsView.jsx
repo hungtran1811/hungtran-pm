@@ -919,7 +919,6 @@ function LessonDetail({
                       <LessonContent
                         format={displayLesson.contentRenderFormat ?? displayLesson.contentFormat}
                         content={displayLesson.content}
-                        protectCopy
                       />
                     ) : (
                       <p className="py-8 text-center text-sm text-slate-400">
@@ -960,7 +959,6 @@ function LessonDetail({
                       <LessonContent
                         format={displayLesson.exerciseRenderFormat ?? displayLesson.contentFormat}
                         content={displayLesson.exercise}
-                        protectCopy
                       />
                     </div>
                   ) : (
