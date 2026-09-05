@@ -21,6 +21,7 @@ import { ALL_CLASSES_VALUE, buildClassesByCode, resolveScopedClasses } from '../
 import { invalidateAdminSnapshots, loadAdminClasses, loadFeedbackPanelSnapshot } from '../../lib/adminPanelData.js';
 import { AdminSnapshotControls } from '../../ui/components/AdminSnapshotControls.jsx';
 import { resetKnowledgeFeedback } from '../../services/knowledgeReports.service.js';
+import { listCurriculumPrograms } from '../../services/curriculum.service.js';
 import {
   latestFeedbackPerStudent,
   studentsMissingFeedback,
@@ -66,6 +67,7 @@ export function FeedbackPanel({
   const [historyTarget, setHistoryTarget] = useState(null);
   const [resetTarget, setResetTarget] = useState(null);
   const [resetting, setResetting] = useState(false);
+  const [programs, setPrograms] = useState([]);
 
   const isControlled = selectedClassProp !== undefined;
   const selectedClass = isControlled ? selectedClassProp : internalClass;
@@ -111,6 +113,12 @@ export function FeedbackPanel({
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isControlled]);
+
+  useEffect(() => {
+    listCurriculumPrograms()
+      .then(setPrograms)
+      .catch(() => setPrograms([]));
+  }, []);
 
   const loadSnapshot = useCallback(
     async ({ force = false, initial = false } = {}) => {
@@ -287,6 +295,7 @@ export function FeedbackPanel({
           <div className="mb-5 space-y-3">
             <ClassFilterBar
               classes={classes}
+              programs={programs}
               value={selectedClass}
               onChange={setSelectedClass}
               showArchived={showArchived}

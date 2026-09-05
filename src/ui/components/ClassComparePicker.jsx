@@ -9,7 +9,6 @@ import {
   formatClassOptionLabel,
   resolveClassSubject,
   subjectsWithClasses,
-  SUBJECT_FILTERS,
 } from '../../lib/subjectGroups.js';
 import { Input } from './Field.jsx';
 
@@ -17,6 +16,7 @@ const MAX_SELECTION = 8;
 
 export function ClassComparePicker({
   classes,
+  programs = [],
   value = [],
   onChange,
   showArchived = false,
@@ -28,6 +28,11 @@ export function ClassComparePicker({
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
 
+  const programsById = useMemo(
+    () => Object.fromEntries(programs.map((p) => [p.id, p])),
+    [programs],
+  );
+
   const pool = useMemo(() => {
     const filtered = includeCompleted
       ? filterClassesForAnalytics(classes, showArchived)
@@ -35,11 +40,14 @@ export function ClassComparePicker({
     return sortClassesByOperationalPriority(filtered);
   }, [classes, showArchived, includeCompleted]);
 
-  const subjectOptions = useMemo(() => subjectsWithClasses(pool), [pool]);
+  const subjectOptions = useMemo(
+    () => subjectsWithClasses(pool, programsById),
+    [pool, programsById],
+  );
 
   const subjectFiltered = useMemo(
-    () => filterClassesBySubject(pool, subjectId),
-    [pool, subjectId],
+    () => filterClassesBySubject(pool, subjectId, programsById),
+    [pool, subjectId, programsById],
   );
 
   const searchedClasses = useMemo(() => {
@@ -59,11 +67,11 @@ export function ClassComparePicker({
       return [{ id: '_all', label: null, items: searchedClasses }];
     }
     const subjectLabels = Object.fromEntries(
-      SUBJECT_FILTERS.filter((g) => g.id !== 'all').map((g) => [g.id, g.label]),
+      subjectOptions.filter((g) => g.id !== 'all').map((g) => [g.id, g.label]),
     );
     const buckets = new Map();
     searchedClasses.forEach((c) => {
-      const sid = resolveClassSubject(c);
+      const sid = resolveClassSubject(c, programsById);
       if (!buckets.has(sid)) buckets.set(sid, []);
       buckets.get(sid).push(c);
     });
@@ -76,7 +84,7 @@ export function ClassComparePicker({
         label: subjectLabels[sid] || sid,
         items,
       }));
-  }, [searchedClasses, subjectId, subjectOptions.length]);
+  }, [searchedClasses, subjectId, subjectOptions, programsById]);
 
   const activeCodes = useMemo(
     () => pool.filter((c) => c.status === 'active').map((c) => c.classCode),

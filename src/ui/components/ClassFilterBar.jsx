@@ -10,7 +10,6 @@ import {
   formatClassOptionLabel,
   resolveClassSubject,
   subjectsWithClasses,
-  SUBJECT_FILTERS,
 } from '../../lib/subjectGroups.js';
 import { Input } from './Field.jsx';
 
@@ -92,7 +91,7 @@ export function ClassFilterBar({
       return [{ id: '_all', label: null, items: searchedClasses }];
     }
     const subjectLabels = Object.fromEntries(
-      SUBJECT_FILTERS.filter((g) => g.id !== 'all').map((g) => [g.id, g.label]),
+      subjectOptions.filter((g) => g.id !== 'all').map((g) => [g.id, g.label]),
     );
     const buckets = new Map();
     searchedClasses.forEach((c) => {
@@ -109,7 +108,7 @@ export function ClassFilterBar({
         label: subjectLabels[sid] || sid,
         items,
       }));
-  }, [searchedClasses, subjectId, showSubjectFilter, subjectOptions.length, programsById]);
+  }, [searchedClasses, subjectId, showSubjectFilter, subjectOptions, programsById]);
 
   const resultCount = listGroups.reduce((sum, g) => sum + g.items.length, 0);
 

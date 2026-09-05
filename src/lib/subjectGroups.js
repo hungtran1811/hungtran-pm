@@ -159,7 +159,12 @@ export function canonicalProgramLevelValue(program) {
 
 export function resolveClassSubject(classDoc, programsById = {}) {
   const program = programsById[classDoc?.curriculumProgramId];
-  return resolveProgramSubject(classDoc?.curriculumProgramId, program);
+  return resolveProgramSubjectMeta(classDoc?.curriculumProgramId, program).id;
+}
+
+export function resolveClassSubjectMeta(classDoc, programsById = {}) {
+  const program = programsById[classDoc?.curriculumProgramId];
+  return resolveProgramSubjectMeta(classDoc?.curriculumProgramId, program);
 }
 
 export function filterClassesBySubject(classes, subjectId, programsById = {}) {
@@ -168,8 +173,22 @@ export function filterClassesBySubject(classes, subjectId, programsById = {}) {
 }
 
 export function subjectsWithClasses(classes, programsById = {}) {
-  const ids = new Set(classes.map((c) => resolveClassSubject(c, programsById)));
-  return SUBJECT_FILTERS.filter((g) => g.id === 'all' || ids.has(g.id));
+  const present = new Map();
+  classes.forEach((classDoc) => {
+    const meta = resolveClassSubjectMeta(classDoc, programsById);
+    present.set(meta.id, meta.label);
+  });
+  const known = SUBJECT_FILTERS.filter(
+    (g) => g.id === 'all' || (g.match && present.has(g.id)),
+  );
+  const extras = [...present.entries()]
+    .filter(([id]) => !SUBJECT_FILTERS.some((g) => g.id === id))
+    .sort((a, b) => a[1].localeCompare(b[1], 'vi'))
+    .map(([id, label]) => ({ id, label }));
+  const other = present.has(OTHER_SUBJECT_ID)
+    ? [{ id: OTHER_SUBJECT_ID, label: 'Khác' }]
+    : [];
+  return [...known, ...extras, ...other];
 }
 
 export function subjectsWithPrograms(programs = []) {

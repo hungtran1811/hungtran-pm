@@ -13,6 +13,7 @@ import { useToast } from '../../ui/components/Toast.jsx';
 import { StudentHistoryModal } from '../../ui/components/StudentHistoryModal.jsx';
 import { STAGES, STATUSES, STATUS_TONES } from '../../constants/index.js';
 import { subscribeClasses } from '../../services/classes.service.js';
+import { listCurriculumPrograms } from '../../services/curriculum.service.js';
 import {
   createStudent,
   deleteStudent,
@@ -60,6 +61,7 @@ export function StudentsPage() {
   const [deleting, setDeleting] = useState(false);
   const [historyTarget, setHistoryTarget] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [programs, setPrograms] = useState([]);
 
   const scopedClasses = useMemo(
     () => resolveScopedClasses(classes, selectedClass, showArchived),
@@ -91,6 +93,12 @@ export function StudentsPage() {
     );
     return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    listCurriculumPrograms()
+      .then(setPrograms)
+      .catch(() => setPrograms([]));
   }, []);
 
   useEffect(() => {
@@ -186,10 +194,10 @@ export function StudentsPage() {
             </div>
           )}
 
-          <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-start">
+          <div className="mb-5 space-y-3">
             <ClassFilterBar
-              className="lg:flex-1"
               classes={classes}
+              programs={programs}
               value={selectedClass}
               onChange={setSelectedClass}
               showArchived={showArchived}
@@ -199,20 +207,18 @@ export function StudentsPage() {
               allLabel={`Tất cả lớp${showArchived ? ' lưu trữ' : ' đang hoạt động'}`}
               showStudentCount
             />
-            <div className="flex-1 lg:max-w-sm">
-              <Input
-                placeholder={
-                  !selectedClass
-                    ? 'Chọn lớp để tìm học sinh...'
-                    : isAllClasses
-                      ? 'Tìm trong tất cả học sinh lớp...'
-                      : 'Tìm học sinh trong lớp...'
-                }
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                disabled={!selectedClass}
-              />
-            </div>
+            <Input
+              placeholder={
+                !selectedClass
+                  ? 'Chọn lớp để tìm học sinh...'
+                  : isAllClasses
+                    ? 'Tìm trong tất cả học sinh lớp...'
+                    : 'Tìm học sinh trong lớp...'
+              }
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              disabled={!selectedClass}
+            />
           </div>
 
           {!selectedClass ? (

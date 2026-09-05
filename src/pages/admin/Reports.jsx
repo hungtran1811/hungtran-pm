@@ -21,6 +21,7 @@ import { ALL_CLASSES_VALUE, resolveScopedClasses } from '../../lib/classFilterSc
 import { invalidateAdminSnapshots, loadAdminClasses, loadReportsPanelSnapshot } from '../../lib/adminPanelData.js';
 import { AdminSnapshotControls } from '../../ui/components/AdminSnapshotControls.jsx';
 import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
+import { listCurriculumPrograms } from '../../services/curriculum.service.js';
 import { reportFromStudentSnapshot } from '../../services/reports.service.js';
 import {
   buildClassExport,
@@ -53,6 +54,7 @@ export function ReportsPanel({
   const [search, setSearch] = useState('');
   const [historyTarget, setHistoryTarget] = useState(null);
   const [codeByStudent, setCodeByStudent] = useState(() => new Map());
+  const [programs, setPrograms] = useState([]);
 
   const isControlled = selectedClassProp !== undefined;
   const selectedClass = isControlled ? selectedClassProp : internalClass;
@@ -103,6 +105,12 @@ export function ReportsPanel({
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isControlled]);
+
+  useEffect(() => {
+    listCurriculumPrograms()
+      .then(setPrograms)
+      .catch(() => setPrograms([]));
+  }, []);
 
   const loadSnapshot = useCallback(
     async ({ force = false, initial = false } = {}) => {
@@ -258,6 +266,7 @@ export function ReportsPanel({
           <div className="mb-5 space-y-3">
             <ClassFilterBar
               classes={classes}
+              programs={programs}
               value={selectedClass}
               onChange={setSelectedClass}
               showArchived={showArchived}

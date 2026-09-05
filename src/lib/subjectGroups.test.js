@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  filterClassesBySubject,
   firstProgramForSubject,
   groupProgramsBySubjectAndLevel,
+  resolveClassSubject,
   resolveProgramLevel,
   resolveProgramSubject,
   resolveProgramSubjectMeta,
+  subjectsWithClasses,
   subjectsWithPrograms,
 } from './subjectGroups.js';
 
@@ -14,6 +17,15 @@ const programs = [
   { id: 'web-intro', name: 'Web Intro', subject: 'web', level: 'Cơ bản' },
   { id: 'robot-1', name: 'Robotics 101', subject: 'Robotics', level: 'intensive' },
   { id: 'mystery', name: 'Mystery Course', subject: '', level: '' },
+];
+
+const programsById = Object.fromEntries(programs.map((p) => [p.id, p]));
+
+const classes = [
+  { classCode: 'PY1', curriculumProgramId: 'python-basic' },
+  { classCode: 'WEB1', curriculumProgramId: 'web-intro' },
+  { classCode: 'ROB1', curriculumProgramId: 'robot-1' },
+  { classCode: 'MY1', curriculumProgramId: 'mystery' },
 ];
 
 describe('subject grouping', () => {
@@ -47,6 +59,18 @@ describe('subject grouping', () => {
     const chips = subjectsWithPrograms(programs);
     expect(chips.map((c) => c.id)).toEqual(['all', 'python', 'web', 'robotics', 'other']);
     expect(chips.some((c) => c.id === 'scratch')).toBe(false);
+  });
+
+  it('lists class subject chips from attached programs including custom subjects', () => {
+    const chips = subjectsWithClasses(classes, programsById);
+    expect(chips.map((c) => c.id)).toEqual(['all', 'python', 'web', 'robotics', 'other']);
+    expect(resolveClassSubject(classes[2], programsById)).toBe('robotics');
+    expect(filterClassesBySubject(classes, 'python', programsById).map((c) => c.classCode)).toEqual([
+      'PY1',
+    ]);
+    expect(filterClassesBySubject(classes, 'robotics', programsById).map((c) => c.classCode)).toEqual([
+      'ROB1',
+    ]);
   });
 
   it('picks the first basic program for a subject chip', () => {
