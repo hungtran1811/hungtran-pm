@@ -1,13 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
+const THEME_STORAGE_KEY = 'hungtranpm-theme';
+
 const ThemeContext = createContext({ theme: 'light', toggleTheme: () => {}, setTheme: () => {} });
 
 function getInitialTheme() {
   if (typeof window === 'undefined') return 'light';
   try {
-    const stored = localStorage.getItem('theme');
-    if (stored === 'dark' || stored === 'light') return stored;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light';
   } catch {
     return 'light';
   }
@@ -24,7 +24,7 @@ export function ThemeProvider({ children }) {
       root.classList.remove('dark');
     }
     try {
-      localStorage.setItem('theme', theme);
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
     } catch {
       // ignore persistence errors (private mode, etc.)
     }

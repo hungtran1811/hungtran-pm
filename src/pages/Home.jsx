@@ -39,7 +39,8 @@ export function HomePage() {
       <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-5 py-12">
         <div className="mb-8 flex flex-col items-center text-center">
           <BrandLogo size="lg" />
-          <h1 className="mt-6 text-2xl font-bold text-slate-800 dark:text-slate-50">Cổng học sinh</h1>
+          <h1 className="mt-6 text-2xl font-bold text-slate-800 dark:text-slate-50">{OAUTH_APP_NAME}</h1>
+          <p className="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">Cổng học sinh</p>
         </div>
 
         <form onSubmit={handleSubmit} className="card space-y-4 p-6">
