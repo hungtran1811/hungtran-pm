@@ -37,6 +37,7 @@ import { getErrorMessage } from '../../lib/firestore.js';
 import { filterClassesBySubject, subjectsWithClasses } from '../../lib/subjectGroups.js';
 import { CodeSubmissionsPurgePanel } from '../../ui/components/CodeSubmissionsPurgePanel.jsx';
 import { FEATURE_KNOWLEDGE_FEEDBACK_ENABLED, FEATURE_CODE_UPLOAD_ENABLED } from '../../config/features.js';
+import { getPublicBaseUrl } from '../../config/publicUrl.js';
 
 const STATUS_TONES = { active: 'green', completed: 'blue', archived: 'slate' };
 
@@ -344,7 +345,7 @@ function ClassCard({
   const toast = useToast();
   const { understandingTone } = useSettings();
   const program = programs.find((p) => p.id === cls.curriculumProgramId);
-  const studentLink = `${window.location.origin}/c/${encodeURIComponent(cls.classCode)}`;
+  const studentLink = `${getPublicBaseUrl()}/c/${encodeURIComponent(cls.classCode)}`;
 
   const copyLink = async () => {
     try {

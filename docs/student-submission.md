@@ -89,7 +89,7 @@ Cách đi từ menu:
 3. Wizard từng trang — bấm **Next** sau mỗi trang:
 
    **App Information**
-   - App name: `HungTranPM Submissions`  
+   - App name: `HungTranPM`  
      (không đặt tên kiểu “Google Drive …”).
    - User support email: chọn **email đang đăng nhập** trong dropdown.
    - **Next**.
@@ -170,7 +170,7 @@ Refresh token = chìa khóa lâu dài; access token Playground hết hạn ~1 gi
 6. Tick **chỉ** `https://www.googleapis.com/auth/drive`.
 7. Bấm **Authorize APIs**.
 8. Chọn **đúng tài khoản GV** (trùng test user ở bước A).
-9. Google cảnh báo “Google hasn’t verified this app” → **Continue** / **Advanced** → **Go to HungTranPM Submissions (unsafe)**.
+9. Google cảnh báo “Google hasn’t verified this app” → **Continue** / **Advanced** → **Go to HungTranPM (unsafe)**.
 10. Cho phép quyền Drive → **Continue**.
 11. Quay lại Playground, cột giữa: **Exchange authorization code for tokens**.
 12. Ô **Refresh token** hiện ra **một lần**. Copy ngay → `GOOGLE_REFRESH_TOKEN`.

@@ -15,6 +15,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '../config/firebase.js';
+import { getPublicBaseUrl } from '../config/publicUrl.js';
 import {
   SPY_ACTIVE_STATUSES,
   SPY_BLANK_VOTE_ID,
@@ -1397,9 +1398,7 @@ export function subscribeActiveSpyForClass(classCode, onData, onError) {
 }
 
 function publicBaseUrl() {
-  const configured = import.meta.env?.VITE_PUBLIC_BASE_URL;
-  if (configured) return String(configured).replace(/\/$/, '');
-  return typeof window !== 'undefined' ? window.location.origin : '';
+  return getPublicBaseUrl();
 }
 
 export function getSpyPortalLink(classCode, sessionId) {

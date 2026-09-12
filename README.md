@@ -89,13 +89,15 @@ Quên mật khẩu: nhập email ở trang login → «Quên mật khẩu?».
 
 ### 1. Netlify
 
+- Domain production: `https://hungtranpm.com` (subdomain cũ `hungtranpm.netlify.app` redirect 301).
 - Build: `npm run build`, publish: `dist` (`netlify.toml` có SPA redirect).
 - **Environment variables:** toàn bộ `VITE_*` trong `.env.example` (Firebase + Cloudinary).
+- Production: `VITE_PUBLIC_BASE_URL=https://hungtranpm.com` (hoặc để trống — app tự dùng domain này khi build production).
 - Không commit `.env`.
 
 ### 2. Firebase Auth
 
-- **Authorized domains:** thêm domain Netlify (và domain tùy chỉnh).
+- **Authorized domains:** thêm `hungtranpm.com` (và `www.hungtranpm.com` nếu dùng).
 
 ### 3. Firestore
 

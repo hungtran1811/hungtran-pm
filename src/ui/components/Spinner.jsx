@@ -1,3 +1,5 @@
+import { BrandMarkIllustration } from './WaitingCatIllustration.jsx';
+
 export function Spinner({ className = 'h-6 w-6' }) {
   return (
     <span
@@ -8,9 +10,14 @@ export function Spinner({ className = 'h-6 w-6' }) {
 
 export function FullPageLoader({ label = 'Đang tải...' }) {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-3 text-slate-500">
-      <Spinner className="h-8 w-8" />
-      <p className="text-sm">{label}</p>
+    <div
+      className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-brand-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900"
+      role="status"
+      aria-live="polite"
+      aria-label={label}
+    >
+      <BrandMarkIllustration variant="loading" className="brand-mark--prompt" />
+      <p className="mt-3 text-sm font-medium text-slate-500 dark:text-slate-400">{label}</p>
     </div>
   );
 }

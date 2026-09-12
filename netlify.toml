@@ -11,6 +11,18 @@
   external_node_modules = ["firebase-admin"]
 
 [[redirects]]
+  from = "https://hungtranpm.netlify.app/*"
+  to = "https://hungtranpm.com/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "https://www.hungtranpm.com/*"
+  to = "https://hungtranpm.com/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
   from = "/privacy"
   to = "/privacy.html"
   status = 200

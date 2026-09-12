@@ -1,16 +1,16 @@
-export const OAUTH_APP_NAME = 'HungTranPM Submissions';
+export const OAUTH_APP_NAME = 'HungTranPM';
 export const SUPPORT_EMAIL = 'hungtran00.nt@gmail.com';
 export const PRIVACY_UPDATED_ISO = '2026-09-12';
 export const PRIVACY_UPDATED_LABEL = '12 September 2026 / 12/09/2026';
 
 export const HOME_PURPOSE_EN = [
-  'HungTranPM Submissions is a classroom web app for one teacher who runs programming classes.',
+  'HungTranPM is a classroom web app for one teacher who runs programming classes.',
   'Students join with a class code. They do not create a Google account login and they do not grant Google Drive access. They can view lessons, send progress reports, and upload homework files.',
   'The teacher signs in to the admin area to manage classes, review reports, and open submitted files. Homework files are stored in the teacher’s own Google Drive after the teacher authorizes Drive access for this app.',
 ];
 
 export const HOME_PURPOSE_VI = [
-  'HungTranPM Submissions là webapp quản lý lớp học lập trình cho một giáo viên.',
+  'HungTranPM là webapp quản lý lớp học lập trình cho một giáo viên.',
   'Học sinh vào lớp bằng mã lớp — không đăng nhập Google, không cấp quyền Drive. Trong lớp có thể xem bài giảng, gửi báo cáo tiến độ và nộp file bài.',
   'Giáo viên đăng nhập khu quản trị để quản lý lớp, xem báo cáo và mở file. File bài nộp được lưu trên Google Drive của giáo viên sau khi giáo viên ủy quyền Drive cho ứng dụng này.',
 ];
@@ -19,7 +19,7 @@ export const PRIVACY_SECTIONS_EN = [
   {
     title: 'Who we are',
     paragraphs: [
-      'HungTranPM Submissions (also shown as hungtranPM) is a private classroom tool operated by the teacher who created this site. It is not a consumer social app and is not offered to the general public as a product marketplace.',
+      'HungTranPM (also shown as hungtranPM) is a private classroom tool operated by the teacher who created this site. It is not a consumer social app and is not offered to the general public as a product marketplace.',
       `Contact: ${SUPPORT_EMAIL}`,
     ],
   },
@@ -44,7 +44,7 @@ export const PRIVACY_SECTIONS_EN = [
     paragraphs: [
       'Drive access is used only to store and organize student homework in the teacher’s Drive (typically under a root folder such as “HungTranPM - Submissions”), verify that an upload finished, and allow the teacher to open those files from the admin reports screen.',
       'OAuth tokens stay on the server (Netlify Functions). They are not sent to student browsers.',
-      'HungTranPM Submissions’s use and transfer to any other app of information received from Google APIs will adhere to the Google API Services User Data Policy, including the Limited Use requirements.',
+      'HungTranPM’s use and transfer to any other app of information received from Google APIs will adhere to the Google API Services User Data Policy, including the Limited Use requirements.',
     ],
   },
   {
@@ -90,7 +90,7 @@ export const PRIVACY_SECTIONS_VI = [
   {
     title: 'Chúng tôi là ai',
     paragraphs: [
-      'HungTranPM Submissions (còn gọi hungtranPM) là công cụ lớp học do giáo viên vận hành, không phải mạng xã hội hay chợ ứng dụng đại chúng.',
+      'HungTranPM (còn gọi hungtranPM) là công cụ lớp học do giáo viên vận hành, không phải mạng xã hội hay chợ ứng dụng đại chúng.',
       `Liên hệ: ${SUPPORT_EMAIL}`,
     ],
   },
@@ -115,7 +115,7 @@ export const PRIVACY_SECTIONS_VI = [
     paragraphs: [
       'Quyền Drive chỉ để lưu và sắp xếp bài nộp trên Drive của giáo viên, xác nhận upload xong, và cho giáo viên mở file từ trang báo cáo quản trị.',
       'Token OAuth chỉ chạy trên máy chủ (Netlify Functions), không đưa lên trình duyệt học sinh.',
-      'Việc dùng và chuyển thông tin nhận từ Google API của HungTranPM Submissions tuân thủ Google API Services User Data Policy, gồm yêu cầu Limited Use.',
+      'Việc dùng và chuyển thông tin nhận từ Google API của HungTranPM tuân thủ Google API Services User Data Policy, gồm yêu cầu Limited Use.',
     ],
   },
   {

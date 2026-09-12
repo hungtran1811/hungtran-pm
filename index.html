@@ -11,10 +11,11 @@
       rel="stylesheet"
     />
     <meta name="google-site-verification" content="google8815cffc54d28b08" />
-    <title>HungTranPM Submissions</title>
+    <title>HungTranPM</title>
+    <link rel="canonical" href="https://hungtranpm.com/" />
     <meta
       name="description"
-      content="HungTranPM Submissions is a classroom app for programming classes. Students join with a class code to view lessons, send progress reports, and upload homework. The teacher reviews work in admin and stores homework files in the teacher's Google Drive."
+      content="HungTranPM is a classroom app for programming classes. Students join with a class code to view lessons, send progress reports, and upload homework. The teacher reviews work in admin and stores homework files in the teacher's Google Drive."
     />
     <script>
       (function () {
@@ -27,12 +28,97 @@
         } catch (e) {}
       })();
     </script>
+    <style>
+      .app-boot {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.85rem;
+        margin: 0;
+        background: linear-gradient(135deg, #eff6ff 0%, #ffffff 45%, #f1f5f9 100%);
+        font-family: 'Exo 2', ui-sans-serif, system-ui, sans-serif;
+      }
+      html.dark .app-boot {
+        background: linear-gradient(135deg, #020617 0%, #0f172a 55%, #020617 100%);
+      }
+      .app-boot-mark {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: 8.5rem;
+        height: 8.5rem;
+      }
+      .app-boot-ring {
+        position: absolute;
+        inset: 0;
+        border-radius: 9999px;
+        border: 3px solid transparent;
+        border-top-color: #1596ff;
+        border-right-color: #5142ff;
+        animation: app-boot-spin 1.1s linear infinite;
+      }
+      .app-boot-mark img {
+        width: 4.75rem;
+        height: auto;
+        animation: app-boot-float 1.8s ease-in-out infinite;
+      }
+      .app-boot-name {
+        margin: 0;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #1e293b;
+      }
+      html.dark .app-boot-name {
+        color: #f8fafc;
+      }
+      .app-boot-label {
+        margin: 0;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #64748b;
+      }
+      html.dark .app-boot-label {
+        color: #94a3b8;
+      }
+      @keyframes app-boot-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @keyframes app-boot-float {
+        0%,
+        100% {
+          transform: translateY(0);
+        }
+        50% {
+          transform: translateY(-5px);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .app-boot-ring,
+        .app-boot-mark img {
+          animation: none;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="root">
+      <div class="app-boot" role="status" aria-live="polite" aria-label="Đang tải HungTranPM">
+        <div class="app-boot-mark">
+          <span class="app-boot-ring"></span>
+          <img src="/logo-icon.svg" alt="" width="80" height="85" />
+        </div>
+        <p class="app-boot-name">HungTranPM</p>
+        <p class="app-boot-label">Đang tải...</p>
+      </div>
+    </div>
+    <noscript>
       <main>
-        <h1>HungTranPM Submissions</h1>
-        <p>HungTranPM Submissions is a classroom web app for one teacher who runs programming classes.</p>
+        <h1>HungTranPM</h1>
+        <p>HungTranPM is a classroom web app for one teacher who runs programming classes.</p>
         <p>
           Students join with a class code. They do not create a Google account login and they do not
           grant Google Drive access. They can view lessons, send progress reports, and upload homework
@@ -43,12 +129,12 @@
           files. Homework files are stored in the teacher’s own Google Drive after the teacher
           authorizes Drive access for this app.
         </p>
-        <p>HungTranPM Submissions là webapp quản lý lớp học lập trình cho một giáo viên.</p>
+        <p>HungTranPM là webapp quản lý lớp học lập trình cho một giáo viên.</p>
         <p>
           <a href="/privacy">Privacy Policy / Chính sách quyền riêng tư</a>
         </p>
       </main>
-    </div>
+    </noscript>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
