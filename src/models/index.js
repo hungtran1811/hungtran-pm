@@ -24,6 +24,7 @@ export function toClassModel(snapshot) {
       : [],
     finalMode: data.finalMode === 'exam' ? 'exam' : 'project',
     studentCount: Number(data.studentCount ?? 0),
+    driveFolderId: data.driveFolderId ?? '',
     activeShowdownSessionId: data.activeShowdownSessionId ?? null,
     activeSpySessionId: data.activeSpySessionId ?? null,
     completedAt: toDate(data.completedAt),
@@ -87,7 +88,30 @@ export function toReportModel(snapshot) {
     projectCanvaUrl: data.projectCanvaUrl ?? '',
     submittedAt: toDate(data.submittedAt),
     submittedDateKey: data.submittedDateKey ?? '',
+    lessonKey: data.lessonKey ?? '',
     source: data.source ?? 'student-form',
+    createdAt: toDate(data.createdAt),
+  };
+}
+
+export function toDriveSubmissionModel(snapshot) {
+  const data = snapshot.data() || {};
+  return {
+    id: snapshot.id,
+    classCode: data.classCode ?? '',
+    studentId: data.studentId ?? '',
+    studentName: data.studentName ?? '',
+    lessonKey: data.lessonKey ?? '',
+    originalFileName: data.originalFileName ?? '',
+    storedFileName: data.storedFileName ?? '',
+    fileSize: Number(data.fileSize ?? 0),
+    mimeType: data.mimeType ?? '',
+    driveFileId: data.driveFileId ?? '',
+    driveFolderId: data.driveFolderId ?? '',
+    attempt: Number(data.attempt ?? 0),
+    isLatest: data.isLatest === true,
+    status: data.status ?? '',
+    submittedAt: toDate(data.submittedAt),
     createdAt: toDate(data.createdAt),
   };
 }

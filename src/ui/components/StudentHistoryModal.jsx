@@ -188,6 +188,7 @@ function TimelineReport({ report, isLatest }) {
         <Badge tone="brand">Báo cáo tiến độ</Badge>
         {isLatest && <Badge tone="green">Mới nhất</Badge>}
         <Badge tone={STATUS_TONES[report.status] || 'slate'}>{report.status || '—'}</Badge>
+        {report.lessonKey ? <Badge tone="slate">{report.lessonKey}</Badge> : null}
         <span className="text-xs text-slate-400">{formatDateTime(report.submittedAt)}</span>
       </div>
       <p className="text-sm text-slate-700 dark:text-slate-200">

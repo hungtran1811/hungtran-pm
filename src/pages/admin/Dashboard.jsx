@@ -13,6 +13,7 @@ import {
   RefreshCw,
   BookOpen,
   UserRound,
+  Upload,
 } from 'lucide-react';
 import { AppShell } from '../../ui/components/AppShell.jsx';
 import { StatCard } from '../../ui/components/StatCard.jsx';
@@ -27,7 +28,10 @@ import { invalidateAdminDataCache } from '../../lib/adminDataCache.js';
 import { loadDashboardOpsSnapshot } from '../../lib/adminPanelData.js';
 import { computeDashboardStats } from '../../lib/dashboardStats.js';
 import { getErrorMessage } from '../../lib/firestore.js';
-import { FEATURE_PROGRESS_REPORTS_ENABLED } from '../../config/features.js';
+import {
+  FEATURE_DRIVE_SUBMISSION_ENABLED,
+  FEATURE_PROGRESS_REPORTS_ENABLED,
+} from '../../config/features.js';
 
 function formatLoadedAt(date) {
   if (!date) return '';
@@ -130,7 +134,6 @@ function SessionQuickSet({ classes, onUpdated }) {
           </span>
           <div>
             <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Buổi & giai đoạn lớp</h2>
-            <p className="text-sm text-slate-500">Chỉnh nhanh buổi hiện tại và giai đoạn học / cuối khóa.</p>
           </div>
         </div>
         {selected && (
@@ -142,7 +145,7 @@ function SessionQuickSet({ classes, onUpdated }) {
           </div>
         )}
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_auto_auto_auto] lg:items-end">
+      <div className="grid gap-3 lg:grid-cols-[minmax(12rem,1.4fr)_auto_auto] lg:items-end">
         <Field label="Lớp">
           <Select value={classCode} onChange={(e) => handleClassChange(e.target.value)}>
             {activeClasses.map((c) => (
@@ -150,13 +153,6 @@ function SessionQuickSet({ classes, onUpdated }) {
                 {c.classCode}
                 {c.className ? ` · ${c.className}` : ''}
               </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Giai đoạn">
-          <Select value={phase} onChange={(e) => setPhase(e.target.value)}>
-            {CURRICULUM_PHASES.map((p) => (
-              <option key={p.value} value={p.value}>{p.label}</option>
             ))}
           </Select>
         </Field>
@@ -173,6 +169,29 @@ function SessionQuickSet({ classes, onUpdated }) {
         <Button onClick={handleSave} loading={saving} className="lg:mb-0.5">
           Lưu
         </Button>
+      </div>
+      <div className="mt-4">
+        <p className="mb-1.5 text-xs font-medium text-slate-500">Giai đoạn lớp</p>
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Giai đoạn lớp">
+          {CURRICULUM_PHASES.map((item) => {
+            const active = phase === item.value;
+            return (
+              <button
+                key={item.value}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setPhase(item.value)}
+                className={`inline-flex min-h-11 items-center rounded-xl px-4 text-sm font-medium transition ${
+                  active
+                    ? 'bg-brand-600 text-white shadow-sm'
+                    : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700 dark:hover:bg-slate-800'
+                }`}
+              >
+                {item.value === 'final' ? 'Làm sản phẩm' : item.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </section>
   );
@@ -229,10 +248,13 @@ export function DashboardPage() {
       ) : (
         <div className="space-y-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Số liệu theo lớp đang vận hành
-              {loadedAt ? ` · Cập nhật ${formatLoadedAt(loadedAt)}` : ''}
-            </p>
+            {loadedAt ? (
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Cập nhật {formatLoadedAt(loadedAt)}
+              </p>
+            ) : (
+              <span />
+            )}
             <Button variant="secondary" size="sm" onClick={handleRefresh} loading={refreshing}>
               <RefreshCw className="h-4 w-4" />
               Làm mới
@@ -299,8 +321,20 @@ export function DashboardPage() {
                 <QuickAction
                   to="/admin/reports"
                   icon={<ClipboardList className="h-6 w-6" />}
-                  title="Báo cáo học sinh"
-                  description="Tiến độ cuối khóa, HS chưa nộp báo cáo."
+                  title={FEATURE_DRIVE_SUBMISSION_ENABLED ? 'Báo cáo & nộp bài' : 'Báo cáo học sinh'}
+                  description={
+                    FEATURE_DRIVE_SUBMISSION_ENABLED
+                      ? 'Tiến độ cuối khóa và file Drive trên cùng một trang.'
+                      : 'Tiến độ cuối khóa, HS chưa nộp báo cáo.'
+                  }
+                />
+              )}
+              {FEATURE_DRIVE_SUBMISSION_ENABLED && !FEATURE_PROGRESS_REPORTS_ENABLED && (
+                <QuickAction
+                  to="/admin/submissions"
+                  icon={<Upload className="h-6 w-6" />}
+                  title="Bài nộp Drive"
+                  description="Xem file học sinh đã nộp và mở trên Drive."
                 />
               )}
               <QuickAction

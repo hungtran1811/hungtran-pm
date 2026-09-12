@@ -49,7 +49,7 @@ export function ImageLightbox({ open, images = [], index = 0, onClose, onIndexCh
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
+      className="fixed inset-0 z-[100] flex cursor-pointer items-center justify-center bg-black/90 p-4"
       role="dialog"
       aria-modal="true"
       aria-label="Xem ảnh"

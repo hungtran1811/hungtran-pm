@@ -1,12 +1,14 @@
 import { NavLink } from 'react-router-dom';
-import { BookOpen, ClipboardList, LayoutDashboard, MessageSquare } from 'lucide-react';
+import { BookOpen, ClipboardList, LayoutDashboard, MessageSquare, Upload } from 'lucide-react';
 
 const ICONS = {
   overview: LayoutDashboard,
   lessons: BookOpen,
+  learn: BookOpen,
   feedback: MessageSquare,
   report: ClipboardList,
   project: ClipboardList,
+  submit: Upload,
 };
 
 export function StudentBottomNav({ items, activeId, onSelect }) {
@@ -21,7 +23,7 @@ export function StudentBottomNav({ items, activeId, onSelect }) {
         {items.map((item) => {
           const Icon = ICONS[item.id] || BookOpen;
           const className = (active) =>
-            `flex min-h-[3.25rem] flex-1 flex-col items-center justify-center gap-0.5 px-1 py-2 text-[10px] font-medium transition ${
+            `flex min-h-[3.25rem] flex-1 cursor-pointer flex-col items-center justify-center gap-0.5 px-1 py-2 text-[10px] font-medium transition ${
               active
                 ? 'text-brand-600 dark:text-brand-300'
                 : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'

@@ -31,7 +31,7 @@ export function Button({
     <button
       type={type}
       disabled={disabled || loading}
-      className={`inline-flex items-center justify-center rounded-xl font-medium transition focus:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-60 ${
+      className={`inline-flex cursor-pointer items-center justify-center rounded-xl font-medium transition focus:outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-60 motion-safe:enabled:hover:-translate-y-px ${
         VARIANTS[variant] || VARIANTS.primary
       } ${SIZES[size] || SIZES.md} ${className}`}
       {...props}

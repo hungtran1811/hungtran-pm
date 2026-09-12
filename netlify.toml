@@ -5,6 +5,23 @@
 [build.environment]
   NODE_VERSION = "22.23.0"
 
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+  external_node_modules = ["firebase-admin"]
+
+[[redirects]]
+  from = "/privacy"
+  to = "/privacy.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/privacy/"
+  to = "/privacy.html"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/*"
   to = "/index.html"

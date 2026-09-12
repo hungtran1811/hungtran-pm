@@ -597,12 +597,6 @@ function ClassFormModal({ initial, programs, onClose, onSaved }) {
           </Field>
         </div>
 
-        <p className="text-sm text-slate-500">
-          {form.finalMode === 'exam'
-            ? 'Lớp kiểm tra cuối khóa — học sinh không cần đặt tên dự án.'
-            : 'Lớp báo cáo sản phẩm — học sinh tự đặt tên dự án, giáo viên duyệt trong mục Học sinh.'}
-        </p>
-
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Buổi hiện tại">
             <Input

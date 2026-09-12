@@ -11,10 +11,16 @@ import {
   StudentLearnRoute,
   StudentProjectRoute,
   StudentLessonsReviewRoute,
+  StudentSubmitRoute,
 } from './pages/student/StudentPortal.jsx';
+import { StudentSubmitHubPage } from './pages/student/StudentSubmitHubPage.jsx';
 import { NotFoundPage } from './pages/NotFound.jsx';
+import { PrivacyPage } from './pages/Privacy.jsx';
 import { ErrorBoundary } from './ui/components/ErrorBoundary.jsx';
-import { FEATURE_PROGRESS_REPORTS_ENABLED } from './config/features.js';
+import {
+  FEATURE_DRIVE_SUBMISSION_ENABLED,
+  FEATURE_PROGRESS_REPORTS_ENABLED,
+} from './config/features.js';
 
 const ShowdownPresentationPage = lazy(() =>
   import('./pages/ShowdownPresentationPage.jsx').then((m) => ({ default: m.ShowdownPresentationPage })),
@@ -47,6 +53,9 @@ const SettingsPage = lazy(() =>
 const MiniGamesPage = lazy(() =>
   import('./pages/admin/MiniGames.jsx').then((m) => ({ default: m.MiniGamesPage })),
 );
+const SubmissionsPage = lazy(() =>
+  import('./pages/admin/Submissions.jsx').then((m) => ({ default: m.SubmissionsPage })),
+);
 
 function LegacyFeedbackRedirect() {
   const { search } = useLocation();
@@ -57,6 +66,11 @@ function LegacyFeedbackRedirect() {
 
 function LegacyReportsRedirect() {
   return <Navigate to="/admin/analytics" replace />;
+}
+
+function SubmissionsToReportsRedirect() {
+  const { search } = useLocation();
+  return <Navigate to={`/admin/reports${search}`} replace />;
 }
 
 function AdminSuspense({ children }) {
@@ -91,6 +105,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<HomePage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
+      <Route path="/submit" element={<StudentSubmitHubPage />} />
       <Route
         path="/c/:classCode"
         element={
@@ -103,6 +119,7 @@ export default function App() {
         <Route path="learn" element={<StudentLearnRoute />} />
         <Route path="project" element={<StudentProjectRoute />} />
         <Route path="lessons" element={<StudentLessonsReviewRoute />} />
+        <Route path="submit" element={<StudentSubmitRoute />} />
       </Route>
 
       <Route
@@ -183,6 +200,20 @@ export default function App() {
           </AdminSuspense>
         }
       />
+      {FEATURE_DRIVE_SUBMISSION_ENABLED ? (
+        <Route
+          path="/admin/submissions"
+          element={
+            FEATURE_PROGRESS_REPORTS_ENABLED ? (
+              <SubmissionsToReportsRedirect />
+            ) : (
+              <AdminSuspense>
+                <SubmissionsPage />
+              </AdminSuspense>
+            )
+          }
+        />
+      ) : null}
       <Route path="/admin/analytics" element={<AnalyticsEntry />} />
       <Route
         path="/admin/settings"

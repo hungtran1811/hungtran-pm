@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { AppShell } from '../../ui/components/AppShell.jsx';
 import { ALL_CLASSES_VALUE } from '../../lib/classFilterScope.js';
 import { ALL_SESSIONS_VALUE } from '../../lib/sessionScope.js';
-import { FEATURE_KNOWLEDGE_FEEDBACK_ENABLED } from '../../config/features.js';
+import { FEATURE_DRIVE_SUBMISSION_ENABLED, FEATURE_KNOWLEDGE_FEEDBACK_ENABLED } from '../../config/features.js';
 import { ReportsPanel } from './Reports.jsx';
 import { FeedbackPanel } from './Feedback.jsx';
 
@@ -91,7 +91,7 @@ export function ReportsHubPage() {
   };
 
   return (
-    <AppShell title="Báo cáo học sinh">
+    <AppShell title={FEATURE_DRIVE_SUBMISSION_ENABLED ? 'Báo cáo & nộp bài' : 'Báo cáo học sinh'}>
       <div className="space-y-6">
         {FEATURE_KNOWLEDGE_FEEDBACK_ENABLED && (
           <div className="flex flex-wrap gap-2">

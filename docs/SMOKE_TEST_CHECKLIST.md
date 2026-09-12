@@ -20,6 +20,7 @@ Chạy sau khi update dependency, sửa rules/indexes, hoặc refactor service/p
 - **`/lessons`:** xem lại bài giảng; nút quay về **Dự án** hoạt động.
 - Phản hồi buổi học: chỉ test nếu `FEATURE_KNOWLEDGE_FEEDBACK_ENABLED = true` (hiện tắt UI).
 - Với lớp final/project: gửi tên dự án, admin duyệt, học sinh gửi báo cáo tiến độ và link sản phẩm.
+- **Nộp bài Drive** (khi `FEATURE_DRIVE_SUBMISSION_ENABLED` và đã set env Netlify): `/c/{classCode}/submit` — chọn buổi, file hợp lệ có progress, file lên Drive, Firestore `submissions` có metadata; file `.exe` / lớp đóng / quá 150MB bị từ chối; mobile 375px + Retry. HS thấy buổi đã nộp + giờ + tên file, **không** tải file. Lớp cuối khóa (project): HS thấy nhắc nộp cả báo cáo (tab Dự án) lẫn file. Lớp đang học: chỉ nộp file. Admin `/admin/reports`: lớp cuối khóa hiện báo cáo + file; lớp đang học chỉ file nộp. Chi tiết: `docs/student-submission.md`.
 
 ## Reports
 

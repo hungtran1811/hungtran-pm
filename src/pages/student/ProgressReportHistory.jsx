@@ -28,6 +28,7 @@ function ReportHistoryCard({ report }) {
               {report.progressPercent}%
             </span>
             <Badge tone={STATUS_TONES[report.status] || 'slate'}>{report.status}</Badge>
+            {report.lessonKey && <Badge tone="slate">{report.lessonKey}</Badge>}
             {report.stage && <Badge tone="slate">{report.stage}</Badge>}
           </div>
           <p className="mt-1 text-xs text-slate-500">

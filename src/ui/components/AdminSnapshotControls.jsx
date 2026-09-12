@@ -9,9 +9,7 @@ export function AdminSnapshotControls({ lastLoadedAt, refreshing, onRefresh, cla
   return (
     <div className={`flex flex-wrap items-center gap-2 ${className}`}>
       {time && (
-        <p className="text-xs text-slate-500">
-          Tải lúc {time} · Bấm «Làm mới» để cập nhật.
-        </p>
+        <p className="text-xs text-slate-500">Tải lúc {time}</p>
       )}
       <Button variant="subtle" size="sm" onClick={onRefresh} loading={refreshing} className="ml-auto">
         <RefreshCw className="h-4 w-4" />

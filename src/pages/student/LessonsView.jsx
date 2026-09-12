@@ -298,11 +298,6 @@ export function LessonsView({
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Bài giảng</h2>
-            {isFinalPhase && (
-              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-                Xem lại các buổi học trước khi làm sản phẩm cuối khóa.
-              </p>
-            )}
           </div>
           <span className="shrink-0 rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-600 dark:bg-brand-500/10 dark:text-brand-300">
             {readCount}/{lessons.length}
@@ -311,10 +306,7 @@ export function LessonsView({
       )}
 
       {embedded && (
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Xem lại các buổi học trước khi làm sản phẩm cuối khóa.
-          </p>
+        <div className="mb-4 flex items-center justify-end">
           <span className="shrink-0 rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-600 dark:bg-brand-500/10 dark:text-brand-300">
             {readCount}/{lessons.length}
           </span>
@@ -354,7 +346,7 @@ export function LessonsView({
               }}
               type="button"
               onClick={() => openLesson(index)}
-              className="card group overflow-hidden text-left transition hover:border-brand-400 hover:shadow-md active:scale-[0.98]"
+              className="card group cursor-pointer overflow-hidden text-left transition hover:border-brand-400 hover:shadow-md motion-safe:hover:-translate-y-0.5 active:scale-[0.98]"
             >
               <div className="aspect-video w-full overflow-hidden bg-slate-100 dark:bg-slate-800">
                 {thumb ? (

@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
-import { CheckCircle2, GitBranch } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { CheckCircle2 } from 'lucide-react';
 import { Button } from '../../ui/components/Button.jsx';
 import { Badge } from '../../ui/components/Badge.jsx';
 import { Field, Textarea, Select } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { STAGES, STATUSES, STATUS_TONES } from '../../constants/index.js';
-import { submitProgressReport } from '../../services/reports.service.js';
+import { listReportsByStudent, submitProgressReport } from '../../services/reports.service.js';
 import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
+import { buildStudentLessonOptions, defaultLessonKey } from '../../lib/submissionLessons.js';
+import { lessonKeysEqual } from '../../lib/submissionFileName.js';
 import { isProjectNameApproved, projectNameAwaitingReview } from '../../lib/classFinalMode.js';
 import { getWaterfallStage } from '../../data/productWaterfall.js';
 import { ProgressReportHistory } from './ProgressReportHistory.jsx';
@@ -15,6 +17,7 @@ import { ProjectExtrasPanel } from './ProjectExtrasPanel.jsx';
 
 export function ProgressReportView({
   classDoc,
+  program,
   student,
   onUpdateStudent,
   onOpenGuide,
@@ -24,7 +27,9 @@ export function ProgressReportView({
   embedded = false,
 }) {
   const toast = useToast();
+  const lessonOptions = useMemo(() => buildStudentLessonOptions(classDoc, program), [classDoc, program]);
   const [form, setForm] = useState({
+    lessonKey: defaultLessonKey(classDoc, program),
     stage: student.currentStage || STAGES[0],
     status: student.currentStatus || STATUSES[0],
     progressPercent: student.currentProgressPercent || 0,
@@ -32,12 +37,14 @@ export function ProgressReportView({
     nextGoal: '',
     difficulties: '',
   });
+  const [recentReports, setRecentReports] = useState([]);
   const [links, setLinks] = useState({
     githubUrl: student.projectGithubUrl || '',
     canvaUrl: student.projectCanvaUrl || '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [justSubmitted, setJustSubmitted] = useState(false);
+  const submittingRef = useRef(false);
 
   useEffect(() => {
     setLinks({
@@ -45,6 +52,28 @@ export function ProgressReportView({
       canvaUrl: student.projectCanvaUrl || '',
     });
   }, [student.id, student.projectGithubUrl, student.projectCanvaUrl]);
+
+  useEffect(() => {
+    if (!student.id) return undefined;
+    let cancelled = false;
+    listReportsByStudent(student.id, 20)
+      .then((rows) => {
+        if (!cancelled) setRecentReports(rows.filter((row) => row?.lessonKey));
+      })
+      .catch(() => {
+        if (!cancelled) setRecentReports([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [student.id, student.latestReportId]);
+
+  useEffect(() => {
+    setForm((prev) => {
+      if (lessonOptions.some((option) => option.value === prev.lessonKey)) return prev;
+      return { ...prev, lessonKey: defaultLessonKey(classDoc, program) };
+    });
+  }, [lessonOptions, classDoc, program]);
 
   useEffect(() => {
     if (!stagePrefill || !STAGES.includes(stagePrefill)) return;
@@ -56,7 +85,12 @@ export function ProgressReportView({
   const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
   const updateLink = (key, value) => setLinks((prev) => ({ ...prev, [key]: value }));
 
+  const selectedLesson = lessonOptions.find((item) => item.value === form.lessonKey);
+
   const validate = () => {
+    if (!form.lessonKey || !lessonOptions.some((option) => option.value === form.lessonKey)) {
+      return 'Hãy chọn buổi giáo viên đã mở cho lớp.';
+    }
     if (form.doneToday.trim().length < 10) return 'Phần "đã làm được" cần ít nhất 10 ký tự.';
     if (form.nextGoal.trim().length < 10) return 'Phần "mục tiêu tiếp theo" cần ít nhất 10 ký tự.';
     if (form.status === 'Cần hỗ trợ' && form.difficulties.trim().length < 15) {
@@ -70,11 +104,13 @@ export function ProgressReportView({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submittingRef.current) return;
     const errorMsg = validate();
     if (errorMsg) {
       toast.error(errorMsg);
       return;
     }
+    submittingRef.current = true;
     setSubmitting(true);
     try {
       await submitProgressReport({
@@ -88,6 +124,10 @@ export function ProgressReportView({
       });
       toast.success('Đã gửi báo cáo.');
       setJustSubmitted(true);
+      setRecentReports((prev) => [
+        { lessonKey: form.lessonKey, submittedAt: new Date() },
+        ...prev.filter((row) => row.lessonKey !== form.lessonKey),
+      ]);
       onUpdateStudent?.({
         ...student,
         currentStage: form.stage,
@@ -102,6 +142,7 @@ export function ProgressReportView({
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -126,7 +167,7 @@ export function ProgressReportView({
             )}
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            {student.currentStage || '—'} ·{' '}
+            {selectedLesson?.label || form.lessonKey} · {student.currentStage || '—'} ·{' '}
             {student.lastReportedAt ? formatDateTime(student.lastReportedAt) : 'Chưa báo cáo'}
           </p>
         </div>
@@ -143,34 +184,27 @@ export function ProgressReportView({
         />
       </div>
 
-      <div className="rounded-xl border border-brand-200 bg-brand-50/70 px-3 py-3 dark:border-brand-500/30 dark:bg-brand-500/10">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-300">
-              Ở giai đoạn này bạn nên…
-            </p>
-            <p className="mt-1 text-sm leading-6 text-slate-700 dark:text-slate-200">
-              {stageGuide.tip}
-            </p>
-          </div>
-          {onOpenProcess && (
-            <button
-              type="button"
-              onClick={onOpenProcess}
-              className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-brand-700 transition hover:bg-white/80 dark:text-brand-300 dark:hover:bg-slate-900/40"
-            >
-              <GitBranch className="h-3.5 w-3.5" />
-              Xem quy trình
-            </button>
-          )}
-        </div>
-      </div>
-
       <ProjectLinksReadonly
         githubUrl={student.projectGithubUrl}
         canvaUrl={student.projectCanvaUrl}
       />
 
+      {lessonOptions.length ? (
+        <Field label="Buổi" required>
+          <Select value={form.lessonKey} onChange={(e) => update('lessonKey', e.target.value)}>
+            {lessonOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+                {recentReports.some((row) => lessonKeysEqual(row.lessonKey, option.value)) ? ' · đã gửi' : ''}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      ) : (
+        <p className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+          Giáo viên chưa đặt buổi hiện tại cho lớp. Chưa gửi được báo cáo.
+        </p>
+      )}
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label="Giai đoạn">
           <Select value={form.stage} onChange={(e) => update('stage', e.target.value)}>
@@ -234,7 +268,13 @@ export function ProgressReportView({
       </Field>
 
       <div className="student-sticky-footer dark:border-slate-800 lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
-        <Button type="submit" size="lg" className="w-full min-h-12" loading={submitting}>
+        <Button
+          type="submit"
+          size="lg"
+          className="w-full min-h-12"
+          loading={submitting}
+          disabled={!lessonOptions.length}
+        >
           Gửi báo cáo
         </Button>
       </div>

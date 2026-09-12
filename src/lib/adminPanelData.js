@@ -21,11 +21,16 @@ export async function loadAdminClasses({ force = false } = {}) {
   return base.classes;
 }
 
-export async function loadReportsPanelSnapshot(classCodes, { force = false } = {}) {
+export async function loadReportsPanelSnapshot(
+  classCodes,
+  { force = false, includeLatestReports = true } = {},
+) {
   const base = await fetchAdminBaseData({ force });
   const codeSet = new Set(classCodes || []);
   const students = (base.students || []).filter((s) => codeSet.has(s.classCode));
-  const latestByStudent = await loadLatestReportsForStudents(students);
+  const latestByStudent = includeLatestReports
+    ? await loadLatestReportsForStudents(students)
+    : new Map();
   return { classes: base.classes, students, latestByStudent };
 }
 

@@ -8,6 +8,17 @@ export function studentUsesProjectWorkspace(classDoc, program) {
   return classDoc?.curriculumPhase === 'final' && resolveFinalMode(classDoc, program) === 'project';
 }
 
+/** Lớp sản phẩm cuối khóa: bắt buộc báo cáo tiến độ + file sản phẩm. */
+export function classRequiresProgressAndProduct(classDoc, program) {
+  return studentUsesProjectWorkspace(classDoc, program);
+}
+
+export function findProgramForClass(classDoc, programs = []) {
+  const programId = classDoc?.curriculumProgramId || classDoc?.programId;
+  if (!programId) return null;
+  return programs.find((item) => item.id === programId) ?? null;
+}
+
 export function studentWorkspaceHomePath(classCode, classDoc, program) {
   const base = studentClassBasePath(classCode);
   return studentUsesProjectWorkspace(classDoc, program) ? `${base}/project` : `${base}/learn`;
@@ -23,4 +34,8 @@ export function studentProjectPath(classCode) {
 
 export function studentLearnPath(classCode) {
   return `${studentClassBasePath(classCode)}/learn`;
+}
+
+export function studentSubmitPath(classCode) {
+  return `${studentClassBasePath(classCode)}/submit`;
 }

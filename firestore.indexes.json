@@ -179,6 +179,46 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "submissions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "classCode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "studentId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lessonKey",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "isLatest",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "submissions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "classCode",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lessonKey",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "isLatest",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

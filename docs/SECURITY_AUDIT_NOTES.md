@@ -6,6 +6,10 @@ Cập nhật gần nhất đã xử lý các mục trực tiếp/rủi ro cao nh
 - `happy-dom` đã được nâng lên major mới để loại bỏ cảnh báo critical trong môi trường test/dev.
 - `npm audit fix` không force đã được chạy để nhận các bản transitive an toàn.
 
+## Nộp bài Drive
+
+Secret Google OAuth + `FIREBASE_SERVICE_ACCOUNT` chỉ đặt trên Netlify. Collection `submissions` chỉ admin đọc; client deny ghi. `submissionUploadSessions` deny all từ client. HS xem buổi/giờ/tên file qua Function (không `driveFileId`, không tải). Admin mở file trên Drive (`/admin/reports`). Chi tiết: [`docs/student-submission.md`](student-submission.md).
+
 ## Residual audit items
 
 `npm run audit:security` vẫn có thể trả exit code non-zero vì các advisory còn lại nằm trong chuỗi tooling:

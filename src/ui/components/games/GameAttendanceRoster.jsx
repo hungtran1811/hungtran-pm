@@ -43,7 +43,6 @@ export function GameAttendanceRoster({
           </span>
           <div>
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">Điểm danh có mặt</p>
-            <p className="text-xs text-slate-500">Chỉ học sinh được chọn mới tham gia mini game</p>
           </div>
         </div>
         <Badge tone={presentCount >= minPresent ? 'green' : 'amber'}>

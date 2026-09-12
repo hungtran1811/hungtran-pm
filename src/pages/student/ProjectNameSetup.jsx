@@ -45,9 +45,6 @@ export function ProjectNameSetup({ student }) {
           </span>
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-slate-800 dark:text-slate-100">Đề xuất sản phẩm cá nhân</p>
-            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-              Điền tên, chủ đề, vấn đề và tính năng dự kiến — giáo viên duyệt trước khi báo cáo tiến độ cuối khóa.
-            </p>
           </div>
         </div>
 
@@ -121,7 +118,6 @@ export function ProjectNamePendingBanner({ student }) {
       <p className="mt-1">
         <em>{name}</em>
         {student.projectTopic ? ` · Chủ đề: ${student.projectTopic}` : ''}
-        {' — '}bạn có thể học bình thường; báo cáo tiến độ mở sau khi được duyệt.
       </p>
     </div>
   );

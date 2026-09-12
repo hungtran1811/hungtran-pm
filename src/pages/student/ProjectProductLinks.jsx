@@ -51,9 +51,6 @@ export function ProjectProductLinks({
           </span>
           <div>
             <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">Liên kết sản phẩm</h3>
-            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-              Lưu link GitHub (mã nguồn) và Canva (slide/thiết kế) để giáo viên xem nhanh.
-            </p>
           </div>
         </div>
       )}
@@ -61,15 +58,7 @@ export function ProjectProductLinks({
       <div className={compact ? 'grid gap-3 sm:grid-cols-2' : 'space-y-4'}>
         <Field
           label="GitHub"
-          hint={
-            compact ? (
-              onOpenGuide ? (
-                <GithubGuideHints onOpenGuide={onOpenGuide} />
-              ) : undefined
-            ) : (
-              'Ví dụ: github.com/username/ten-du-an'
-            )
-          }
+          hint={compact && onOpenGuide ? <GithubGuideHints onOpenGuide={onOpenGuide} /> : undefined}
         >
         <div className="relative">
           <Code2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -88,13 +77,9 @@ export function ProjectProductLinks({
         <Field
           label="Canva"
           hint={
-            compact ? (
-              onOpenGuide ? (
-      <GuideHint onOpen={() => onOpenGuide(GUIDE_SECTIONS.canva)} label="Hướng dẫn Canva" />
-              ) : undefined
-            ) : (
-              'canva.com/design/... hoặc canva.link/...'
-            )
+            compact && onOpenGuide ? (
+              <GuideHint onOpen={() => onOpenGuide(GUIDE_SECTIONS.canva)} label="Hướng dẫn Canva" />
+            ) : undefined
           }
         >
           <div className="relative">

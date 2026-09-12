@@ -22,15 +22,19 @@ import {
 } from '../../lib/classFinalMode.js';
 import {
   FEATURE_CODING_SHOWDOWN_ENABLED,
+  FEATURE_DRIVE_SUBMISSION_ENABLED,
   FEATURE_KNOWLEDGE_FEEDBACK_ENABLED,
   FEATURE_SPY_GAME_ENABLED,
 } from '../../config/features.js';
 import {
+  studentLearnPath,
   studentLessonsPath,
   studentProjectPath,
+  studentSubmitPath,
   studentUsesProjectWorkspace,
   studentWorkspaceHomePath,
 } from '../../lib/studentWorkspace.js';
+import { DriveSubmitPage } from './DriveSubmitPage.jsx';
 
 const LessonsViewLazy = lazy(() =>
   import('./LessonsView.jsx').then((m) => ({ default: m.LessonsView })),
@@ -350,11 +354,19 @@ export function StudentPortalPage() {
   const onProjectHome = location.pathname.endsWith('/project');
 
   const bottomNavItems = useMemo(() => {
-    if (!usesProjectWorkspace) return [];
-    return [
-      { id: 'project', label: 'Dự án', to: studentProjectPath(classCode) },
-      { id: 'lessons', label: 'Bài giảng', to: studentLessonsPath(classCode) },
-    ];
+    const items = [];
+    if (usesProjectWorkspace) {
+      items.push(
+        { id: 'project', label: 'Dự án', to: studentProjectPath(classCode) },
+        { id: 'lessons', label: 'Bài giảng', to: studentLessonsPath(classCode) },
+      );
+    } else if (FEATURE_DRIVE_SUBMISSION_ENABLED) {
+      items.push({ id: 'learn', label: 'Bài học', to: studentLearnPath(classCode) });
+    }
+    if (FEATURE_DRIVE_SUBMISSION_ENABLED) {
+      items.push({ id: 'submit', label: 'Nộp bài', to: studentSubmitPath(classCode) });
+    }
+    return items;
   }, [usesProjectWorkspace, classCode]);
 
   const shellSubtitle = useMemo(() => {
@@ -390,8 +402,15 @@ export function StudentPortalPage() {
     setSelectedStudentId(student.id);
     setSelectedStudent(student);
     localStorage.setItem(storageKey(classCode), student.id);
+    const stayOnSubmit =
+      FEATURE_DRIVE_SUBMISSION_ENABLED && location.pathname.endsWith('/submit');
     navigate(
-      { pathname: studentWorkspaceHomePath(classCode, classDoc, program), search: location.search },
+      {
+        pathname: stayOnSubmit
+          ? studentSubmitPath(classCode)
+          : studentWorkspaceHomePath(classCode, classDoc, program),
+        search: location.search,
+      },
       { replace: true },
     );
   };
@@ -497,32 +516,41 @@ export function StudentPortalPage() {
       }
       right={
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-          {usesProjectWorkspace && (
+          {(usesProjectWorkspace || FEATURE_DRIVE_SUBMISSION_ENABLED) && (
             <nav className="hidden items-center gap-0.5 sm:flex" aria-label="Trang học sinh">
-              <NavLink
-                to={studentProjectPath(classCode)}
-                className={({ isActive }) =>
-                  `rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
-                    isActive
-                      ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300'
-                      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200'
-                  }`
-                }
-              >
-                Dự án
-              </NavLink>
-              <NavLink
-                to={studentLessonsPath(classCode)}
-                className={({ isActive }) =>
-                  `rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
-                    isActive
-                      ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300'
-                      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200'
-                  }`
-                }
-              >
-                Bài giảng
-              </NavLink>
+              {usesProjectWorkspace ? (
+                <>
+                  <NavLink
+                    to={studentProjectPath(classCode)}
+                    className={({ isActive }) => studentHeaderNavClass(isActive)}
+                  >
+                    Dự án
+                  </NavLink>
+                  <NavLink
+                    to={studentLessonsPath(classCode)}
+                    className={({ isActive }) => studentHeaderNavClass(isActive)}
+                  >
+                    Bài giảng
+                  </NavLink>
+                </>
+              ) : (
+                FEATURE_DRIVE_SUBMISSION_ENABLED && (
+                  <NavLink
+                    to={studentLearnPath(classCode)}
+                    className={({ isActive }) => studentHeaderNavClass(isActive)}
+                  >
+                    Bài học
+                  </NavLink>
+                )
+              )}
+              {FEATURE_DRIVE_SUBMISSION_ENABLED && (
+                <NavLink
+                  to={studentSubmitPath(classCode)}
+                  className={({ isActive }) => studentHeaderNavClass(isActive)}
+                >
+                  Nộp bài
+                </NavLink>
+              )}
             </nav>
           )}
           <div className="min-w-0 text-right">
@@ -653,12 +681,27 @@ export function StudentProjectRoute() {
       >
         <FinalProjectStudentViewLazy
           classDoc={classDoc}
+          program={program}
           student={student}
           onOpenLessons={() => navigate(studentLessonsPath(classCode))}
         />
       </Suspense>
     </div>
   );
+}
+
+export function StudentSubmitRoute() {
+  const { classCode, classDoc, program } = useOutletContext();
+  const location = useLocation();
+  if (!FEATURE_DRIVE_SUBMISSION_ENABLED) {
+    return (
+      <Navigate
+        to={`${studentWorkspaceHomePath(classCode, classDoc, program)}${location.search}`}
+        replace
+      />
+    );
+  }
+  return <DriveSubmitPage />;
 }
 
 export function StudentLessonsReviewRoute() {
@@ -701,6 +744,14 @@ export function StudentLessonsReviewRoute() {
       />
     </Suspense>
   );
+}
+
+function studentHeaderNavClass(isActive) {
+  return `rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
+    isActive
+      ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300'
+      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200'
+  }`;
 }
 
 function studentInitial(name = '') {

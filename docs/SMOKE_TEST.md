@@ -23,7 +23,9 @@ npx firebase-tools@latest deploy --only firestore:rules
 | 3 | Tab Báo cáo / bổ sung dự án | **Không** thấy mục nộp file code theo buổi |
 | 4 | Sau khi chọn tên (giai đoạn học) | **Không** banner next-action, **không** card Ôn tập/Quiz/Bài đã mở, **không** Checklist học tập; vào thẳng bài giảng |
 | 5 | Form cuối bài | **Không** form «Phản hồi buổi học» |
-| 6 | Lớp `final` + project | Tab **Quy trình** (5 bước + hướng dẫn ý tưởng/làm); **Báo cáo** có gợi ý theo stage; xem lại bài qua navbar **Bài giảng** → `/lessons`; **Hướng dẫn nộp** vẫn có |
+| 6 | Lớp `final` + project | Tab **Quy trình** (5 bước + hướng dẫn ý tưởng/làm); **Báo cáo** chọn buổi rồi gửi; xem lại bài qua navbar **Bài giảng** → `/lessons`; **Hướng dẫn nộp** vẫn có |
+| 7 | `/c/{mã}/submit` (flag Drive bật + env Netlify) | Form buổi + dropzone; file hợp lệ có %, lên Drive; `submissions` có metadata; `.exe`/quá 150MB bị từ chối; buổi đã nộp hiện giờ + tên file; **không** tải lại file |
+| 8 | `/admin/reports` (admin đã login) | Lớp cuối khóa (project): lọc buổi chung, «Đủ» = báo cáo + file cùng buổi. Lớp đang học: chỉ file nộp, không hiện «chưa báo cáo». **Mở file** ra Drive; HS không thấy trang này |
 
 ---
 

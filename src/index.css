@@ -45,6 +45,107 @@
   * {
     scrollbar-width: thin;
   }
+
+  :where(
+    a[href],
+    button,
+    summary,
+    select,
+    label[for],
+    [role='button'],
+    [role='tab'],
+    [role='menuitem'],
+    [role='option'],
+    [role='switch'],
+    [role='checkbox'],
+    [role='radio'],
+    [role='link'],
+    input[type='checkbox'],
+    input[type='radio'],
+    input[type='file'],
+    input[type='submit'],
+    input[type='reset'],
+    input[type='button'],
+    input[type='image'],
+    input[type='range']
+  ):not(:disabled):not([aria-disabled='true']) {
+    cursor: pointer;
+  }
+
+  :where(button, select, input, textarea, [role='button']):disabled,
+  :where([aria-disabled='true']) {
+    cursor: not-allowed;
+  }
+
+  label:has(> input[type='checkbox']),
+  label:has(> input[type='radio']) {
+    cursor: pointer;
+  }
+
+  :where(button, a[href], [role='button'], [role='tab'], [role='option'], summary, select) {
+    transition:
+      color 0.15s ease,
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      box-shadow 0.15s ease,
+      filter 0.15s ease,
+      opacity 0.15s ease,
+      transform 0.15s ease;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  :where(
+    button,
+    [role='button'],
+    [role='tab'],
+    [role='option'],
+    [role='menuitem'],
+    summary,
+    select
+  ):not(:disabled):not([aria-disabled='true']):hover {
+    filter: brightness(0.97);
+  }
+
+  .dark
+    :where(
+      button,
+      [role='button'],
+      [role='tab'],
+      [role='option'],
+      [role='menuitem'],
+      summary,
+      select
+    ):not(:disabled):not([aria-disabled='true']):hover {
+    filter: brightness(1.1);
+  }
+
+  :where(a[href]):hover {
+    filter: brightness(0.95);
+  }
+
+  :where(input[type='checkbox'], input[type='radio']):not(:disabled):hover {
+    outline: 2px solid color-mix(in oklab, var(--color-brand-500) 40%, transparent);
+    outline-offset: 2px;
+  }
+
+  :where(label[for]):hover,
+  label:has(> input[type='checkbox']):hover,
+  label:has(> input[type='radio']):hover {
+    color: var(--color-brand-700);
+  }
+
+  .dark :where(label[for]):hover,
+  .dark label:has(> input[type='checkbox']):hover,
+  .dark label:has(> input[type='radio']):hover {
+    color: var(--color-brand-300);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(button, a[href], [role='button'], [role='tab'], summary, select) {
+    transition: none;
+  }
 }
 
 @layer components {

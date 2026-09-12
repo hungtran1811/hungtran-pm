@@ -15,6 +15,7 @@ import {
   sessionNumbersUpToCurrent,
   sessionNumbersUpToCurrentMulti,
   unlockedLessonSessionCap,
+  isLessonKeyOpenForClass,
 } from './sessionScope.js';
 import { validateProjectLinks } from './projectLinks.js';
 
@@ -58,6 +59,11 @@ describe('sessionScope', () => {
     expect(unlockedLessonSessionCap(classDoc)).toBe(3);
     expect(sessionNumbersUpToCurrent(classDoc)).toEqual([1, 2, 3]);
     expect(sessionNumbersUpToCurrent({ curriculumCurrentSession: 0 })).toEqual([]);
+    expect(isLessonKeyOpenForClass('B03', classDoc)).toBe(true);
+    expect(isLessonKeyOpenForClass('L03', classDoc)).toBe(true);
+    expect(isLessonKeyOpenForClass('B04', classDoc)).toBe(false);
+    expect(isLessonKeyOpenForClass('L04', classDoc)).toBe(false);
+    expect(isLessonKeyOpenForClass('B01', { curriculumCurrentSession: 0 })).toBe(false);
   });
 
   it('filters rows by explicit and implicit session scope', () => {

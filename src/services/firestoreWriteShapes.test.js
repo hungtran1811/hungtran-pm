@@ -175,6 +175,7 @@ describe('student Firestore write shapes', () => {
         progressPercent: 45,
         stage: 'Xây dựng sản phẩm',
         status: 'Đang làm',
+        lessonKey: 'L02',
         doneToday: 'Hoàn thành giao diện chính',
         nextGoal: 'Kết nối dữ liệu thời tiết',
         difficulties: '',
@@ -192,6 +193,7 @@ describe('student Firestore write shapes', () => {
       studentId: 'student-1',
       projectName: 'Weather App',
       progressPercent: 45,
+      lessonKey: 'L02',
       source: 'student-form',
     });
     expect(studentOp).toMatchObject({ type: 'update' });

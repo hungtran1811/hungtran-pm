@@ -15,6 +15,7 @@ export function formatProgressReport(report, { displayName } = {}) {
   return [
     `Học sinh: ${studentName}`,
     `Dự án: ${report.projectName || '—'}`,
+    report.lessonKey ? `Buổi: ${report.lessonKey}` : '',
     `Tiến độ: ${report.progressPercent}% - ${report.stage} - ${report.status}`,
     `Đã làm: ${report.doneToday}`,
     `Mục tiêu tiếp theo: ${report.nextGoal}`,

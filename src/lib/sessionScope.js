@@ -1,3 +1,5 @@
+import { lessonKeySessionNumber } from './submissionFileName.js';
+
 export const ALL_SESSIONS_VALUE = 'all';
 
 /** Buổi học tối đa học sinh được xem (theo buổi hiện tại của lớp). */
@@ -10,6 +12,14 @@ export function sessionNumbersUpToCurrent(classDoc) {
   const current = Number(classDoc?.curriculumCurrentSession) || 0;
   if (current <= 0) return [];
   return Array.from({ length: current }, (_, i) => i + 1);
+}
+
+/** HS chỉ nộp / báo cáo buổi đã mở trên lớp (1 … buổi hiện tại). */
+export function isLessonKeyOpenForClass(lessonKey, classDoc) {
+  const cap = unlockedLessonSessionCap(classDoc);
+  const session = lessonKeySessionNumber(lessonKey);
+  if (!cap || !session) return false;
+  return session <= cap;
 }
 
 export function isSessionWithinClassScope(sessionNumber, classDoc) {

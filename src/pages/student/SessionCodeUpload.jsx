@@ -165,18 +165,8 @@ export function SessionCodeUpload({ classDoc, student, compact = false }) {
           </span>
           <div>
             <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">Nộp file code theo buổi</h3>
-            <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-              Tải lên mã nguồn buổi học ({CODE_SUBMISSION_EXTENSIONS.join(', ')}). Tối đa{' '}
-              {CODE_SUBMISSION_MAX_FILES_PER_SESSION} file, 512 KB/file.
-            </p>
           </div>
         </div>
-      )}
-
-      {compact && (
-        <p className="text-xs text-slate-500 dark:text-slate-400">
-          {CODE_SUBMISSION_EXTENSIONS.join(', ')} · tối đa {CODE_SUBMISSION_MAX_FILES_PER_SESSION} file, 512 KB/file
-        </p>
       )}
 
       <div className="flex flex-wrap items-end gap-3">

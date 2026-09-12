@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { TrendingUp, Copy } from 'lucide-react';
+import { Copy, FolderOpen, TrendingUp } from 'lucide-react';
 import { Button } from '../../ui/components/Button.jsx';
-import { Badge } from '../../ui/components/Badge.jsx';
 import { EmptyState } from '../../ui/components/EmptyState.jsx';
 import { SelectClassPrompt, LoadingCatState } from '../../ui/components/WaitingCatIllustration.jsx';
 import { ClassFilterBar } from '../../ui/components/ClassFilterBar.jsx';
@@ -10,17 +9,12 @@ import { Input } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { StudentHistoryModal } from '../../ui/components/StudentHistoryModal.jsx';
 import { ClassCodeSubmissionsOverview } from '../../ui/components/ClassCodeSubmissionsOverview.jsx';
-import { ProjectLinksReadonly } from '../student/ProjectProductLinks.jsx';
-import {
-  PanelSummaryGrid,
-  PanelSummaryStat,
-  ProgressMiniBar,
-} from '../../ui/components/SubmissionDisplay.jsx';
-import { STATUS_TONES } from '../../constants/index.js';
+import { ClassCompletionRoster } from '../../ui/components/ClassCompletionRoster.jsx';
+import { ConfirmDialog } from '../../ui/components/ConfirmDialog.jsx';
 import { ALL_CLASSES_VALUE, resolveScopedClasses } from '../../lib/classFilterScope.js';
 import { invalidateAdminSnapshots, loadAdminClasses, loadReportsPanelSnapshot } from '../../lib/adminPanelData.js';
 import { AdminSnapshotControls } from '../../ui/components/AdminSnapshotControls.jsx';
-import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
+import { getErrorMessage } from '../../lib/firestore.js';
 import { listCurriculumPrograms } from '../../services/curriculum.service.js';
 import { reportFromStudentSnapshot } from '../../services/reports.service.js';
 import {
@@ -32,7 +26,61 @@ import {
   listCodeSubmissionsByClass,
   summarizeCodeSubmissions,
 } from '../../services/codeSubmissions.service.js';
-import { FEATURE_CODE_UPLOAD_ENABLED } from '../../config/features.js';
+import { FEATURE_CODE_UPLOAD_ENABLED, FEATURE_DRIVE_SUBMISSION_ENABLED } from '../../config/features.js';
+import { deleteProgressReportsAsAdmin, listReportsByClass } from '../../services/reports.service.js';
+import {
+  deleteDriveSubmissionAsAdmin,
+  deleteDriveSubmissionsAsAdmin,
+  listSubmissionsByClass,
+} from '../../services/submissions.service.js';
+import {
+  driveFolderUrl,
+  summarizeDriveSubmissionsByStudent,
+  uniqueLessonKeys,
+} from '../../lib/submissionAdmin.js';
+import {
+  hasOverlappingLesson,
+  latestReportForLesson,
+  latestReportsByStudentLesson,
+  reportsForStudentLesson,
+  scopeDriveToLesson,
+} from '../../lib/progressReports.js';
+import { buildLessonOptions, defaultLessonKey } from '../../lib/submissionLessons.js';
+import {
+  classRequiresProgressAndProduct,
+  findProgramForClass,
+} from '../../lib/studentWorkspace.js';
+import { sortByRecentActivity } from '../../lib/reportSignals.js';
+
+function matchesCompletionFilter(item, filter) {
+  if (filter === 'done') return item.isComplete;
+  if (filter === 'missing') return !item.isComplete;
+  return true;
+}
+
+function shortLessonLabel(option) {
+  if (option.sessionNumber) return String(option.sessionNumber);
+  const match = String(option.value || '').match(/^B0*(\d+)$/i);
+  return match ? match[1] : option.value;
+}
+
+function FilterChip({ active, onClick, children, title }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-pressed={active}
+      onClick={onClick}
+      className={`inline-flex min-h-10 shrink-0 cursor-pointer items-center rounded-xl px-3 text-sm font-medium transition ${
+        active
+          ? 'bg-brand-600 text-white shadow-sm'
+          : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
 
 export function ReportsPanel({
   selectedClass: selectedClassProp,
@@ -55,6 +103,12 @@ export function ReportsPanel({
   const [historyTarget, setHistoryTarget] = useState(null);
   const [codeByStudent, setCodeByStudent] = useState(() => new Map());
   const [programs, setPrograms] = useState([]);
+  const [driveRows, setDriveRows] = useState([]);
+  const [classReports, setClassReports] = useState([]);
+  const [completionFilter, setCompletionFilter] = useState('all');
+  const [reviewLessonKey, setReviewLessonKey] = useState('');
+  const [pendingDelete, setPendingDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const isControlled = selectedClassProp !== undefined;
   const selectedClass = isControlled ? selectedClassProp : internalClass;
@@ -72,6 +126,24 @@ export function ReportsPanel({
     () => classes.find((c) => c.classCode === selectedClass) ?? null,
     [classes, selectedClass],
   );
+  const selectedProgram = useMemo(
+    () => findProgramForClass(selectedClassDoc, programs),
+    [selectedClassDoc, programs],
+  );
+  const requiresBoth = classRequiresProgressAndProduct(selectedClassDoc, selectedProgram);
+  const classByCode = useMemo(() => {
+    const map = new Map();
+    for (const cls of classes) map.set(cls.classCode, cls);
+    return map;
+  }, [classes]);
+  const hasAnyFinalProjectClass = useMemo(
+    () =>
+      scopedClasses.some((cls) =>
+        classRequiresProgressAndProduct(cls, findProgramForClass(cls, programs)),
+      ),
+    [scopedClasses, programs],
+  );
+  const showReports = Boolean(selectedClass) && (isAllClasses ? hasAnyFinalProjectClass : requiresBoth);
   const showCodeOverview =
     FEATURE_CODE_UPLOAD_ENABLED &&
     !isAllClasses &&
@@ -112,19 +184,37 @@ export function ReportsPanel({
       .catch(() => setPrograms([]));
   }, []);
 
+  const showDriveOverview =
+    FEATURE_DRIVE_SUBMISSION_ENABLED && Boolean(selectedClass) && !isAllClasses;
+
   const loadSnapshot = useCallback(
     async ({ force = false, initial = false } = {}) => {
       if (!classCodes.length) {
         setLatestByStudent(new Map());
         setStudents([]);
+        setDriveRows([]);
+        setClassReports([]);
         return;
       }
       if (initial) setLoading(true);
       else setRefreshing(true);
       try {
-        const data = await loadReportsPanelSnapshot(classCodes, { force });
+        const [data, drive, reports] = await Promise.all([
+          loadReportsPanelSnapshot(classCodes, {
+            force,
+            includeLatestReports: !selectedClass || selectedClass === ALL_CLASSES_VALUE,
+          }),
+          FEATURE_DRIVE_SUBMISSION_ENABLED && selectedClass && selectedClass !== ALL_CLASSES_VALUE
+            ? listSubmissionsByClass(selectedClass)
+            : Promise.resolve([]),
+          selectedClass && selectedClass !== ALL_CLASSES_VALUE
+            ? listReportsByClass(selectedClass, 400)
+            : Promise.resolve([]),
+        ]);
         setStudents(data.students);
         setLatestByStudent(data.latestByStudent);
+        setDriveRows(drive);
+        setClassReports(reports);
         setLastLoadedAt(Date.now());
       } catch (error) {
         toast.error(getErrorMessage(error));
@@ -133,12 +223,21 @@ export function ReportsPanel({
         setRefreshing(false);
       }
     },
-    [classCodes, toast],
+    [classCodes, selectedClass, toast],
   );
 
   useEffect(() => {
     loadSnapshot({ initial: true });
   }, [loadSnapshot]);
+
+  useEffect(() => {
+    setReviewLessonKey(
+      selectedClass && selectedClass !== ALL_CLASSES_VALUE
+        ? defaultLessonKey(selectedClassDoc, selectedProgram)
+        : '',
+    );
+    setCompletionFilter('all');
+  }, [selectedClass, selectedClassDoc, selectedProgram]);
 
   useEffect(() => {
     if (!showCodeOverview || !selectedClass) {
@@ -173,54 +272,137 @@ export function ReportsPanel({
     [latestByStudent],
   );
 
-  const visible = useMemo(() => {
-    let list = students.map((student) => ({
-      student,
-      report: resolveReport(student),
-    }));
-    const q = search.trim().toLowerCase();
-    if (q) list = list.filter((item) => item.student.fullName.toLowerCase().includes(q));
+  const driveByStudent = useMemo(
+    () => summarizeDriveSubmissionsByStudent(driveRows),
+    [driveRows],
+  );
+  const reportsByStudentLesson = useMemo(
+    () => latestReportsByStudentLesson(classReports),
+    [classReports],
+  );
+  const reviewLessonOptions = useMemo(() => {
+    const fromProgram = buildLessonOptions(selectedClassDoc, selectedProgram);
+    const extra = uniqueLessonKeys([...driveRows, ...classReports]).filter(
+      (key) => !fromProgram.some((option) => option.value === key),
+    );
+    return [...fromProgram, ...extra.map((value) => ({ value, label: value }))];
+  }, [selectedClassDoc, selectedProgram, driveRows, classReports]);
+  const scanned = useMemo(() => {
+    let list = students.map((student) => {
+      const fallbackReport = resolveReport(student);
+      const allDrive = driveByStudent.get(student.id) || null;
+      const lessons = reportsByStudentLesson.get(student.id);
 
-    const reportTime = (item) => item.report?.submittedAt?.getTime?.() ?? 0;
+      const lessonReports = reportsForStudentLesson(classReports, student.id, reviewLessonKey)
+        .slice()
+        .sort((left, right) => (right.submittedAt?.getTime?.() || 0) - (left.submittedAt?.getTime?.() || 0));
+      const reportCount = lessonReports.length;
+      const history = {
+        reportHistory: isAllClasses ? undefined : lessonReports,
+        driveHistory: isAllClasses ? null : allDrive,
+      };
 
-    return list.sort((a, b) => {
-      const aHas = Boolean(a.report);
-      const bHas = Boolean(b.report);
-      if (aHas !== bHas) return aHas ? -1 : 1;
-
-      const timeDiff = reportTime(b) - reportTime(a);
-      if (timeDiff !== 0) return timeDiff;
-
-      if (isAllClasses && a.student.classCode !== b.student.classCode) {
-        return a.student.classCode.localeCompare(b.student.classCode, 'vi');
+      if (isAllClasses) {
+        const hasReport = Boolean(fallbackReport) || Boolean(student.lastReportedAt);
+        return {
+          student,
+          report: fallbackReport,
+          drive: null,
+          hasReport,
+          hasFile: false,
+          isComplete: hasReport,
+          reportCount,
+          showClass: true,
+          ...history,
+        };
       }
-      return a.student.fullName.localeCompare(b.student.fullName, 'vi');
-    });
-  }, [students, resolveReport, search, isAllClasses]);
 
-  const newestStudentId = useMemo(() => {
-    const first = visible.find((item) => item.report && !item.report.snapshotOnly);
-    return first?.student.id ?? null;
-  }, [visible]);
+      if (requiresBoth) {
+        const report = latestReportForLesson(lessons, reviewLessonKey) || (!reviewLessonKey ? fallbackReport : null);
+        const drive = scopeDriveToLesson(allDrive, reviewLessonKey);
+        const hasReport = Boolean(latestReportForLesson(lessons, reviewLessonKey));
+        const hasFile = Boolean(drive);
+        const isComplete = reviewLessonKey
+          ? hasReport && hasFile
+          : hasOverlappingLesson(lessons, allDrive);
+        return {
+          student,
+          report,
+          drive,
+          hasReport,
+          hasFile,
+          isComplete,
+          reportCount,
+          showClass: false,
+          ...history,
+        };
+      }
+
+      const drive = scopeDriveToLesson(allDrive, reviewLessonKey);
+      const hasFile = Boolean(drive);
+      return {
+        student,
+        report: fallbackReport,
+        drive,
+        hasReport: Boolean(student.lastReportedAt),
+        hasFile,
+        isComplete: hasFile,
+        reportCount,
+        showClass: false,
+        ...history,
+      };
+    });
+
+    if (isAllClasses) {
+      list = list.filter((item) => {
+        const cls = classByCode.get(item.student.classCode);
+        return classRequiresProgressAndProduct(cls, findProgramForClass(cls, programs));
+      });
+    }
+
+    const query = search.trim().toLowerCase();
+    if (query) {
+      list = list.filter((item) => item.student.fullName.toLowerCase().includes(query));
+    }
+
+    return sortByRecentActivity(list);
+  }, [
+    students,
+    resolveReport,
+    search,
+    isAllClasses,
+    driveByStudent,
+    classByCode,
+    programs,
+    requiresBoth,
+    reportsByStudentLesson,
+    reviewLessonKey,
+    classReports,
+  ]);
+
+  const visible = useMemo(
+    () => scanned.filter((item) => matchesCompletionFilter(item, completionFilter)),
+    [scanned, completionFilter],
+  );
 
   const reportsForCopy = useMemo(
-    () => visible
+    () => scanned
       .filter((item) => item.report && !item.report.snapshotOnly)
       .map((item) => ({ report: item.report, displayName: item.student.fullName })),
-    [visible],
+    [scanned],
   );
 
-  const avgProgress = useMemo(() => {
-    const withProgress = visible.map((item) => item.report).filter(Boolean);
-    if (!withProgress.length) return null;
-    const sum = withProgress.reduce((acc, r) => acc + Number(r.progressPercent || 0), 0);
-    return Math.round(sum / withProgress.length);
-  }, [visible]);
-
-  const missingCount = useMemo(
-    () => visible.filter((item) => !item.student.lastReportedAt).length,
-    [visible],
+  const completeCount = useMemo(
+    () => scanned.filter((item) => item.isComplete).length,
+    [scanned],
   );
+  const missingCount = scanned.length - completeCount;
+  const completePercent = scanned.length ? Math.round((completeCount / scanned.length) * 100) : 0;
+  const currentLessonKey = selectedClassDoc
+    ? defaultLessonKey(selectedClassDoc, selectedProgram)
+    : '';
+  const classFolderHref = driveFolderUrl(selectedClassDoc?.driveFolderId);
+  const doneLabel = requiresBoth || isAllClasses ? 'đủ' : 'đã nộp';
 
   const openHistory = (student, report) => {
     setHistoryTarget({
@@ -236,11 +418,12 @@ export function ReportsPanel({
 
   const copyAll = async () => {
     if (!reportsForCopy.length) return;
+    const lessonSuffix = reviewLessonKey ? ` · Buổi ${reviewLessonKey}` : '';
     const header = isAllClasses
-      ? 'BÁO CÁO TIẾN ĐỘ - TẤT CẢ LỚP'
+      ? `BÁO CÁO TIẾN ĐỘ - TẤT CẢ LỚP${lessonSuffix}`
       : (() => {
           const cls = classes.find((c) => c.classCode === selectedClass);
-          return `BÁO CÁO TIẾN ĐỘ - ${selectedClass}${cls?.className ? ` (${cls.className})` : ''}`;
+          return `BÁO CÁO TIẾN ĐỘ - ${selectedClass}${cls?.className ? ` (${cls.className})` : ''}${lessonSuffix}`;
         })();
     const text = buildClassExport(
       header,
@@ -255,6 +438,60 @@ export function ReportsPanel({
     }
   };
 
+  const canDeleteRecords = Boolean(selectedClass) && !isAllClasses;
+
+  const deleteTitle = pendingDelete?.type === 'file'
+    ? 'Xóa file nộp'
+    : pendingDelete?.type === 'report'
+      ? 'Xóa báo cáo'
+      : 'Xóa bản ghi buổi này';
+
+  const deleteMessage = pendingDelete?.type === 'file'
+    ? `Xóa bản ghi file "${pendingDelete.file?.originalFileName || 'này'}" của ${pendingDelete.item?.student?.fullName}? File trên Drive vẫn còn trong thư mục lớp.`
+    : pendingDelete?.type === 'report'
+      ? `Xóa báo cáo mới nhất của ${pendingDelete.item?.student?.fullName}? Học sinh có thể gửi lại bản khác.`
+      : `Xóa toàn bộ file và báo cáo buổi ${reviewLessonKey} của ${pendingDelete?.item?.student?.fullName}? File trên Drive vẫn còn.`;
+
+  const handleConfirmDelete = async () => {
+    if (!pendingDelete) return;
+    setDeleting(true);
+    try {
+      if (pendingDelete.type === 'file') {
+        await deleteDriveSubmissionAsAdmin(
+          pendingDelete.file,
+          pendingDelete.item.driveHistory?.files || pendingDelete.item.drive?.files || [],
+        );
+      } else if (pendingDelete.type === 'report') {
+        await deleteProgressReportsAsAdmin([pendingDelete.report], {
+          student: pendingDelete.item.student,
+          remainingReports: classReports,
+        });
+      } else if (pendingDelete.type === 'lesson') {
+        const files = pendingDelete.item.drive?.files || [];
+        const reports = reportsForStudentLesson(
+          classReports,
+          pendingDelete.item.student.id,
+          reviewLessonKey,
+        );
+        if (files.length) await deleteDriveSubmissionsAsAdmin(files);
+        if (reports.length) {
+          await deleteProgressReportsAsAdmin(reports, {
+            student: pendingDelete.item.student,
+            remainingReports: classReports,
+          });
+        }
+      }
+      toast.success('Đã xóa bản ghi.');
+      setPendingDelete(null);
+      invalidateAdminSnapshots();
+      await loadSnapshot({ force: true });
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <>
       {loadingClasses ? (
@@ -263,7 +500,7 @@ export function ReportsPanel({
         <EmptyState icon={<TrendingUp className="h-7 w-7" />} title="Chưa có lớp" />
       ) : (
         <>
-          <div className="mb-5 space-y-3">
+          <div className="mb-4 space-y-3">
             <ClassFilterBar
               classes={classes}
               programs={programs}
@@ -276,21 +513,136 @@ export function ReportsPanel({
               allLabel={`Tất cả lớp${showArchived ? ' lưu trữ' : ' đang hoạt động'}`}
               showStudentCount
             />
-            <Input
-              placeholder={selectedClass ? 'Tìm học sinh...' : 'Chọn lớp để tìm học sinh...'}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              disabled={!selectedClass}
-            />
+            {selectedClass && !isAllClasses && reviewLessonOptions.length ? (
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-slate-500">Buổi</p>
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Chọn buổi">
+                  <FilterChip
+                    active={!reviewLessonKey}
+                    onClick={() => setReviewLessonKey('')}
+                  >
+                    Tất cả
+                  </FilterChip>
+                  {reviewLessonOptions.map((option) => (
+                    <FilterChip
+                      key={option.value}
+                      active={reviewLessonKey === option.value}
+                      title={option.label}
+                      onClick={() => setReviewLessonKey(option.value)}
+                    >
+                      <span className="tabular-nums">{shortLessonLabel(option)}</span>
+                      {option.value === currentLessonKey ? (
+                        <span
+                          className="ml-1 h-1.5 w-1.5 rounded-full bg-current opacity-80"
+                          aria-label="Buổi hiện tại"
+                        />
+                      ) : null}
+                    </FilterChip>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {selectedClass ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Lọc hoàn thành">
+                  <FilterChip active={completionFilter === 'all'} onClick={() => setCompletionFilter('all')}>
+                    Tất cả · {scanned.length}
+                  </FilterChip>
+                  <FilterChip
+                    active={completionFilter === 'missing'}
+                    onClick={() => setCompletionFilter('missing')}
+                  >
+                    Thiếu · {missingCount}
+                  </FilterChip>
+                  <FilterChip
+                    active={completionFilter === 'done'}
+                    onClick={() => setCompletionFilter('done')}
+                  >
+                    {requiresBoth || isAllClasses ? 'Đủ' : 'Đã nộp'} · {completeCount}
+                  </FilterChip>
+                </div>
+                <Input
+                  aria-label="Tìm học sinh"
+                  placeholder="Tìm tên..."
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  className="sm:ml-auto sm:max-w-56"
+                />
+              </div>
+            ) : null}
           </div>
 
           {!selectedClass ? (
             <SelectClassPrompt
-              title="Chọn lớp để xem báo cáo"
-              description="Chọn lớp ở bộ lọc phía trên để xem báo cáo tiến độ học sinh."
+              title="Chọn lớp để xem báo cáo hoặc bài nộp"
+              description="Lớp sản phẩm cuối khóa hiện báo cáo tiến độ và file Drive. Lớp đang học kiến thức chỉ hiện file nộp."
+            />
+          ) : isAllClasses && !showReports ? (
+            <EmptyState
+              title="Không có lớp sản phẩm cuối khóa"
+              description="Các lớp đang lọc là giai đoạn học kiến thức — không bắt buộc báo cáo tiến độ. Chọn một lớp để xem file nộp."
             />
           ) : (
             <>
+              <div className="mb-3 flex flex-wrap items-center gap-3">
+                <div className="min-w-[12rem] flex-1">
+                  <div
+                    className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={scanned.length}
+                    aria-valuenow={completeCount}
+                    aria-label={`Học sinh ${doneLabel}`}
+                  >
+                    <div
+                      className={`h-full rounded-full ${
+                        completeCount === scanned.length && scanned.length
+                          ? 'bg-emerald-500'
+                          : 'bg-brand-500'
+                      }`}
+                      style={{ width: `${completePercent}%` }}
+                    />
+                  </div>
+                  <p className="mt-1.5 text-sm text-slate-600 dark:text-slate-300">
+                    <span className="font-semibold tabular-nums text-slate-800 dark:text-slate-100">
+                      {completeCount}/{scanned.length}
+                    </span>{' '}
+                    {doneLabel}
+                    {missingCount > 0 ? (
+                      <span className="text-amber-700 dark:text-amber-300">
+                        {' '}
+                        · {missingCount} thiếu
+                      </span>
+                    ) : scanned.length ? (
+                      <span className="text-emerald-700 dark:text-emerald-300"> · đủ hết</span>
+                    ) : null}
+                  </p>
+                </div>
+                {classFolderHref ? (
+                  <a
+                    href={classFolderHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex min-h-10 items-center gap-1.5 rounded-xl px-3 text-sm font-medium text-brand-700 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-500/10"
+                  >
+                    <FolderOpen className="h-4 w-4" />
+                    Thư mục Drive
+                  </a>
+                ) : null}
+                {showReports ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={copyAll}
+                    disabled={!reportsForCopy.length}
+                    className="shrink-0"
+                  >
+                    <Copy className="h-4 w-4" />
+                    Copy cả lớp
+                  </Button>
+                ) : null}
+              </div>
+
               <AdminSnapshotControls
                 lastLoadedAt={lastLoadedAt}
                 refreshing={refreshing}
@@ -298,82 +650,39 @@ export function ReportsPanel({
                 className="mb-3"
               />
 
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <PanelSummaryGrid className="mb-0 flex-1 sm:grid-cols-2 lg:grid-cols-3">
-                  <PanelSummaryStat label="Học sinh" value={visible.length} />
-                  <PanelSummaryStat
-                    label="Đã báo cáo"
-                    value={visible.length - missingCount}
-                    tone="brand"
-                    hint={missingCount > 0 ? `${missingCount} chưa gửi` : undefined}
-                  />
-                  {avgProgress != null && (
-                    <PanelSummaryStat label="Tiến độ trung bình" value={`${avgProgress}%`} tone="green" />
-                  )}
-                  {showCodeOverview && (
-                    <PanelSummaryStat
-                      label="Đã nộp code"
-                      value={`${codeByStudent.size}/${visible.length}`}
-                      tone={codeByStudent.size ? 'brand' : 'slate'}
-                    />
-                  )}
-                </PanelSummaryGrid>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={copyAll}
-                  disabled={!reportsForCopy.length}
-                  className="shrink-0"
-                >
-                  <Copy className="h-4 w-4" />
-                  Copy tất cả
-                </Button>
-              </div>
-
-              {missingCount > 0 && !isAllClasses && (
-                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
-                  <strong>{missingCount} học sinh</strong> chưa gửi báo cáo tiến độ
-                  {selectedClass ? ` cho lớp ${selectedClass}` : ''}. Học sinh cần nộp trên cổng
-                  học sinh trước khi bạn cập nhật tiến độ thủ công.
-                </div>
-              )}
-
               {loading ? (
-                <LoadingCatState message="Đang tải báo cáo học sinh..." />
+                <LoadingCatState
+                  message={showReports ? 'Đang tải báo cáo học sinh...' : 'Đang tải bài nộp...'}
+                />
               ) : visible.length === 0 ? (
-                <EmptyState title="Chưa có học sinh" />
+                <EmptyState
+                  title={
+                    search.trim() || completionFilter !== 'all'
+                      ? 'Không có học sinh khớp bộ lọc'
+                      : 'Chưa có học sinh'
+                  }
+                />
               ) : (
                 <>
+                  <ClassCompletionRoster
+                    items={visible}
+                    showDrive={showDriveOverview}
+                    showReport={showReports}
+                    lessonKey={reviewLessonKey}
+                    canDelete={canDeleteRecords}
+                    onDeleteFile={(item, file) => setPendingDelete({ type: 'file', item, file })}
+                    onDeleteReport={(item, report) => setPendingDelete({ type: 'report', item, report })}
+                    onDeleteLesson={(item) => setPendingDelete({ type: 'lesson', item })}
+                  />
                   {showCodeOverview && (
-                    <ClassCodeSubmissionsOverview
-                      codeByStudent={codeByStudent}
-                      students={visible.map(({ student }) => student)}
-                      onSelectStudent={(student) => openHistory(student, resolveReport(student))}
-                    />
-                  )}
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {visible.map(({ student, report }) =>
-                    report ? (
-                      <ReportGridCard
-                        key={student.id}
-                        report={report}
-                        student={student}
-                        showClass={isAllClasses}
-                        isNewest={student.id === newestStudentId}
-                        codeStats={codeByStudent.get(student.id)}
-                        onViewHistory={() => openHistory(student, report)}
+                    <div className="mt-4">
+                      <ClassCodeSubmissionsOverview
+                        codeByStudent={codeByStudent}
+                        students={visible.map(({ student }) => student)}
+                        onSelectStudent={(student) => openHistory(student, resolveReport(student))}
                       />
-                    ) : (
-                      <MissingReportCard
-                        key={student.id}
-                        student={student}
-                        showClass={isAllClasses}
-                        codeStats={codeByStudent.get(student.id)}
-                        onViewHistory={() => openHistory(student, null)}
-                      />
-                    ),
+                    </div>
                   )}
-                </div>
                 </>
               )}
             </>
@@ -384,144 +693,16 @@ export function ReportsPanel({
       {historyTarget && (
         <StudentHistoryModal student={historyTarget} onClose={() => setHistoryTarget(null)} />
       )}
-    </>
-  );
-}
 
-function MissingReportCard({ student, showClass, codeStats, onViewHistory }) {
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onViewHistory}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') onViewHistory();
-      }}
-      className="card flex h-full cursor-pointer flex-col border-dashed p-5 opacity-90 transition hover:border-slate-400 hover:shadow-sm"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="truncate text-base font-semibold text-slate-800 dark:text-slate-100">
-            {student.fullName}
-          </h3>
-          <p className="mt-0.5 truncate text-xs text-slate-400">
-            {showClass ? `${student.classCode} · ` : ''}Chưa gửi báo cáo tiến độ
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          <Badge tone="slate">Chưa báo cáo</Badge>
-          {codeStats && <Badge tone="brand">{codeStats.fileCount} file code</Badge>}
-        </div>
-      </div>
-      <p className="mt-4 flex-1 text-sm text-slate-500 dark:text-slate-400">
-        Học sinh chưa nộp báo cáo trên cổng học sinh. Nhấn để xem lịch sử.
-      </p>
-    </div>
-  );
-}
-
-function ReportGridCard({ report, student, showClass, isNewest = false, codeStats, onViewHistory }) {
-  const toast = useToast();
-  const hasFull = !report.snapshotOnly;
-  const percent = Number(report.progressPercent || 0);
-
-  const copyContent = async (e) => {
-    e.stopPropagation();
-    if (!hasFull) {
-      toast.error('Chỉ có snapshot tiến độ — mở lịch sử để xem nội dung đầy đủ.');
-      return;
-    }
-    try {
-      await copyToClipboard(formatProgressReport(report, { displayName: student.fullName }));
-      toast.success('Đã sao chép nội dung báo cáo.');
-    } catch {
-      toast.error('Không sao chép được.');
-    }
-  };
-
-  const highlightClass = isNewest
-    ? 'border-brand-300 bg-brand-50/40 dark:border-brand-500/40 dark:bg-brand-500/10'
-    : hasFull
-      ? 'border-slate-200 dark:border-slate-700'
-      : '';
-
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onViewHistory}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') onViewHistory();
-      }}
-      className={`card flex h-full cursor-pointer flex-col p-5 transition hover:border-brand-400 hover:shadow-md ${highlightClass}`}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="truncate text-base font-semibold text-slate-800 dark:text-slate-100">
-            {student.fullName || report.studentName}
-          </h3>
-          <p className="mt-0.5 truncate text-xs text-slate-400">
-            {showClass ? `${report.classCode} · ` : ''}
-            {report.projectName}
-          </p>
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-1">
-          {isNewest && <Badge tone="brand">Mới nhất</Badge>}
-          <Badge tone={STATUS_TONES[report.status] || 'slate'}>{report.status}</Badge>
-          {codeStats && <Badge tone="brand">{codeStats.fileCount} file code</Badge>}
-        </div>
-      </div>
-
-      <dl className="mt-4 flex-1 space-y-1.5 text-sm">
-        <div className="flex justify-between gap-2">
-          <dt className="text-slate-400">Tiến độ</dt>
-          <dd className="font-semibold tabular-nums text-brand-600 dark:text-brand-300">{percent}%</dd>
-        </div>
-        <ProgressMiniBar percent={percent} className="pb-1" />
-        <div className="flex justify-between gap-2">
-          <dt className="text-slate-400">Giai đoạn</dt>
-          <dd className="font-medium text-slate-700 dark:text-slate-200">{report.stage}</dd>
-        </div>
-        <div className="flex justify-between gap-2">
-          <dt className="text-slate-400">Nộp lúc</dt>
-          <dd className="text-right font-medium text-slate-700 dark:text-slate-200">
-            {hasFull ? formatDateTime(report.submittedAt) : 'Snapshot'}
-          </dd>
-        </div>
-      </dl>
-
-      <ProjectLinksReadonly
-        githubUrl={report.projectGithubUrl || student.projectGithubUrl}
-        canvaUrl={report.projectCanvaUrl || student.projectCanvaUrl}
-        className="mt-3"
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        title={deleteTitle}
+        message={deleteMessage}
+        confirmLabel="Xóa bản ghi"
+        loading={deleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => !deleting && setPendingDelete(null)}
       />
-
-      {hasFull ? (
-        <div className="mt-3 rounded-lg border border-emerald-100 bg-emerald-50/60 p-3 dark:border-emerald-500/20 dark:bg-emerald-500/10">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
-            Đã làm được
-          </p>
-          <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-slate-700 dark:text-slate-200">
-            {report.doneToday}
-          </p>
-        </div>
-      ) : (
-        <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
-          Chỉ có snapshot tiến độ. Nhấn card để xem lịch sử đầy đủ.
-        </p>
-      )}
-
-      {hasFull && (
-        <div
-          className="mt-4 flex justify-end border-t border-slate-100 pt-4 dark:border-slate-800"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Button size="sm" variant="ghost" onClick={copyContent}>
-            <Copy className="h-4 w-4" />
-            Copy
-          </Button>
-        </div>
-      )}
-    </div>
+    </>
   );
 }

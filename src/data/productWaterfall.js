@@ -3,92 +3,88 @@ import { STAGES } from '../constants/index.js';
 /**
  * Soft waterfall guide for final-project students.
  * Keys must match STAGES in constants/index.js.
+ * Dùng chung cho Scratch, Game Maker, Python App, Web, Computer Science.
  */
 export const PRODUCT_WATERFALL = {
   [STAGES[0]]: {
     shortLabel: 'Phân tích',
     meaning:
-      'Làm rõ vấn đề bạn muốn giải quyết trước khi viết code. Giai đoạn này giúp sản phẩm có lý do tồn tại, không làm “cho có”.',
+      'Chốt người dùng, vấn đề và tính năng cốt lõi trước khi thiết kế hay dựng sản phẩm. Dùng được cho Scratch, Game Maker, Python App, Web và Computer Science.',
     howTo: [
-      'Viết 1–2 câu: ai dùng sản phẩm và họ gặp khó khăn gì?',
-      'Liệt kê 3 việc người dùng cần làm được (chức năng cốt lõi).',
-      'Ghi rõ phạm vi: lần này làm gì / chưa làm gì (tránh ôm đồm).',
-      'Tìm ví dụ thực tế (app/web quen thuộc) để hình dung kết quả.',
+      'Viết 1–2 câu: ai dùng hoặc chơi sản phẩm, và họ cần gì?',
+      'Liệt kê 3–5 tính năng chính (ví dụ: menu, nhân vật di chuyển, nộp bài, xem kết quả).',
+      'Ghi phạm vi lần này: làm gì / chưa làm gì để tránh ôm đồm.',
+      'Tìm 1 sản phẩm tương tự (game, app hoặc website) để hình dung kết quả.',
     ],
-    lessonsHint: 'Xem lại bài tư duy giải quyết vấn đề, sơ đồ khối nếu lớp đã học.',
     doneTodayPlaceholder:
-      'Ví dụ: xác định người dùng là học sinh lớp 10; liệt kê 3 chức năng: nhập điểm, xem điểm TB, xuất cảnh báo...',
+      'Ví dụ: người dùng là học sinh; 4 tính năng: màn hình chính, nhân vật, tính điểm, lưu kết quả...',
     nextGoalPlaceholder:
-      'Ví dụ: chốt danh sách chức năng cốt lõi và bắt đầu phác thảo màn hình chính...',
-    tip: 'Đừng vội code. Nếu chưa nói rõ “ai – vấn đề – kết quả mong muốn”, hãy ở lại giai đoạn này thêm một báo cáo.',
+      'Ví dụ: chốt danh sách tính năng rồi bắt đầu phác thảo giao diện và nhân vật...',
+    tip: 'Chưa vẽ giao diện hay dựng sản phẩm nếu chưa nói rõ ai dùng, vấn đề gì và tính năng nào là bắt buộc.',
   },
   [STAGES[1]]: {
     shortLabel: 'Thiết kế',
     meaning:
-      'Biến ý tưởng thành kế hoạch làm việc: màn hình, luồng thao tác, cấu trúc dữ liệu — trước khi xây dựng.',
+      'Lên giao diện, hình ảnh nhân vật / vật phẩm và luồng từng tính năng — trước khi ráp vào công cụ lớp đang học.',
     howTo: [
-      'Phác thảo 2–4 màn hình chính (giấy/Canva đều được).',
-      'Viết luồng: người dùng bấm gì → hệ thống làm gì → hiện gì.',
-      'Chọn cấu trúc dữ liệu đơn giản (biến, list, dict) phù hợp bài đã học.',
-      'Chia việc thành bước nhỏ có thể hoàn thành trong 1–2 buổi.',
+      'Phác thảo 2–4 màn hình, phòng hoặc scene chính (giấy, Canva hoặc công cụ vẽ).',
+      'Thiết kế nhân vật, vật phẩm, nút bấm, nền: kiểu dáng, màu sắc, kích thước.',
+      'Viết luồng mỗi tính năng: người dùng làm gì → sản phẩm phản hồi gì.',
+      'Chia việc nhỏ theo từng màn hình hoặc từng tính năng, đủ làm trong 1–2 buổi.',
     ],
-    lessonsHint: 'Ôn lại bài cấu trúc dữ liệu, hàm, và cách chia chương trình thành phần.',
     doneTodayPlaceholder:
-      'Ví dụ: vẽ 3 màn hình (đăng nhập giả, danh sách, chi tiết); quyết định dùng list chứa dict cho mỗi học sinh...',
+      'Ví dụ: vẽ menu, màn chơi và màn kết quả; chọn hình nhân vật + 3 vật phẩm; ghi luồng tính điểm...',
     nextGoalPlaceholder:
-      'Ví dụ: tạo file dự án trên GitHub và viết khung chương trình theo thiết kế...',
-    tip: 'Thiết kế tốt giúp bạn biết “làm gì tiếp theo” khi code. Nếu còn mơ hồ, quay lại phân tích hoặc đơn giản hóa phạm vi.',
+      'Ví dụ: tạo dự án trên nền tảng lớp đang học và dựng khung giao diện theo bản phác...',
+    tip: 'Thiết kế xong phải chỉ được: màn hình nào, nhân vật / ảnh nào, tính năng nào làm trước.',
   },
   [STAGES[2]]: {
     shortLabel: 'Xây dựng',
     meaning:
-      'Hiện thực hóa thiết kế bằng code: làm từng chức năng nhỏ, chạy thử ngay, rồi mới làm phần kế tiếp.',
+      'Dựng sản phẩm theo thiết kế: giao diện trước, rồi gắn hành vi cho từng tính năng trên Scratch, Game Maker, Python, Web hoặc bài CS.',
     howTo: [
-      'Làm theo thứ tự: khung chương trình → chức năng 1 → chức năng 2…',
-      'Mỗi buổi chỉ nhắm 1 mục tiêu rõ (ví dụ: “nhập và lưu danh sách”).',
-      'Commit / lưu phiên bản thường xuyên; ghi chú chỗ còn lỗi.',
-      'Khi kẹt: xem lại bài giảng liên quan trước khi nhờ hỗ trợ.',
+      'Tạo dự án rồi dựng khung giao diện (sân khấu, room, cửa sổ hoặc trang web).',
+      'Thêm hình nhân vật, vật phẩm, nút và nền đúng như bản thiết kế.',
+      'Làm lần lượt từng tính năng; mỗi buổi chỉ nhắm 1 mục tiêu chạy được.',
+      'Lưu phiên bản thường xuyên; ghi chỗ còn lỗi hoặc tính năng chưa làm.',
     ],
-    lessonsHint: 'Mở Bài giảng trên thanh trên để xem lại cú pháp, vòng lặp, hàm, xử lý lỗi đã học.',
     doneTodayPlaceholder:
-      'Ví dụ: hoàn thành hàm thêm phần tử vào list; chương trình chạy được menu chọn 1–2...',
+      'Ví dụ: đã có menu và nhân vật di chuyển; nút Bắt đầu vào màn chơi được...',
     nextGoalPlaceholder:
-      'Ví dụ: làm chức năng tìm kiếm theo tên và kiểm tra với 5 dữ liệu mẫu...',
-    tip: 'Ưu tiên “chạy được ít chức năng” hơn “viết nhiều nhưng chưa chạy”. Báo cáo nên nêu được file/hàm bạn vừa đụng tới.',
+      'Ví dụ: làm tính năng tính điểm và chuyển sang màn kết quả...',
+    tip: 'Ưu tiên vài tính năng chạy được hơn làm nhiều thứ nhưng chưa mở được sản phẩm.',
   },
   [STAGES[3]]: {
     shortLabel: 'Kiểm thử',
     meaning:
-      'Chủ động tìm lỗi: thử các trường hợp thường gặp và biên, ghi lại lỗi rồi sửa — giống quy trình phần mềm thật.',
+      'Tự chơi / tự dùng như người mới: thử các tình huống thường gặp và lệch, ghi lỗi rồi sửa.',
     howTo: [
-      'Lập checklist thử: dữ liệu hợp lệ, rỗng, sai định dạng, trùng lặp…',
-      'Ghi lỗi theo mẫu: bước tái hiện → kết quả sai → bạn đã sửa thế nào.',
-      'Nhờ bạn cùng lớp thử 1 lần (góc nhìn người dùng mới).',
-      'Chỉ đánh dấu gần xong khi các chức năng cốt lõi chạy ổn.',
+      'Thử đủ luồng chính: mở sản phẩm, dùng từng tính năng, kết thúc đúng.',
+      'Thử trường hợp lệch: bấm lung tung, để trống, chọn sai, chơi lại từ đầu.',
+      'Xem giao diện và hình nhân vật / vật phẩm có bị lệch, mất, quá to hoặc quá nhỏ không.',
+      'Nhờ bạn cùng lớp thử 1 lần rồi sửa theo phản hồi.',
     ],
-    lessonsHint: 'Nhớ lại bài debug & xử lý lỗi; dùng print / kiểm tra điều kiện để khoanh vùng bug.',
     doneTodayPlaceholder:
-      'Ví dụ: thử 6 case; phát hiện lỗi khi nhập số âm; đã thêm kiểm tra và thông báo...',
+      'Ví dụ: thử 6 tình huống; nhân vật xuyên tường khi bấm nhanh; đã chỉnh va chạm...',
     nextGoalPlaceholder:
-      'Ví dụ: sửa nốt 2 lỗi còn lại và chuẩn bị link GitHub/Canva để nộp...',
-    tip: 'Kiểm thử không phải “chạy một lần thấy ổn”. Hãy cố tình làm hỏng để biết chương trình chịu được gì.',
+      'Ví dụ: sửa nốt 2 lỗi giao diện và chuẩn bị file nộp + báo cáo...',
+    tip: 'Đừng chỉ chạy một lần thấy ổn. Hãy cố tình làm lệch để biết sản phẩm chịu được gì.',
   },
   [STAGES[4]]: {
     shortLabel: 'Bảo trì',
     meaning:
-      'Hoàn thiện để người khác dùng được: dọn code, hướng dẫn chạy, cải tiến nhỏ sau phản hồi — rồi nộp sản phẩm.',
+      'Chỉnh cho người khác dùng được: dọn giao diện, tên, file thừa, rồi nộp sản phẩm kèm cách mở.',
     howTo: [
-      'Viết README ngắn: cách chạy, chức năng chính, giới hạn đã biết.',
-      'Dọn tên biến/hàm, xóa code thừa, thêm comment chỗ khó.',
-      'Cập nhật Canva (nếu có) và link GitHub cho đúng bản cuối.',
-      'Ghi 1–2 ý muốn cải tiến sau này (kể cả chưa kịp làm).',
+      'Dọn màn hình, nhân vật, âm thanh, file không dùng; đặt tên dễ hiểu.',
+      'Kiểm tra lại chữ, nút, hình ảnh cho đều và đọc được.',
+      'Ghi cách mở / chạy (file Scratch, Game Maker, Python, link web hoặc bài CS).',
+      'Nộp file sản phẩm, gửi báo cáo, và ghi 1–2 ý muốn cải tiến sau.',
     ],
-    lessonsHint: 'Xem lại hướng dẫn nộp GitHub/Canva ở tab Hướng dẫn nộp khi chuẩn bị bàn giao.',
     doneTodayPlaceholder:
-      'Ví dụ: viết README; đổi tên biến cho dễ hiểu; cập nhật link GitHub bản cuối...',
+      'Ví dụ: xóa sprite thừa, chỉnh nút cho đều; viết cách mở file; nộp bản cuối...',
     nextGoalPlaceholder:
-      'Ví dụ: nộp sản phẩm, chuẩn bị demo 2 phút cho giáo viên...',
-    tip: 'Sản phẩm “xong” là người khác chạy được và hiểu bạn làm gì — không chỉ máy bạn chạy được.',
+      'Ví dụ: nộp sản phẩm và chuẩn bị demo 1–2 phút cho giáo viên...',
+    tip: 'Sản phẩm xong là người khác mở được, hiểu tính năng và thấy giao diện rõ — không chỉ máy bạn chạy được.',
   },
 };
 

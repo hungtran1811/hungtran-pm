@@ -1,6 +1,8 @@
 import {
   collection,
+  deleteField,
   doc,
+  documentId,
   getDoc,
   getDocs,
   limit,
@@ -11,10 +13,12 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
+import { nextLatestReport } from '../lib/progressReports.js';
 import { db } from '../config/firebase.js';
 import { toReportModel } from '../models/index.js';
 import { dateKey } from '../lib/firestore.js';
 import { validateProjectLinks } from '../lib/projectLinks.js';
+import { isValidLessonKey, normalizeLessonKey } from '../lib/submissionFileName.js';
 
 const reportsRef = collection(db, 'reports');
 
@@ -29,12 +33,20 @@ export async function loadLatestReportsForStudents(students) {
   const uniqueIds = [...new Set(students.map((s) => s.latestReportId).filter(Boolean))];
   if (!uniqueIds.length) return new Map();
 
-  const snapshots = await Promise.all(uniqueIds.map((id) => getDoc(doc(db, 'reports', id))));
+  const chunks = [];
+  for (let i = 0; i < uniqueIds.length; i += 10) {
+    chunks.push(uniqueIds.slice(i, i + 10));
+  }
+
+  const snapshots = await Promise.all(
+    chunks.map((ids) => getDocs(query(reportsRef, where(documentId(), 'in', ids)))),
+  );
   const byStudentId = new Map();
   snapshots.forEach((snapshot) => {
-    if (!snapshot.exists()) return;
-    const model = toReportModel(snapshot);
-    byStudentId.set(model.studentId, model);
+    snapshot.docs.forEach((row) => {
+      const model = toReportModel(row);
+      byStudentId.set(model.studentId, model);
+    });
   });
   return byStudentId;
 }
@@ -58,6 +70,7 @@ export function reportFromStudentSnapshot(student) {
     projectCanvaUrl: student.projectCanvaUrl || '',
     submittedAt: student.lastReportedAt,
     submittedDateKey: '',
+    lessonKey: '',
     source: 'student-snapshot',
     createdAt: student.lastReportedAt,
     snapshotOnly: true,
@@ -110,10 +123,30 @@ export async function listReportsByStudent(studentId, max = 50) {
 // Submits a final-product progress report. Mirrors firestore.rules: the report
 // document and the student snapshot update MUST happen in one atomic batch so
 // `getAfter` cross-checks pass (latestReportId -> the report being created).
+const progressReportInFlight = new Set();
+
 export async function submitProgressReport({ student, classDoc, form }) {
+  if (!student?.id) throw new Error('Thiếu học sinh.');
+  if (progressReportInFlight.has(student.id)) {
+    throw new Error('Đang gửi báo cáo. Đợi gửi xong rồi thử lại.');
+  }
+  progressReportInFlight.add(student.id);
+  try {
+    return await writeProgressReport({ student, classDoc, form });
+  } finally {
+    progressReportInFlight.delete(student.id);
+  }
+}
+
+async function writeProgressReport({ student, classDoc, form }) {
   const batch = writeBatch(db);
   const reportRef = doc(collection(db, 'reports'));
   const studentRef = doc(db, 'students', student.id);
+
+  const lessonKey = normalizeLessonKey(form.lessonKey);
+  if (!isValidLessonKey(lessonKey)) {
+    throw new Error('Buổi học không hợp lệ.');
+  }
 
   const progressPercent = Number(form.progressPercent);
   const difficulties = form.difficulties?.trim() ?? '';
@@ -141,6 +174,7 @@ export async function submitProgressReport({ student, classDoc, form }) {
     projectCanvaUrl: linkValidation.canvaUrl,
     submittedAt: serverTimestamp(),
     submittedDateKey: dateKey(),
+    lessonKey,
     source: 'student-form',
     createdAt: serverTimestamp(),
   });
@@ -165,4 +199,39 @@ export async function submitProgressReport({ student, classDoc, form }) {
 
   await batch.commit();
   return reportRef.id;
+}
+
+export async function deleteProgressReportsAsAdmin(reports = [], { student, remainingReports = [] } = {}) {
+  const rows = reports.filter((row) => row?.id);
+  if (!rows.length) return;
+  const deletedIds = new Set(rows.map((row) => row.id));
+  const batch = writeBatch(db);
+  rows.forEach((row) => batch.delete(doc(db, 'reports', row.id)));
+
+  const studentId = student?.id || rows[0].studentId;
+  if (studentId && student?.latestReportId && deletedIds.has(student.latestReportId)) {
+    const next = nextLatestReport(
+      remainingReports.filter((row) => row.studentId === studentId && !deletedIds.has(row.id)),
+    );
+    const studentRef = doc(db, 'students', studentId);
+    if (next) {
+      batch.update(studentRef, {
+        latestReportId: next.id,
+        currentProgressPercent: Number(next.progressPercent ?? 0),
+        currentStage: next.stage || '',
+        currentStatus: next.status || '',
+        currentDifficulties: next.difficulties || '',
+        lastReportedAt: next.submittedAt || deleteField(),
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      batch.update(studentRef, {
+        latestReportId: '',
+        lastReportedAt: deleteField(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+  }
+
+  await batch.commit();
 }

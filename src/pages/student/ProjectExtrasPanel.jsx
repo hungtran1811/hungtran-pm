@@ -50,14 +50,7 @@ export function ProjectExtrasPanel({ classDoc, student, links, onChangeLink, onO
     <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
       <div className="border-b border-slate-200 bg-slate-50 px-4 py-2.5 dark:border-slate-700 dark:bg-slate-800/50">
         <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Bổ sung dự án</p>
-            <p className="mt-0.5 text-xs text-slate-400">
-              {FEATURE_CODE_UPLOAD_ENABLED
-                ? 'Liên kết và file code — mở khi cần cập nhật'
-                : 'Liên kết sản phẩm — mở khi cần cập nhật'}
-            </p>
-          </div>
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Bổ sung dự án</p>
           {onOpenGuide && (
             <button
               type="button"
@@ -94,19 +87,7 @@ export function ProjectExtrasPanel({ classDoc, student, links, onChangeLink, onO
       </AccordionSection>
 
       {FEATURE_CODE_UPLOAD_ENABLED && (
-        <AccordionSection icon={FileCode2} title="Nộp file code theo buổi" hint=".py, .html, .css, .js, .ui">
-          {onOpenGuide && (
-            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-              Chưa biết cách nộp?{' '}
-              <button
-                type="button"
-                onClick={() => onOpenGuide(GUIDE_SECTIONS.code)}
-                className="font-medium text-brand-600 underline-offset-2 hover:underline dark:text-brand-400"
-              >
-                Xem hướng dẫn file theo buổi
-              </button>
-            </p>
-          )}
+        <AccordionSection icon={FileCode2} title="Nộp file code theo buổi">
           <SessionCodeUpload classDoc={classDoc} student={student} compact />
         </AccordionSection>
       )}

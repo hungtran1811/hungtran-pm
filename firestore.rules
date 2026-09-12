@@ -93,13 +93,15 @@ service cloud.firestore {
           'classId', 'classCode', 'studentId', 'studentName', 'projectName',
           'progressPercent', 'stage', 'status', 'doneToday', 'nextGoal',
           'difficulties', 'projectGithubUrl', 'projectCanvaUrl',
-          'submittedAt', 'submittedDateKey', 'source', 'createdAt'
+          'submittedAt', 'submittedDateKey', 'lessonKey', 'source', 'createdAt'
         ])
         && request.resource.data.classId == request.resource.data.classCode
         && isOpenClass(request.resource.data.classCode)
         && isActiveStudentInClass(request.resource.data.studentId, request.resource.data.classCode)
         && studentDoc(request.resource.data.studentId).data.fullName == request.resource.data.studentName
         && studentDoc(request.resource.data.studentId).data.projectName == request.resource.data.projectName
+        && request.resource.data.lessonKey is string
+        && request.resource.data.lessonKey.matches('^[BL][0-9]{2,3}$')
         && isValidProgress(request.resource.data.progressPercent)
         && isValidStage(request.resource.data.stage)
         && isValidStatus(request.resource.data.status)
@@ -842,6 +844,16 @@ service cloud.firestore {
       allow list: if isAdmin() || isReadableStudentReport(resource.data);
       allow create: if isAdmin() || isValidPublicReportCreate();
       allow update, delete: if isAdmin();
+    }
+
+    match /submissions/{docId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update, delete: if isAdmin();
+    }
+
+    match /submissionUploadSessions/{docId} {
+      allow read, write: if false;
     }
 
     match /projectCodeSubmissions/{docId} {

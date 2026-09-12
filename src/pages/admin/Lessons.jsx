@@ -750,11 +750,6 @@ function HtmlSourceField({ label, value, onChange, onImport, rows, placeholder }
         className="hidden"
         onChange={handleImport}
       />
-      <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
-        Nhập một file <code>.html</code> hoàn chỉnh rồi mở tab Xem trước. SVG/màu, CSS
-        HTTPS và nút xem đáp án được giữ; <code>&lt;script&gt;</code>/iframe vẫn bị loại. Ảnh
-        đi kèm thư mục không tự tải — dùng URL https, SVG nhúng, hoặc <code>data:image</code>.
-      </p>
       {containsRelativeImageUrl && (
         <p
           role="note"

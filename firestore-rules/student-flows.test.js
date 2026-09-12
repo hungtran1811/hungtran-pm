@@ -434,6 +434,7 @@ describe('student-facing Firestore rules', () => {
       projectCanvaUrl: '',
       submittedAt: serverTimestamp(),
       submittedDateKey: '2026-06-29',
+      lessonKey: 'B02',
       source: 'student-form',
       createdAt: serverTimestamp(),
     });
@@ -451,6 +452,46 @@ describe('student-facing Firestore rules', () => {
     });
 
     await assertSucceeds(batch.commit());
+  });
+
+  it('denies a progress report without a valid lessonKey', async () => {
+    const db = publicDb();
+    const reportId = 'report-no-lesson';
+    const batch = db.batch();
+
+    batch.set(db.doc(`reports/${reportId}`), {
+      classId: FINAL_CLASS_CODE,
+      classCode: FINAL_CLASS_CODE,
+      studentId: FINAL_STUDENT_ID,
+      studentName: FINAL_STUDENT_NAME,
+      projectName: 'Final learning app',
+      progressPercent: 45,
+      stage: 'Phân tích vấn đề',
+      status: 'Đang làm',
+      doneToday: 'Built the first working prototype',
+      nextGoal: 'Collect feedback from classmates',
+      difficulties: '',
+      projectGithubUrl: 'https://github.com/example/final-learning-app',
+      projectCanvaUrl: '',
+      submittedAt: serverTimestamp(),
+      submittedDateKey: '2026-06-29',
+      source: 'student-form',
+      createdAt: serverTimestamp(),
+    });
+    batch.update(db.doc(`students/${FINAL_STUDENT_ID}`), {
+      currentProgressPercent: 45,
+      currentStage: 'Phân tích vấn đề',
+      currentStatus: 'Đang làm',
+      currentDifficulties: '',
+      lastReportedAt: serverTimestamp(),
+      latestReportId: reportId,
+      progressStalledCount: 0,
+      projectGithubUrl: 'https://github.com/example/final-learning-app',
+      projectCanvaUrl: '',
+      updatedAt: serverTimestamp(),
+    });
+
+    await assertFails(batch.commit());
   });
 
   it('denies student snapshot updates without the matching report create', async () => {
@@ -566,5 +607,25 @@ describe('student-facing Firestore rules', () => {
         content: 'print("hello")',
       }),
     );
+  });
+
+  it('denies client reads and writes on Drive submissions', async () => {
+    const db = publicDb();
+    const submissionRef = db.doc('submissions/drive-1');
+    const sessionRef = db.doc('submissionUploadSessions/token-1');
+
+    await assertFails(
+      submissionRef.set({
+        classCode: CLASS_CODE,
+        studentId: STUDENT_ID,
+        lessonKey: 'B01',
+        isLatest: true,
+        status: 'submitted',
+      }),
+    );
+    await assertFails(submissionRef.get());
+    await assertFails(db.collection('submissions').where('classCode', '==', CLASS_CODE).get());
+    await assertFails(sessionRef.set({ classCode: CLASS_CODE, studentId: STUDENT_ID }));
+    await assertFails(sessionRef.get());
   });
 });

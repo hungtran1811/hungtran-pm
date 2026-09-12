@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  classRequiresProgressAndProduct,
+  findProgramForClass,
   studentLearnPath,
   studentLessonsPath,
   studentProjectPath,
+  studentSubmitPath,
   studentUsesProjectWorkspace,
   studentWorkspaceHomePath,
 } from './studentWorkspace.js';
@@ -28,5 +31,28 @@ describe('student workspace paths', () => {
     expect(studentWorkspaceHomePath('EX1', classDoc)).toBe('/c/EX1/learn');
     expect(studentUsesProjectWorkspace(classDoc)).toBe(false);
     expect(studentLearnPath('EX1')).toBe('/c/EX1/learn');
+    expect(studentSubmitPath('EX1')).toBe('/c/EX1/submit');
+  });
+});
+
+describe('classRequiresProgressAndProduct', () => {
+  it('requires both deliverables only for final project classes', () => {
+    expect(classRequiresProgressAndProduct({ curriculumPhase: 'learning' })).toBe(false);
+    expect(
+      classRequiresProgressAndProduct({ curriculumPhase: 'final', finalMode: 'project' }),
+    ).toBe(true);
+    expect(classRequiresProgressAndProduct({ curriculumPhase: 'final', finalMode: 'exam' })).toBe(
+      false,
+    );
+    expect(
+      classRequiresProgressAndProduct({ curriculumPhase: 'final', programId: 'p1' }, { finalMode: 'exam' }),
+    ).toBe(false);
+  });
+
+  it('resolves the matching program for a class', () => {
+    const program = { id: 'web', finalMode: 'project' };
+    expect(findProgramForClass({ curriculumProgramId: 'web' }, [program])).toEqual(program);
+    expect(findProgramForClass({ programId: 'web' }, [program])).toEqual(program);
+    expect(findProgramForClass({ programId: 'other' }, [program])).toBeNull();
   });
 });

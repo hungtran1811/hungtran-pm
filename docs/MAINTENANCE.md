@@ -32,10 +32,11 @@ Các write từ cổng học sinh phải giữ đúng shape vì `firestore.rules
   - `knowledgeReportStudentSummaries/{sameId}`
   - `studentFeedbackIndex/{classCode}__{studentId}` với `lessonIds: arrayUnion(lessonId)`
 - Báo cáo tiến độ dự án phải ghi cùng batch:
-  - `reports/{generatedId}`
+  - `reports/{generatedId}` với `lessonKey` dạng `L01` / `L02`… (bản cũ `B01` vẫn đọc được)
   - `students/{studentId}` với `latestReportId` trỏ đúng report mới
 - Quiz/ôn tập: collection legacy vẫn nằm trong `firestore.rules` để bài nộp cũ an toàn. App không còn UI ghi mới.
 - Mini-game **Vụ án** đã bỏ khỏi app; không còn rules `caseSessions` (feature chưa từng deploy production).
+- Nộp bài Drive (`submissions`, `submissionUploadSessions`): client không được ghi; chỉ admin đọc `submissions` (UI `/admin/reports`). Function ghi bằng Admin SDK. Xem `docs/student-submission.md`.
 
 ## Refactor Rules
 

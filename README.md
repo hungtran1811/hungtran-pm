@@ -1,6 +1,6 @@
 # hungtranPM — Quản lý lớp học & học sinh
 
-Webapp quản lý lớp học lập trình (một giáo viên), xây dựng bằng **React + Vite + Tailwind CSS** trên **Firebase** (Authentication + Cloud Firestore). Frontend deploy **Netlify**; không dùng Cloud Functions — logic ghi/đọc qua client + `firestore.rules`.
+Webapp quản lý lớp học lập trình (một giáo viên), xây dựng bằng **React + Vite + Tailwind CSS** trên **Firebase** (Authentication + Cloud Firestore). Frontend deploy **Netlify**. Hầu hết logic HS/admin đi qua client + `firestore.rules`; **nộp file Drive** dùng Netlify Functions (secret Google/Firebase Admin không lên trình duyệt).
 
 ## Tính năng
 
@@ -14,6 +14,7 @@ Webapp quản lý lớp học lập trình (một giáo viên), xây dựng bằ
 | **Báo cáo học sinh** | Tab _Báo cáo tiến độ_ + _Phản hồi buổi học_ — lọc lớp/buổi/trạng thái, copy clipboard, reset phản hồi, **Làm mới**        |
 | **Thống kê**         | Biểu đồ tiến độ, heatmap mức hiểu theo buổi, bảng so sánh lớp, **Làm mới**                                                |
 | **Bài giảng**        | CRUD chương trình & bài (nhập HTML + xem trước, fallback Markdown + ảnh Cloudinary); lọc chương trình theo môn → trình độ |
+| **Báo cáo & nộp bài** | `/admin/reports` — báo cáo tiến độ + file Drive cùng trang; mở file trên Drive bằng tài khoản giáo viên                  |
 | **Mini game**        | Quay tên, đoán số, lật bài, hộp bí ẩn; **Coding Showdown**, **Truy tìm gián điệp** (realtime Firestore); điểm danh có mặt |
 
 Đường dẫn cũ vẫn hoạt động: `/admin/feedback` → báo cáo HS; `/admin/quiz` và `/admin/scores` → thống kê.
@@ -27,9 +28,10 @@ Webapp quản lý lớp học lập trình (một giáo viên), xây dựng bằ
 - **Gửi & chờ duyệt tên dự án** (cuối khóa dạng project)
 - **Phase cuối khóa + project:** `/c/:code/project` — form đề xuất / báo cáo tiến độ; navbar **Dự án | Bài giảng** (desktop + bottom nav mobile); xem lại bài tại `/c/:code/lessons`
 - **Phase cuối khóa + exam:** `/c/:code/learn` — vẫn xem bài giảng; không có form báo cáo tiến độ dự án
+- **Nộp bài Drive:** `/c/:code/submit` (hoặc `/submit` + mã lớp) — chọn buổi, upload ≤150MB lên Drive; HS thấy buổi đã nộp + giờ + tên file, **không** tải file. Admin xem tại `/admin/reports`. Setup: [`docs/student-submission.md`](docs/student-submission.md)
 - **Mini game realtime:** banner tham gia Showdown / Spy trên cổng HS (`?showdown=`, `?spy=`)
 
-**Feature flags** (xem [`src/config/features.js`](src/config/features.js)): phản hồi buổi học (`FEATURE_KNOWLEDGE_FEEDBACK_ENABLED`) và Coding Showdown hiện **tắt UI**; Spy bật.
+**Feature flags** (xem [`src/config/features.js`](src/config/features.js)): phản hồi buổi học (`FEATURE_KNOWLEDGE_FEEDBACK_ENABLED`) và Coding Showdown hiện **tắt UI**; Spy và nộp bài Drive bật.
 
 Giao diện responsive, **dark mode**.
 
@@ -44,7 +46,8 @@ Giao diện responsive, **dark mode**.
 
 ```
 src/
-  App.jsx                 # routes (HS: /c/:code/learn|project|lessons)
+  App.jsx                 # routes (HS: /c/:code/learn|project|lessons|submit)
+  netlify/functions/      # Drive resumable session + ghi submissions
   pages/admin/            # Dashboard, Classes, Students, ReportsHub, Lessons, Analytics, MiniGames
   pages/student/          # StudentPortal, LessonsView, FinalProjectStudentView
   services/               # Firestore: classes, students, reports, knowledgeReports, curriculum
@@ -65,6 +68,8 @@ npm run dev
 ```
 
 Mở http://localhost:5173 — admin: `/admin/login`, học sinh: `/` hoặc `/c/MÃ_LỚP`.
+
+Nộp bài Drive local: đặt secret Google/Firebase Admin (không prefix `VITE_`) rồi chạy `npx netlify dev`. Xem [`docs/student-submission.md`](docs/student-submission.md).
 
 ## Đăng nhập admin
 

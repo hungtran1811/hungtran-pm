@@ -21,15 +21,9 @@ export function ProductWaterfallPanel({
 
   return (
     <div className="space-y-5">
-      <div>
-        <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
-          Quy trình làm sản phẩm
-        </h3>
-        <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
-          Làm phần mềm theo thứ tự giúp bạn lên ý tưởng rõ rồi mới code. Nên đi lần lượt,
-          nhưng vẫn được xem trước các giai đoạn sau.
-        </p>
-      </div>
+      <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
+        Quy trình làm sản phẩm
+      </h3>
 
       <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
         {STAGES.map((stage, index) => {
@@ -68,7 +62,7 @@ export function ProductWaterfallPanel({
           </Badge>
           {selectedStage === currentStage && <Badge tone="green">Bạn đang ở đây</Badge>}
           {selectedIndex > currentIndex && (
-            <Badge tone="slate">Xem trước — nên hoàn thành bước trước</Badge>
+            <Badge tone="slate">Xem trước</Badge>
           )}
         </div>
 
@@ -99,10 +93,6 @@ export function ProductWaterfallPanel({
           <Lightbulb className="mt-0.5 h-4 w-4 shrink-0" />
           <p>{guide.tip}</p>
         </div>
-
-        <p className="mt-3 text-xs leading-5 text-slate-500 dark:text-slate-400">
-          {guide.lessonsHint}
-        </p>
 
         <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           <Button

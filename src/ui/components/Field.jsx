@@ -55,7 +55,7 @@ export const Textarea = forwardRef(function Textarea(props, ref) {
 
 export function Select({ children, ...props }) {
   return (
-    <select {...props} className={`input-base ${props.className || ''}`}>
+    <select {...props} className={`input-base cursor-pointer hover:border-brand-400 ${props.className || ''}`}>
       {children}
     </select>
   );

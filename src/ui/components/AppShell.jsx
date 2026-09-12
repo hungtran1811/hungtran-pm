@@ -10,6 +10,7 @@ import {
   Gamepad2,
   Menu,
   Settings,
+  Upload,
   X,
   LogOut,
 } from 'lucide-react';
@@ -17,15 +18,24 @@ import { useAuth } from '../../state/auth.store.jsx';
 import { ThemeToggle } from './ThemeToggle.jsx';
 import { Button } from './Button.jsx';
 import { BrandLogo } from './BrandLogo.jsx';
-import { FEATURE_PROGRESS_REPORTS_ENABLED } from '../../config/features.js';
+import {
+  FEATURE_DRIVE_SUBMISSION_ENABLED,
+  FEATURE_PROGRESS_REPORTS_ENABLED,
+} from '../../config/features.js';
 
 const NAV_ITEMS = [
   { to: '/admin', label: 'Tổng quan', icon: LayoutDashboard, end: true },
   { to: '/admin/classes', label: 'Lớp học', icon: School },
   { to: '/admin/students', label: 'Học sinh', icon: Users },
   FEATURE_PROGRESS_REPORTS_ENABLED
-    ? { to: '/admin/reports', label: 'Báo cáo học sinh', icon: TrendingUp }
-    : null,
+    ? {
+        to: '/admin/reports',
+        label: FEATURE_DRIVE_SUBMISSION_ENABLED ? 'Báo cáo & nộp bài' : 'Báo cáo học sinh',
+        icon: TrendingUp,
+      }
+    : FEATURE_DRIVE_SUBMISSION_ENABLED
+      ? { to: '/admin/submissions', label: 'Bài nộp Drive', icon: Upload }
+      : null,
   { to: '/admin/analytics', label: 'Thống kê', icon: BarChart3 },
   { to: '/admin/lessons', label: 'Bài giảng', icon: BookOpen },
   { to: '/admin/games', label: 'Mini game', icon: Gamepad2 },
@@ -34,7 +44,7 @@ const NAV_ITEMS = [
 
 function navLinkClass(isActive) {
   return [
-    'group flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-[15px] font-medium transition-all',
+    'group flex cursor-pointer items-center gap-3 rounded-xl px-3.5 py-2.5 text-[15px] font-medium transition-all',
     isActive
       ? 'bg-brand-600 text-white shadow-md shadow-brand-600/25 ring-1 ring-brand-500/40'
       : 'text-slate-700 hover:bg-white hover:text-brand-700 hover:shadow-sm dark:text-slate-200 dark:hover:bg-slate-800/90 dark:hover:text-white',
@@ -132,7 +142,7 @@ export function AppShell({ title, actions, children }) {
 
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-slate-900/50" onClick={() => setMobileOpen(false)} />
+          <div className="absolute inset-0 cursor-pointer bg-slate-900/50" onClick={() => setMobileOpen(false)} />
           <aside className="admin-sidebar relative flex h-full w-72 max-w-[85%] flex-col bg-gradient-to-b from-white to-slate-50 px-3 py-6 dark:from-slate-900 dark:to-slate-950">
             <div className="flex items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
               <BrandLogo size="sm" showWordmark />

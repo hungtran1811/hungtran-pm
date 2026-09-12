@@ -7,6 +7,9 @@ export const FEATURE_SPY_GAME_ENABLED = true;
 /** Nộp file code theo buổi trên cổng HS — tạm ẩn. */
 export const FEATURE_CODE_UPLOAD_ENABLED = false;
 
+/** Nộp file sản phẩm qua Google Drive (Netlify Functions + Firestore metadata). */
+export const FEATURE_DRIVE_SUBMISSION_ENABLED = true;
+
 /** Phản hồi buổi học (knowledge feedback) — tạm tắt toàn bộ UI HS + admin. */
 export const FEATURE_KNOWLEDGE_FEEDBACK_ENABLED = false;
 

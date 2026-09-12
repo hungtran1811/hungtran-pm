@@ -43,9 +43,6 @@ export function ImageGalleryUpload({ label = 'Ảnh minh họa', value = [], onC
   return (
     <div>
       <span className="label-base">{label}</span>
-      <p className="mb-2 text-xs text-slate-500">
-        Ảnh phụ hiển thị dưới banner trong bài giảng ({images.length}/{max}).
-      </p>
       {images.length > 0 && (
         <div className="mb-3 grid grid-cols-2 gap-2">
           {images.map((img, i) => (

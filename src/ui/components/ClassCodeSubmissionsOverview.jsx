@@ -31,7 +31,6 @@ export function ClassCodeSubmissionsOverview({ codeByStudent, students, onSelect
           <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">File code theo buổi</p>
           <Badge tone="brand">{rows.length} học sinh</Badge>
         </div>
-        <p className="mt-0.5 text-xs text-slate-500">Nhấn tên học sinh để xem chi tiết, xem trước hoặc tải file.</p>
       </div>
       <div className="divide-y divide-slate-100 dark:divide-slate-800">
         {rows.map(({ student, stats }) => (
@@ -39,7 +38,7 @@ export function ClassCodeSubmissionsOverview({ codeByStudent, students, onSelect
             key={student.id}
             type="button"
             onClick={() => onSelectStudent(student)}
-            className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800/40"
+            className="flex w-full cursor-pointer items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50 dark:hover:bg-slate-800/40"
           >
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-slate-800 dark:text-slate-100">{student.fullName}</p>
