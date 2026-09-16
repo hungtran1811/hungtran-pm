@@ -29,6 +29,7 @@ export function DriveSubmitPage() {
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
   const [notes, setNotes] = useState([]);
+  const [notesError, setNotesError] = useState('');
   const uploadingRef = useRef(false);
 
   const loadNotes = useCallback(() => {
@@ -38,8 +39,13 @@ export function DriveSubmitPage() {
       studentId: student.id,
       studentName: student.fullName,
     })
-      .then(setNotes)
-      .catch(() => {});
+      .then((rows) => {
+        setNotes(rows);
+        setNotesError('');
+      })
+      .catch((err) => {
+        setNotesError(err?.message || 'Không tải được bài đã nộp.');
+      });
   }, [classCode, student?.id, student?.fullName]);
 
   useEffect(() => {
@@ -217,6 +223,11 @@ export function DriveSubmitPage() {
       </form>
 
       <div className="mt-5">
+        {notesError ? (
+          <p className="mb-3 text-sm text-amber-800 dark:text-amber-200" role="status">
+            {notesError}
+          </p>
+        ) : null}
         <StudentSubmissionNotes notes={notes} lessonOptions={catalogOptions} />
       </div>
     </div>

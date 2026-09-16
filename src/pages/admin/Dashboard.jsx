@@ -2,31 +2,33 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   School,
-  Users,
   AlertTriangle,
   BarChart3,
   ClipboardList,
-  ChevronRight,
-  GraduationCap,
   CalendarDays,
   Gamepad2,
   RefreshCw,
   BookOpen,
   UserRound,
   Upload,
+  FileWarning,
 } from 'lucide-react';
 import { AppShell } from '../../ui/components/AppShell.jsx';
-import { StatCard } from '../../ui/components/StatCard.jsx';
 import { SkeletonCardGrid, SkeletonRows } from '../../ui/components/Skeleton.jsx';
 import { Button } from '../../ui/components/Button.jsx';
 import { Badge } from '../../ui/components/Badge.jsx';
 import { Field, Input, Select } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
+import { ClassOpsBoard, OpsAttentionList } from '../../ui/components/ClassOpsBoard.jsx';
 import { CURRICULUM_PHASES, CURRICULUM_PHASE_LABELS } from '../../constants/index.js';
 import { setClassCurriculumQuick } from '../../services/classes.service.js';
-import { invalidateAdminDataCache } from '../../lib/adminDataCache.js';
-import { loadDashboardOpsSnapshot } from '../../lib/adminPanelData.js';
-import { computeDashboardStats } from '../../lib/dashboardStats.js';
+import { invalidateAdminSnapshots, loadDashboardOpsSnapshot } from '../../lib/adminPanelData.js';
+import {
+  buildClassOpsRows,
+  buildOpsAttentionItems,
+  computeDashboardStats,
+  computeOpsKpis,
+} from '../../lib/dashboardStats.js';
 import { getErrorMessage } from '../../lib/firestore.js';
 import {
   FEATURE_DRIVE_SUBMISSION_ENABLED,
@@ -38,34 +40,61 @@ function formatLoadedAt(date) {
   return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 }
 
-function QuickAction({ to, icon, title, description, emphasis = false }) {
+function CompactKpi({ label, value, hint, tone = 'slate', icon }) {
+  const tones = {
+    brand: 'text-brand-600 dark:text-brand-300',
+    red: 'text-red-600 dark:text-red-400',
+    amber: 'text-amber-600 dark:text-amber-400',
+    green: 'text-emerald-600 dark:text-emerald-400',
+    slate: 'text-slate-800 dark:text-slate-100',
+  };
+  return (
+    <div className="card px-3.5 py-3">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{label}</p>
+        {icon ? <span className={tones[tone] || tones.slate}>{icon}</span> : null}
+      </div>
+      <p className={`mt-1 text-2xl font-semibold tabular-nums ${tones[tone] || tones.slate}`}>{value}</p>
+      {hint ? <p className="mt-0.5 truncate text-[11px] text-slate-400">{hint}</p> : null}
+    </div>
+  );
+}
+
+function CompactShortcut({ to, icon, title }) {
   return (
     <Link
       to={to}
-      className={`group flex h-full flex-col gap-3 rounded-2xl border p-4 transition hover:shadow-md sm:p-5 ${
-        emphasis
-          ? 'border-brand-300 bg-gradient-to-br from-brand-50 to-white hover:border-brand-400 dark:border-brand-500/40 dark:from-brand-500/10 dark:to-slate-900'
-          : 'card hover:border-brand-300 dark:hover:border-brand-500/40'
-      }`}
+      className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:border-brand-300 hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-brand-500/50 dark:hover:text-brand-300"
     >
-      <span
-        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${
-          emphasis
-            ? 'bg-brand-600 text-white shadow-sm'
-            : 'bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-300'
-        }`}
-      >
-        {icon}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="font-semibold text-slate-900 dark:text-slate-50">{title}</p>
-        <p className="mt-1 text-sm leading-snug text-slate-500 dark:text-slate-400">{description}</p>
-      </div>
-      <span className="inline-flex items-center gap-1 text-sm font-medium text-brand-600 dark:text-brand-300">
-        Mở
-        <ChevronRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
-      </span>
+      {icon}
+      {title}
     </Link>
+  );
+}
+
+function ShortcutBar() {
+  return (
+    <nav aria-label="Thao tác nhanh" className="flex flex-wrap gap-2">
+      {FEATURE_PROGRESS_REPORTS_ENABLED && (
+        <CompactShortcut
+          to="/admin/reports"
+          icon={<ClipboardList className="h-4 w-4" />}
+          title={FEATURE_DRIVE_SUBMISSION_ENABLED ? 'Báo cáo' : 'Báo cáo học sinh'}
+        />
+      )}
+      {FEATURE_DRIVE_SUBMISSION_ENABLED && !FEATURE_PROGRESS_REPORTS_ENABLED && (
+        <CompactShortcut
+          to="/admin/submissions"
+          icon={<Upload className="h-4 w-4" />}
+          title="Bài nộp Drive"
+        />
+      )}
+      <CompactShortcut to="/admin/games" icon={<Gamepad2 className="h-4 w-4" />} title="Mini game" />
+      <CompactShortcut to="/admin/students" icon={<UserRound className="h-4 w-4" />} title="Học sinh" />
+      <CompactShortcut to="/admin/classes" icon={<School className="h-4 w-4" />} title="Lớp học" />
+      <CompactShortcut to="/admin/lessons" icon={<BookOpen className="h-4 w-4" />} title="Bài giảng" />
+      <CompactShortcut to="/admin/analytics" icon={<BarChart3 className="h-4 w-4" />} title="Thống kê" />
+    </nav>
   );
 }
 
@@ -126,26 +155,17 @@ function SessionQuickSet({ classes, onUpdated }) {
   if (!activeClasses.length) return null;
 
   return (
-    <section className="card border-brand-200 bg-gradient-to-br from-brand-50/80 to-white p-5 dark:border-brand-500/30 dark:from-brand-500/5 dark:to-slate-900">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white">
-            <CalendarDays className="h-5 w-5" />
-          </span>
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Buổi & giai đoạn lớp</h2>
-          </div>
-        </div>
+    <section className="card p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <CalendarDays className="h-4 w-4 text-brand-600 dark:text-brand-300" />
+        <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-50">Đổi buổi</h2>
         {selected && (
-          <div className="flex flex-wrap gap-2">
-            <Badge tone="brand">Buổi {selected.curriculumCurrentSession ?? 0}</Badge>
-            <Badge tone="slate">
-              {CURRICULUM_PHASE_LABELS[selected.curriculumPhase] || selected.curriculumPhase}
-            </Badge>
-          </div>
+          <Badge tone="brand" className="ml-auto">
+            B{selected.curriculumCurrentSession ?? 0}
+          </Badge>
         )}
       </div>
-      <div className="grid gap-3 lg:grid-cols-[minmax(12rem,1.4fr)_auto_auto] lg:items-end">
+      <div className="space-y-3">
         <Field label="Lớp">
           <Select value={classCode} onChange={(e) => handleClassChange(e.target.value)}>
             {activeClasses.map((c) => (
@@ -156,41 +176,42 @@ function SessionQuickSet({ classes, onUpdated }) {
             ))}
           </Select>
         </Field>
-        <Field label="Buổi số">
-          <Input
-            type="number"
-            min="0"
-            max="50"
-            value={session}
-            onChange={(e) => setSession(e.target.value)}
-            className="w-28"
-          />
-        </Field>
-        <Button onClick={handleSave} loading={saving} className="lg:mb-0.5">
-          Lưu
-        </Button>
-      </div>
-      <div className="mt-4">
-        <p className="mb-1.5 text-xs font-medium text-slate-500">Giai đoạn lớp</p>
-        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Giai đoạn lớp">
-          {CURRICULUM_PHASES.map((item) => {
-            const active = phase === item.value;
-            return (
-              <button
-                key={item.value}
-                type="button"
-                aria-pressed={active}
-                onClick={() => setPhase(item.value)}
-                className={`inline-flex min-h-11 items-center rounded-xl px-4 text-sm font-medium transition ${
-                  active
-                    ? 'bg-brand-600 text-white shadow-sm'
-                    : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700 dark:hover:bg-slate-800'
-                }`}
-              >
-                {item.value === 'final' ? 'Làm sản phẩm' : item.label}
-              </button>
-            );
-          })}
+        <div className="flex items-end gap-2">
+          <Field label="Buổi số" className="min-w-0 flex-1">
+            <Input
+              type="number"
+              min="0"
+              max="50"
+              value={session}
+              onChange={(e) => setSession(e.target.value)}
+            />
+          </Field>
+          <Button onClick={handleSave} loading={saving} className="shrink-0">
+            Lưu
+          </Button>
+        </div>
+        <div>
+          <p className="mb-1.5 text-xs font-medium text-slate-500">Giai đoạn</p>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Giai đoạn lớp">
+            {CURRICULUM_PHASES.map((item) => {
+              const active = phase === item.value;
+              return (
+                <button
+                  key={item.value}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setPhase(item.value)}
+                  className={`inline-flex min-h-10 flex-1 items-center justify-center rounded-xl px-3 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 ${
+                    active
+                      ? 'bg-brand-600 text-white shadow-sm'
+                      : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  {item.value === 'final' ? 'Sản phẩm' : 'Học'}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     </section>
@@ -201,6 +222,7 @@ export function DashboardPage() {
   const toast = useToast();
   const [classes, setClasses] = useState([]);
   const [students, setStudents] = useState([]);
+  const [submissionsByClass, setSubmissionsByClass] = useState({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadedAt, setLoadedAt] = useState(null);
@@ -210,7 +232,13 @@ export function DashboardPage() {
       const ops = await loadDashboardOpsSnapshot({ force });
       setClasses(ops.classes);
       setStudents(ops.students);
+      setSubmissionsByClass(ops.submissionsByClass || {});
       setLoadedAt(new Date());
+      if (!ops.fromCache && ops.failedClassCodes?.length) {
+        toast.error(
+          `Không tải được sản phẩm Drive của lớp ${ops.failedClassCodes.join(', ')}. Cột sản phẩm hiển thị —.`,
+        );
+      }
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -228,141 +256,125 @@ export function DashboardPage() {
     [classes, students],
   );
 
-  const studentHint = stats.enrolledOnClassDocs !== stats.activeStudents
-    ? `${stats.enrolledOnClassDocs} trên hồ sơ lớp`
-    : `${stats.activeClasses} lớp đang mở`;
+  const opsRows = useMemo(
+    () =>
+      buildClassOpsRows(classes, students, submissionsByClass, {
+        driveEnabled: FEATURE_DRIVE_SUBMISSION_ENABLED,
+      }),
+    [classes, students, submissionsByClass],
+  );
+
+  const attentionItems = useMemo(() => buildOpsAttentionItems(opsRows), [opsRows]);
+  const opsKpis = useMemo(() => computeOpsKpis(opsRows), [opsRows]);
 
   const handleRefresh = () => {
     setRefreshing(true);
-    invalidateAdminDataCache();
+    invalidateAdminSnapshots();
     loadDashboard(true);
   };
 
+  const kpiGridClass = FEATURE_DRIVE_SUBMISSION_ENABLED
+    ? 'grid grid-cols-2 gap-2 lg:grid-cols-4'
+    : 'grid grid-cols-2 gap-2 lg:grid-cols-3';
+
+  const handleSessionUpdated = (code, { session, phase }) => {
+    invalidateAdminSnapshots();
+    setClasses((prev) =>
+      prev.map((c) =>
+        c.classCode === code
+          ? { ...c, curriculumCurrentSession: session, curriculumPhase: phase }
+          : c,
+      ),
+    );
+  };
+
   return (
-    <AppShell title="Tổng quan">
+    <AppShell
+      title="Tổng quan"
+      actions={(
+        <div className="flex items-center gap-2">
+          {loadedAt && !loading ? (
+            <p className="hidden text-xs text-slate-500 sm:block dark:text-slate-400">
+              {formatLoadedAt(loadedAt)}
+            </p>
+          ) : null}
+          <Button variant="secondary" size="sm" onClick={handleRefresh} loading={refreshing}>
+            <RefreshCw className="h-4 w-4" />
+            Làm mới
+          </Button>
+        </div>
+      )}
+    >
       {loading ? (
-        <div className="space-y-6">
+        <div className="space-y-5">
           <SkeletonCardGrid count={4} />
-          <SkeletonRows count={4} />
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_19rem]">
+            <SkeletonRows count={5} />
+            <SkeletonRows count={4} />
+          </div>
         </div>
       ) : (
-        <div className="space-y-8">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            {loadedAt ? (
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                Cập nhật {formatLoadedAt(loadedAt)}
-              </p>
-            ) : (
-              <span />
-            )}
-            <Button variant="secondary" size="sm" onClick={handleRefresh} loading={refreshing}>
-              <RefreshCw className="h-4 w-4" />
-              Làm mới
-            </Button>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard
-              label="Lớp đang vận hành"
-              value={stats.activeClasses}
-              hint={`${stats.totalClasses} lớp tổng · ${stats.archivedClasses} đã kết thúc`}
-              icon={<School className="h-5 w-5" />}
-            />
-            <StatCard
-              label="Học sinh đang học"
-              value={stats.activeStudents}
-              hint={studentHint}
-              tone="brand"
-              icon={<Users className="h-5 w-5" />}
-            />
-            <StatCard
-              label="Cần hỗ trợ"
-              value={stats.needsHelp}
-              hint="Trong lớp đang mở"
-              tone="red"
-              icon={<AlertTriangle className="h-5 w-5" />}
-            />
-            <StatCard
-              label="Đã hoàn thành khóa"
-              value={stats.completedCourse}
-              hint={`${stats.alumniStudents} HS thuộc lớp đã kết thúc`}
-              tone="green"
-              icon={<GraduationCap className="h-5 w-5" />}
-            />
-          </div>
-
-          <SessionQuickSet
-            classes={classes}
-            onUpdated={(code, { session, phase }) => {
-              invalidateAdminDataCache();
-              setClasses((prev) =>
-                prev.map((c) =>
-                  c.classCode === code
-                    ? { ...c, curriculumCurrentSession: session, curriculumPhase: phase }
-                    : c,
-                ),
-              );
-            }}
-          />
-
-          <section>
-            <h2 className="mb-3 text-lg font-semibold text-slate-800 dark:text-slate-100">
-              Thao tác nhanh
-            </h2>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <QuickAction
-                to="/admin/classes"
-                icon={<School className="h-6 w-6" />}
-                title="Quản lý lớp"
-                description="Danh sách lớp, chương trình, trạng thái buổi học."
-                emphasis
+        <div className="space-y-5">
+          <div className="space-y-3">
+            <div className={kpiGridClass}>
+              <CompactKpi
+                label="Lớp mở"
+                value={stats.activeClasses}
+                hint={`${stats.archivedClasses} lớp đã kết thúc`}
+                tone="brand"
+                icon={<School className="h-4 w-4" />}
               />
-              {FEATURE_PROGRESS_REPORTS_ENABLED && (
-                <QuickAction
-                  to="/admin/reports"
-                  icon={<ClipboardList className="h-6 w-6" />}
-                  title={FEATURE_DRIVE_SUBMISSION_ENABLED ? 'Báo cáo & nộp bài' : 'Báo cáo học sinh'}
-                  description={
-                    FEATURE_DRIVE_SUBMISSION_ENABLED
-                      ? 'Tiến độ cuối khóa và file Drive trên cùng một trang.'
-                      : 'Tiến độ cuối khóa, HS chưa nộp báo cáo.'
-                  }
+              <CompactKpi
+                label="Cần hỗ trợ"
+                value={stats.needsHelp}
+                hint="Học sinh đang mở"
+                tone={stats.needsHelp > 0 ? 'red' : 'slate'}
+                icon={<AlertTriangle className="h-4 w-4" />}
+              />
+              <CompactKpi
+                label="Thiếu báo cáo"
+                value={opsKpis.missingReports}
+                hint="Lớp làm sản phẩm"
+                tone={opsKpis.missingReports > 0 ? 'amber' : 'slate'}
+                icon={<ClipboardList className="h-4 w-4" />}
+              />
+              {FEATURE_DRIVE_SUBMISSION_ENABLED && (
+                <CompactKpi
+                  label="Thiếu file"
+                  value={opsKpis.missingFiles}
+                  hint="Buổi hiện tại"
+                  tone={opsKpis.missingFiles > 0 ? 'amber' : 'slate'}
+                  icon={<FileWarning className="h-4 w-4" />}
                 />
               )}
-              {FEATURE_DRIVE_SUBMISSION_ENABLED && !FEATURE_PROGRESS_REPORTS_ENABLED && (
-                <QuickAction
-                  to="/admin/submissions"
-                  icon={<Upload className="h-6 w-6" />}
-                  title="Bài nộp Drive"
-                  description="Xem file học sinh đã nộp và mở trên Drive."
-                />
-              )}
-              <QuickAction
-                to="/admin/games"
-                icon={<Gamepad2 className="h-6 w-6" />}
-                title="Mini game"
-                description="Điểm danh có mặt, đoán số, gián điệp, showdown."
-              />
-              <QuickAction
-                to="/admin/students"
-                icon={<UserRound className="h-6 w-6" />}
-                title="Học sinh"
-                description="Thêm, sửa hồ sơ và trạng thái dự án."
-              />
-              <QuickAction
-                to="/admin/lessons"
-                icon={<BookOpen className="h-6 w-6" />}
-                title="Bài giảng"
-                description="Nội dung buổi học và bài tập thực hành."
-              />
-              <QuickAction
-                to="/admin/analytics"
-                icon={<BarChart3 className="h-6 w-6" />}
-                title="Thống kê"
-                description="Tổng quan lớp, phân bố tiến độ và điểm cần chú ý."
-              />
             </div>
-          </section>
+            <ShortcutBar />
+          </div>
+
+          <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-start">
+            <section className="order-2 min-w-0 lg:order-none lg:col-start-1">
+              <h2 className="mb-3 text-lg font-semibold text-slate-800 dark:text-slate-100">
+                Tình hình lớp
+                <span className="ml-2 text-sm font-normal text-slate-500">{opsRows.length} lớp đang mở</span>
+              </h2>
+              <ClassOpsBoard rows={opsRows} driveEnabled={FEATURE_DRIVE_SUBMISSION_ENABLED} />
+            </section>
+
+            <div className="contents lg:col-start-2 lg:flex lg:flex-col lg:gap-4 lg:sticky lg:top-20">
+              <section className="order-1 lg:order-none">
+                <h2 className="mb-3 text-lg font-semibold text-slate-800 dark:text-slate-100">
+                  Cần xử lý
+                  {attentionItems.length > 0 ? (
+                    <span className="ml-2 text-sm font-normal text-slate-400">{attentionItems.length} mục</span>
+                  ) : null}
+                </h2>
+                <OpsAttentionList items={attentionItems} hasOpenClasses={opsRows.length > 0} />
+              </section>
+              <div className="order-3 lg:order-none">
+                <SessionQuickSet classes={classes} onUpdated={handleSessionUpdated} />
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </AppShell>

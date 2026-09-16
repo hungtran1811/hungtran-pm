@@ -25,12 +25,9 @@ async function postJson(name, body, { retries = 2 } = {}) {
         body: JSON.stringify(body),
       });
     } catch {
-      lastError = new Error(
-        'Không kết nối được máy chủ nộp bài. Chạy netlify dev hoặc kiểm tra mạng.',
+      throw new Error(
+        'Không kết nối được máy chủ nộp bài. Chạy npm run dev:functions rồi tải lại trang.',
       );
-      if (attempt === retries) throw lastError;
-      await sleep(400 * 2 ** attempt);
-      continue;
     }
 
     let payload = {};
@@ -45,10 +42,12 @@ async function postJson(name, body, { retries = 2 } = {}) {
     lastError = new Error(
       payload.error ||
         (response.status >= 500
-          ? 'Máy chủ nộp bài đang lỗi. Nếu đang test local, chạy npx netlify dev rồi thử lại.'
+          ? 'Máy chủ nộp bài đang lỗi. Nếu đang test local, chạy npm run dev:functions rồi thử lại.'
           : `Không xử lý được yêu cầu (${response.status}).`),
     );
-    if (!isRetryableStatus(response.status) || attempt === retries) throw lastError;
+    const localDown =
+      typeof payload.error === 'string' && payload.error.includes('dev:functions');
+    if (localDown || !isRetryableStatus(response.status) || attempt === retries) throw lastError;
     await sleep(400 * 2 ** attempt + Math.random() * 250);
   }
   throw lastError;
@@ -153,6 +152,7 @@ export async function submitDriveFile({
 
 const listCache = new Map();
 const LIST_TTL_MS = 15_000;
+const LIST_FAIL_TTL_MS = 8_000;
 
 function listCacheKey(classCode, studentId) {
   return `${classCode}:${studentId}`;
@@ -166,21 +166,25 @@ export async function listMyDriveSubmissions({ classCode, studentId, studentName
   const key = listCacheKey(classCode, studentId);
   const hit = listCache.get(key);
   if (hit?.rows && Date.now() - hit.at < LIST_TTL_MS) return hit.rows;
+  if (hit?.error && Date.now() - hit.at < LIST_FAIL_TTL_MS) throw hit.error;
   if (hit?.inflight) return hit.inflight;
 
-  const inflight = postJson('drive-list-my-submissions', {
-    classCode,
-    studentId,
-    studentName,
-  })
+  const inflight = postJson(
+    'drive-list-my-submissions',
+    {
+      classCode,
+      studentId,
+      studentName,
+    },
+    { retries: 0 },
+  )
     .then((payload) => {
       const rows = Array.isArray(payload.submissions) ? payload.submissions : [];
       listCache.set(key, { rows, at: Date.now() });
       return rows;
     })
     .catch((error) => {
-      const current = listCache.get(key);
-      if (current?.inflight === inflight) listCache.delete(key);
+      listCache.set(key, { error, at: Date.now() });
       throw error;
     });
 

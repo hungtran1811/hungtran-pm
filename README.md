@@ -6,16 +6,15 @@ Webapp quản lý lớp học lập trình (một giáo viên), xây dựng bằ
 
 ### Khu quản trị (`/admin`, đăng nhập admin)
 
-| Trang                | Tính năng chính                                                                                                           |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| **Tổng quan**        | Thống kê lớp/HS, HS cần hỗ trợ, đặt nhanh buổi hiện tại                                                                   |
-| **Lớp học**          | CRUD, ẩn/hiện, active/hoàn thành/lưu trữ, gắn chương trình, phase học/cuối khóa, `finalMode` project/exam, copy link lớp  |
-| **Học sinh**         | CRUD theo lớp, snapshot tiến độ, **duyệt tên dự án**, lịch sử báo cáo & phản hồi                                          |
-| **Báo cáo học sinh** | Tab _Báo cáo tiến độ_ + _Phản hồi buổi học_ — lọc lớp/buổi/trạng thái, copy clipboard, reset phản hồi, **Làm mới**        |
-| **Thống kê**         | Biểu đồ tiến độ, heatmap mức hiểu theo buổi, bảng so sánh lớp, **Làm mới**                                                |
-| **Bài giảng**        | CRUD chương trình & bài (nhập HTML + xem trước, fallback Markdown + ảnh Cloudinary); lọc chương trình theo môn → trình độ |
-| **Báo cáo & nộp bài** | `/admin/reports` — báo cáo tiến độ + file Drive cùng trang; mở file trên Drive bằng tài khoản giáo viên                  |
-| **Mini game**        | Quay tên, đoán số, lật bài, hộp bí ẩn; **Coding Showdown**, **Truy tìm gián điệp** (realtime Firestore); điểm danh có mặt |
+| Trang                 | Tính năng chính                                                                                                           |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **Tổng quan**         | KPI lớp mở / cần hỗ trợ / thiếu báo cáo·file, bảng ops, đổi buổi tại chỗ, shortcut                                        |
+| **Lớp học**           | CRUD, ẩn/hiện, active/hoàn thành/lưu trữ, gắn chương trình, phase học/cuối khóa, `finalMode` project/exam, copy link lớp  |
+| **Học sinh**          | CRUD theo lớp, snapshot tiến độ, **duyệt tên dự án**, lịch sử báo cáo                                                     |
+| **Báo cáo & nộp bài** | `/admin/reports` — báo cáo tiến độ + file Drive; lọc lớp/buổi/Thiếu·Đủ; mở file trên Drive. Tab phản hồi buổi học chỉ khi bật cờ (hiện tắt) |
+| **Thống kê**          | Thanh phân bố CSS (trạng thái / tiến độ), bảng so sánh lớp; snapshot bấm **Tải thống kê**                                 |
+| **Bài giảng**         | CRUD chương trình & bài (nhập HTML + xem trước, fallback Markdown + ảnh Cloudinary); lọc chương trình theo môn → trình độ |
+| **Mini game**         | Quay tên, đoán số, lật bài, hộp bí ẩn, **Truy tìm gián điệp** (realtime); điểm danh có mặt. Coding Showdown tắt UI        |
 
 Đường dẫn cũ vẫn hoạt động: `/admin/feedback` → báo cáo HS; `/admin/quiz` và `/admin/scores` → thống kê.
 
@@ -37,9 +36,9 @@ Giao diện responsive, **dark mode**.
 
 ## Công nghệ
 
-- React 19, React Router 7, Vite 6, Tailwind CSS 4
+- React 19, React Router 7, Vite 8, Tailwind CSS 4
 - Firebase Auth + Firestore
-- marked + DOMPurify, recharts (thống kê), CodeMirror + Pyodide (Coding Showdown)
+- marked + DOMPurify; CodeMirror + Pyodide (Coding Showdown — UI đang tắt)
 - Cloudinary (ảnh bài giảng)
 
 ## Cấu trúc (rút gọn)
@@ -69,7 +68,7 @@ npm run dev
 
 Mở http://localhost:5173 — admin: `/admin/login`, học sinh: `/` hoặc `/c/MÃ_LỚP`.
 
-Nộp bài Drive local: đặt secret Google/Firebase Admin (không prefix `VITE_`) rồi chạy `npx netlify dev`. Xem [`docs/student-submission.md`](docs/student-submission.md).
+Nộp bài Drive local: terminal 2 chạy `npm run dev:functions` (cổng 8888). `npm run dev` chỉ proxy tới đó — nếu tắt functions, trang nộp bài không tải được danh sách file. Xem [`docs/student-submission.md`](docs/student-submission.md).
 
 ## Đăng nhập admin
 

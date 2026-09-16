@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Check, Eye, History, Plus, School, Users, X } from 'lucide-react';
 import { AppShell } from '../../ui/components/AppShell.jsx';
 import { Button } from '../../ui/components/Button.jsx';
@@ -47,10 +48,34 @@ const EMPTY_FORM = {
   currentDifficulties: '',
 };
 
+function readClassFromParams(params) {
+  const value = params.get('class') || '';
+  if (value === ALL_CLASSES_VALUE) return ALL_CLASSES_VALUE;
+  return value;
+}
+
+function FilterChip({ active, onClick, children }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={`inline-flex min-h-10 shrink-0 cursor-pointer items-center rounded-xl px-3 text-sm font-medium transition ${
+        active
+          ? 'bg-brand-600 text-white shadow-sm'
+          : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 export function StudentsPage() {
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [classes, setClasses] = useState([]);
-  const [selectedClass, setSelectedClass] = useState('');
+  const [selectedClass, setSelectedClass] = useState(() => readClassFromParams(searchParams));
   const [students, setStudents] = useState([]);
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [loadingStudents, setLoadingStudents] = useState(false);
@@ -62,6 +87,9 @@ export function StudentsPage() {
   const [historyTarget, setHistoryTarget] = useState(null);
   const [showArchived, setShowArchived] = useState(false);
   const [programs, setPrograms] = useState([]);
+  const reviewOnly = searchParams.get('review') === '1';
+  const selectedClassRef = useRef(selectedClass);
+  selectedClassRef.current = selectedClass;
 
   const scopedClasses = useMemo(
     () => resolveScopedClasses(classes, selectedClass, showArchived),
@@ -70,9 +98,36 @@ export function StudentsPage() {
   const classCodes = useMemo(() => scopedClasses.map((c) => c.classCode), [scopedClasses]);
   const isAllClasses = selectedClass === ALL_CLASSES_VALUE;
 
+  const syncFiltersToUrl = useCallback(
+    (classCode, review) => {
+      setSearchParams(() => {
+        const next = new URLSearchParams(window.location.search);
+        if (classCode) next.set('class', classCode);
+        else next.delete('class');
+        if (review === true) next.set('review', '1');
+        else if (review === false) next.delete('review');
+        return next;
+      }, { replace: true });
+    },
+    [setSearchParams],
+  );
+
+  const handleClassChange = useCallback(
+    (code) => {
+      if (code === selectedClassRef.current) return;
+      setSelectedClass(code);
+      syncFiltersToUrl(code);
+    },
+    [syncFiltersToUrl],
+  );
+
   const toggleArchived = (checked) => {
     setShowArchived(checked);
-    setSelectedClass('');
+    handleClassChange('');
+  };
+
+  const toggleReviewOnly = (on) => {
+    syncFiltersToUrl(selectedClass, on);
   };
 
   useEffect(() => {
@@ -94,6 +149,11 @@ export function StudentsPage() {
     return unsubscribe;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const classFromUrl = readClassFromParams(searchParams);
+    setSelectedClass((prev) => (prev === classFromUrl ? prev : classFromUrl));
+  }, [searchParams]);
 
   useEffect(() => {
     listCurriculumPrograms()
@@ -136,6 +196,11 @@ export function StudentsPage() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = students;
+    if (reviewOnly) {
+      list = list.filter((s) =>
+        canReviewStudentProjectName(s, classesByCode.get(s.classCode)),
+      );
+    }
     if (q) {
       list = list.filter(
         (s) =>
@@ -151,7 +216,7 @@ export function StudentsPage() {
       }
       return a.fullName.localeCompare(b.fullName, 'vi');
     });
-  }, [students, search, isAllClasses]);
+  }, [students, search, isAllClasses, reviewOnly, classesByCode]);
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -199,7 +264,7 @@ export function StudentsPage() {
               classes={classes}
               programs={programs}
               value={selectedClass}
-              onChange={setSelectedClass}
+              onChange={handleClassChange}
               showArchived={showArchived}
               onShowArchivedChange={toggleArchived}
               allowAll
@@ -207,6 +272,13 @@ export function StudentsPage() {
               allLabel={`Tất cả lớp${showArchived ? ' lưu trữ' : ' đang hoạt động'}`}
               showStudentCount
             />
+            {selectedClass && (pendingProjectCount > 0 || reviewOnly) ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <FilterChip active={reviewOnly} onClick={() => toggleReviewOnly(!reviewOnly)}>
+                  Chờ duyệt · {pendingProjectCount}
+                </FilterChip>
+              </div>
+            ) : null}
             <Input
               placeholder={
                 !selectedClass
@@ -231,7 +303,7 @@ export function StudentsPage() {
           ) : filtered.length === 0 ? (
             <EmptyState
               icon={<Users className="h-7 w-7" />}
-              title="Chưa có học sinh"
+              title={reviewOnly ? 'Không còn đề xuất chờ duyệt' : 'Chưa có học sinh'}
             />
           ) : (
             <div className="card overflow-hidden">

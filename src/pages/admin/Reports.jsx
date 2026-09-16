@@ -58,6 +58,11 @@ function matchesCompletionFilter(item, filter) {
   return true;
 }
 
+function readCompletionFilter(params) {
+  const value = params.get('filter');
+  return value === 'missing' || value === 'done' ? value : 'all';
+}
+
 function shortLessonLabel(option) {
   if (option.sessionNumber) return String(option.sessionNumber);
   const match = String(option.value || '').match(/^B0*(\d+)$/i);
@@ -87,9 +92,11 @@ export function ReportsPanel({
   onSelectedClassChange,
   showArchived: showArchivedProp,
   onShowArchivedChange,
+  completionFilter: completionFilterProp,
+  onCompletionFilterChange,
 }) {
   const toast = useToast();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [classes, setClasses] = useState([]);
   const [internalClass, setInternalClass] = useState('');
   const [internalArchived, setInternalArchived] = useState(false);
@@ -105,7 +112,6 @@ export function ReportsPanel({
   const [programs, setPrograms] = useState([]);
   const [driveRows, setDriveRows] = useState([]);
   const [classReports, setClassReports] = useState([]);
-  const [completionFilter, setCompletionFilter] = useState('all');
   const [reviewLessonKey, setReviewLessonKey] = useState('');
   const [pendingDelete, setPendingDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -115,6 +121,20 @@ export function ReportsPanel({
   const setSelectedClass = onSelectedClassChange ?? setInternalClass;
   const showArchived = showArchivedProp ?? internalArchived;
   const setShowArchived = onShowArchivedChange ?? setInternalArchived;
+  const completionFilter = completionFilterProp ?? readCompletionFilter(searchParams);
+
+  const setCompletionFilter = (value) => {
+    if (onCompletionFilterChange) {
+      onCompletionFilterChange(value);
+      return;
+    }
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value === 'missing' || value === 'done') next.set('filter', value);
+      else next.delete('filter');
+      return next;
+    }, { replace: true });
+  };
 
   const scopedClasses = useMemo(
     () => resolveScopedClasses(classes, selectedClass, showArchived),
@@ -236,7 +256,6 @@ export function ReportsPanel({
         ? defaultLessonKey(selectedClassDoc, selectedProgram)
         : '',
     );
-    setCompletionFilter('all');
   }, [selectedClass, selectedClassDoc, selectedProgram]);
 
   useEffect(() => {

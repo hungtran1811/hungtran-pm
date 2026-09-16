@@ -1,11 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AppShell } from '../../ui/components/AppShell.jsx';
+import { Spinner } from '../../ui/components/Spinner.jsx';
 import { ALL_CLASSES_VALUE } from '../../lib/classFilterScope.js';
 import { ALL_SESSIONS_VALUE } from '../../lib/sessionScope.js';
 import { FEATURE_DRIVE_SUBMISSION_ENABLED, FEATURE_KNOWLEDGE_FEEDBACK_ENABLED } from '../../config/features.js';
 import { ReportsPanel } from './Reports.jsx';
-import { FeedbackPanel } from './Feedback.jsx';
+
+const FeedbackPanel = FEATURE_KNOWLEDGE_FEEDBACK_ENABLED
+  ? lazy(() => import('./Feedback.jsx').then((m) => ({ default: m.FeedbackPanel })))
+  : null;
 
 const TABS = FEATURE_KNOWLEDGE_FEEDBACK_ENABLED
   ? [
@@ -20,6 +24,11 @@ function readClassFromParams(params) {
   return value;
 }
 
+function readCompletionFilter(params) {
+  const value = params.get('filter');
+  return value === 'missing' || value === 'done' ? value : 'all';
+}
+
 export function ReportsHubPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = TABS.some((t) => t.id === searchParams.get('tab'))
@@ -31,30 +40,38 @@ export function ReportsHubPage() {
   const [sessionFilter, setSessionFilter] = useState(
     () => searchParams.get('session') || ALL_SESSIONS_VALUE,
   );
+  const [completionFilter, setCompletionFilter] = useState(() => readCompletionFilter(searchParams));
+  const selectedClassRef = useRef(selectedClass);
+  selectedClassRef.current = selectedClass;
 
   const syncFiltersToUrl = useCallback(
-    (classCode, archived, session) => {
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
+    (classCode, archived, session, filter) => {
+      setSearchParams(() => {
+        const next = new URLSearchParams(window.location.search);
         if (classCode) next.set('class', classCode);
         else next.delete('class');
         if (archived) next.set('archived', '1');
         else next.delete('archived');
         if (session && session !== ALL_SESSIONS_VALUE) next.set('session', session);
         else next.delete('session');
+        if (filter === 'missing' || filter === 'done') next.set('filter', filter);
+        else if (filter === 'all') next.delete('filter');
+        if (!next.get('tab')) next.set('tab', tab);
         return next;
-      });
+      }, { replace: true });
     },
-    [setSearchParams],
+    [setSearchParams, tab],
   );
 
   useEffect(() => {
     const classFromUrl = readClassFromParams(searchParams);
     const archivedFromUrl = searchParams.get('archived') === '1';
     const sessionFromUrl = searchParams.get('session') || ALL_SESSIONS_VALUE;
+    const filterFromUrl = readCompletionFilter(searchParams);
     setSelectedClass((prev) => (prev === classFromUrl ? prev : classFromUrl));
     setShowArchived((prev) => (prev === archivedFromUrl ? prev : archivedFromUrl));
     setSessionFilter((prev) => (prev === sessionFromUrl ? prev : sessionFromUrl));
+    setCompletionFilter((prev) => (prev === filterFromUrl ? prev : filterFromUrl));
   }, [searchParams]);
 
   const setTab = (id) => {
@@ -62,14 +79,18 @@ export function ReportsHubPage() {
       const next = new URLSearchParams(prev);
       next.set('tab', id);
       return next;
-    });
+    }, { replace: true });
   };
 
-  const handleClassChange = (code) => {
-    setSelectedClass(code);
-    setSessionFilter(ALL_SESSIONS_VALUE);
-    syncFiltersToUrl(code, showArchived, ALL_SESSIONS_VALUE);
-  };
+  const handleClassChange = useCallback(
+    (code) => {
+      if (code === selectedClassRef.current) return;
+      setSelectedClass(code);
+      setSessionFilter(ALL_SESSIONS_VALUE);
+      syncFiltersToUrl(code, showArchived, ALL_SESSIONS_VALUE);
+    },
+    [showArchived, syncFiltersToUrl],
+  );
 
   const handleArchivedChange = (checked) => {
     setShowArchived(checked);
@@ -83,11 +104,21 @@ export function ReportsHubPage() {
     syncFiltersToUrl(selectedClass, showArchived, value);
   };
 
+  const handleCompletionFilterChange = useCallback(
+    (value) => {
+      setCompletionFilter(value);
+      syncFiltersToUrl(selectedClass, showArchived, sessionFilter, value);
+    },
+    [selectedClass, sessionFilter, showArchived, syncFiltersToUrl],
+  );
+
   const sharedFilterProps = {
     selectedClass,
     onSelectedClassChange: handleClassChange,
     showArchived,
     onShowArchivedChange: handleArchivedChange,
+    completionFilter,
+    onCompletionFilterChange: handleCompletionFilterChange,
   };
 
   return (
@@ -113,12 +144,21 @@ export function ReportsHubPage() {
         )}
 
         {tab === 'progress' && <ReportsPanel {...sharedFilterProps} />}
-        {FEATURE_KNOWLEDGE_FEEDBACK_ENABLED && tab === 'feedback' && (
-          <FeedbackPanel
-            {...sharedFilterProps}
-            sessionFilter={sessionFilter}
-            onSessionFilterChange={handleSessionChange}
-          />
+        {FEATURE_KNOWLEDGE_FEEDBACK_ENABLED && tab === 'feedback' && FeedbackPanel && (
+          <Suspense
+            fallback={
+              <div className="flex flex-col items-center justify-center gap-3 py-12 text-slate-500">
+                <Spinner className="h-8 w-8" />
+                <p className="text-sm">Đang tải phản hồi...</p>
+              </div>
+            }
+          >
+            <FeedbackPanel
+              {...sharedFilterProps}
+              sessionFilter={sessionFilter}
+              onSessionFilterChange={handleSessionChange}
+            />
+          </Suspense>
         )}
       </div>
     </AppShell>
