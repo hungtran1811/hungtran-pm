@@ -42,3 +42,9 @@ export function driveRootFolderId() {
   if (!id) throw new Error('Missing GOOGLE_DRIVE_ROOT_FOLDER_ID');
   return id;
 }
+
+export function driveMaterialsRootFolderId() {
+  const id = String(process.env.GOOGLE_DRIVE_MATERIALS_ROOT_FOLDER_ID || '').trim();
+  if (!id) throw new Error('Missing GOOGLE_DRIVE_MATERIALS_ROOT_FOLDER_ID');
+  return id;
+}

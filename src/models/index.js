@@ -4,6 +4,7 @@ import {
   isFullHtmlDocument,
   resolveLessonPresentationPreset,
 } from '../lib/lessonHtml.js';
+import { normalizeLessonResources } from '../lib/lessonResources.js';
 import { DEFAULT_STAGE, DEFAULT_STATUS } from '../constants/index.js';
 
 export function toClassModel(snapshot) {
@@ -250,6 +251,7 @@ export function normalizeLesson(lesson = {}, index = 0) {
     images,
     bannerImageUrl: bannerImage?.secureUrl ?? null,
     coverImageUrl: coverImage?.secureUrl ?? null,
+    resources: normalizeLessonResources(lesson.resources),
     _raw: lesson,
   };
 }

@@ -13,7 +13,7 @@ Webapp quản lý lớp học lập trình (một giáo viên), xây dựng bằ
 | **Học sinh**          | CRUD theo lớp, snapshot tiến độ, **duyệt tên dự án**, lịch sử báo cáo                                                     |
 | **Báo cáo & nộp bài** | `/admin/reports` — báo cáo tiến độ + file Drive; lọc lớp/buổi/Thiếu·Đủ; mở file trên Drive. Tab phản hồi buổi học chỉ khi bật cờ (hiện tắt) |
 | **Thống kê**          | Thanh phân bố CSS (trạng thái / tiến độ), bảng so sánh lớp; snapshot bấm **Tải thống kê**                                 |
-| **Bài giảng**         | CRUD chương trình & bài (nhập HTML + xem trước, fallback Markdown + ảnh Cloudinary); lọc chương trình theo môn → trình độ |
+| **Bài giảng**         | CRUD chương trình & bài (HTML + ảnh Cloudinary); **tài nguyên buổi** (zip/py/html/pdf/txt ≤100MB lên Drive, HS bấm tải)   |
 | **Mini game**         | Quay tên, đoán số, lật bài, hộp bí ẩn, **Truy tìm gián điệp** (realtime); điểm danh có mặt. Coding Showdown tắt UI        |
 
 Đường dẫn cũ vẫn hoạt động: `/admin/feedback` → báo cáo HS; `/admin/quiz` và `/admin/scores` → thống kê.
@@ -69,6 +69,8 @@ npm run dev
 Mở http://localhost:5173 — admin: `/admin/login`, học sinh: `/` hoặc `/c/MÃ_LỚP`.
 
 Nộp bài Drive local: terminal 2 chạy `npm run dev:functions` (cổng 8888). `npm run dev` chỉ proxy tới đó — nếu tắt functions, trang nộp bài không tải được danh sách file. Xem [`docs/student-submission.md`](docs/student-submission.md).
+
+Tài nguyên bài giảng: tạo folder Drive `HungTranPM - Lesson Materials`, đặt `GOOGLE_DRIVE_MATERIALS_ROOT_FOLDER_ID` (Netlify / `.env`, không prefix `VITE_`). Upload trong Admin → Bài giảng; học sinh bấm tải ở đầu buổi.
 
 ## Đăng nhập admin
 

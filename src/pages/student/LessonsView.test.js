@@ -2,6 +2,7 @@
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getProgramLesson } from '../../services/curriculum.service.js';
 import { LessonsView } from './LessonsView.jsx';
 
 vi.mock('../../services/students.service.js', () => ({
@@ -172,6 +173,75 @@ describe('LessonsView reading workspace', () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', cancelable: true }));
     });
     expect(document.activeElement).toBe(focusableElements[0]);
+  });
+
+  it('shows downloadable lesson resources at the top of the lesson', async () => {
+    const withFiles = {
+      ...program,
+      lessons: [
+        {
+          ...program.lessons[0],
+          resources: [
+            {
+              id: 'r1',
+              title: 'Starter HTML',
+              fileName: 'starter.zip',
+              downloadUrl: 'https://drive.google.com/uc?export=download&id=abc',
+              size: 1024,
+            },
+          ],
+        },
+      ],
+    };
+
+    await renderLessonsView({ program: withFiles });
+    await act(async () => findButton('HTML cơ bản').click());
+
+    expect(container.querySelector('[aria-label="Tài nguyên buổi 1"]')).not.toBeNull();
+    const link = container.querySelector('a[href*="uc?export=download"]');
+    expect(link?.textContent).toContain('Starter HTML');
+    expect(link?.getAttribute('download')).toBe('starter.zip');
+  });
+
+  it('loads lesson resources after hydrating a slim program lesson', async () => {
+    getProgramLesson.mockResolvedValueOnce({
+      id: 'lesson-1',
+      sessionNumber: 1,
+      title: 'HTML cơ bản',
+      content: '<section class="lesson-section"><h2>Nội dung đầy đủ</h2></section>',
+      contentFormat: 'html',
+      presentationPreset: 'hungtran-v1',
+      resources: [
+        {
+          id: 'r2',
+          title: 'Starter Python',
+          fileName: 'starter.py',
+          downloadUrl: 'https://drive.google.com/uc?export=download&id=slim',
+          size: 2048,
+        },
+      ],
+    });
+
+    await renderLessonsView({
+      program: {
+        id: 'web-basic',
+        lessons: [
+          {
+            id: 'lesson-1',
+            sessionNumber: 1,
+            title: 'HTML cơ bản',
+            _slim: true,
+          },
+        ],
+      },
+    });
+    await act(async () => findButton('HTML cơ bản').click());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[aria-label="Tài nguyên buổi 1"]')).not.toBeNull();
+    expect(container.querySelector('a[href*="id=slim"]')?.textContent).toContain('Starter Python');
   });
 
   it('collapses the desktop rail to session numbers by default', async () => {

@@ -21,6 +21,7 @@ import {
   LESSON_DOCUMENT_MAX_BYTES,
   isSlimLesson,
   lessonDocumentSizeBytes,
+  saveLessonResources,
   serializeLesson,
 } from './curriculum.service.js';
 
@@ -223,5 +224,40 @@ describe('lesson presentation preset serialization', () => {
   it('marks index rows as slim so saving the list cannot overwrite HTML', () => {
     expect(isSlimLesson({ _slim: true, id: 'lesson-1', title: 'Buổi 1' })).toBe(true);
     expect(isSlimLesson({ id: 'lesson-1', content: '<h1>Hi</h1>' })).toBe(false);
+  });
+
+  it('requires ids before saving lesson resources', async () => {
+    await expect(saveLessonResources('', 'lesson-1', [])).rejects.toThrow(/Thiếu/);
+    await expect(saveLessonResources('web-basic', '', [])).rejects.toThrow(/Thiếu/);
+  });
+
+  it('persists normalized lesson resources', () => {
+    const stored = serializeLesson({
+      ...baseLesson,
+      contentFormat: 'html',
+      content: '<h2>Hi</h2>',
+      exercise: '',
+      resources: [
+        {
+          id: 'r1',
+          fileName: 'starter.zip',
+          downloadUrl: 'https://drive.google.com/uc?export=download&id=abc',
+          size: 10,
+        },
+      ],
+      _raw: {},
+    });
+    expect(stored.resources).toEqual([
+      {
+        id: 'r1',
+        title: 'starter.zip',
+        fileName: 'starter.zip',
+        size: 10,
+        mimeType: '',
+        driveFileId: '',
+        downloadUrl: 'https://drive.google.com/uc?export=download&id=abc',
+        addedAt: '',
+      },
+    ]);
   });
 });

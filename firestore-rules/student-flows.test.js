@@ -613,6 +613,7 @@ describe('student-facing Firestore rules', () => {
     const db = publicDb();
     const submissionRef = db.doc('submissions/drive-1');
     const sessionRef = db.doc('submissionUploadSessions/token-1');
+    const materialSessionRef = db.doc('materialUploadSessions/token-material');
 
     await assertFails(
       submissionRef.set({
@@ -627,5 +628,7 @@ describe('student-facing Firestore rules', () => {
     await assertFails(db.collection('submissions').where('classCode', '==', CLASS_CODE).get());
     await assertFails(sessionRef.set({ classCode: CLASS_CODE, studentId: STUDENT_ID }));
     await assertFails(sessionRef.get());
+    await assertFails(materialSessionRef.set({ programId: PROGRAM_ID, lessonKey: 'L01' }));
+    await assertFails(materialSessionRef.get());
   });
 });

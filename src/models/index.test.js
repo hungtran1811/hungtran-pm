@@ -196,4 +196,30 @@ describe('normalizeLesson content formats', () => {
     expect(unknown.presentationPreset).toBe('legacy-document');
     expect(unknown._raw.presentationPreset).toBe('future-preset');
   });
+
+  it('normalizes lesson resource attachments', () => {
+    const lesson = normalizeLesson({
+      id: 'with-files',
+      resources: [
+        {
+          id: 'r1',
+          fileName: 'starter.zip',
+          downloadUrl: 'https://drive.google.com/uc?export=download&id=abc',
+          size: 2048,
+        },
+      ],
+    });
+    expect(lesson.resources).toEqual([
+      {
+        id: 'r1',
+        title: 'starter.zip',
+        fileName: 'starter.zip',
+        size: 2048,
+        mimeType: '',
+        driveFileId: '',
+        downloadUrl: 'https://drive.google.com/uc?export=download&id=abc',
+        addedAt: '',
+      },
+    ]);
+  });
 });

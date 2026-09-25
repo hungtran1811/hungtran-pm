@@ -2,14 +2,20 @@ import { createServer } from 'node:http';
 import { handler as createUploadSession } from '../netlify/functions/drive-create-upload-session.js';
 import { handler as completeSubmission } from '../netlify/functions/drive-complete-submission.js';
 import { handler as listMySubmissions } from '../netlify/functions/drive-list-my-submissions.js';
+import { handler as createMaterialSession } from '../netlify/functions/drive-create-material-session.js';
+import { handler as completeMaterial } from '../netlify/functions/drive-complete-material.js';
 
 const handlers = new Map([
   ['/drive-create-upload-session', createUploadSession],
   ['/drive-complete-submission', completeSubmission],
   ['/drive-list-my-submissions', listMySubmissions],
+  ['/drive-create-material-session', createMaterialSession],
+  ['/drive-complete-material', completeMaterial],
   ['/.netlify/functions/drive-create-upload-session', createUploadSession],
   ['/.netlify/functions/drive-complete-submission', completeSubmission],
   ['/.netlify/functions/drive-list-my-submissions', listMySubmissions],
+  ['/.netlify/functions/drive-create-material-session', createMaterialSession],
+  ['/.netlify/functions/drive-complete-material', completeMaterial],
 ]);
 
 const port = Number(process.env.FUNCTIONS_PORT || 8888);

@@ -23,7 +23,9 @@ import { Select } from '../../ui/components/Field.jsx';
 import { LessonContent } from '../../ui/components/LessonContent.jsx';
 import { ImageUpload } from '../../ui/components/ImageUpload.jsx';
 import { ImageGalleryUpload } from '../../ui/components/ImageGalleryUpload.jsx';
+import { LessonResourcesField } from '../../ui/components/LessonResourcesField.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
+import { FEATURE_LESSON_RESOURCES_ENABLED } from '../../config/features.js';
 import {
   createProgram,
   getCurriculumProgram,
@@ -193,10 +195,18 @@ export function LessonsPage() {
         bannerImage: null,
         coverImage: null,
         images: [],
+        resources: [],
         _raw: {},
         _isNew: true,
       },
     );
+  };
+
+  const syncLessonResources = (lessonId, resources) => {
+    setLessons((prev) =>
+      prev.map((row) => (row.id === lessonId ? { ...row, resources } : row)),
+    );
+    setEditingLesson((prev) => (prev?.id === lessonId ? { ...prev, resources } : prev));
   };
 
   const applyLesson = (lesson) => {
@@ -439,8 +449,10 @@ export function LessonsPage() {
       {showEditor && (
         <LessonEditor
           lesson={editingLesson}
+          programId={selectedProgramId}
           onClose={() => setShowEditor(false)}
           onApply={applyLesson}
+          onResourcesSynced={syncLessonResources}
         />
       )}
 
@@ -764,10 +776,11 @@ function HtmlSourceField({ label, value, onChange, onImport, rows, placeholder }
   );
 }
 
-function LessonEditor({ lesson, onClose, onApply }) {
+function LessonEditor({ lesson, programId, onClose, onApply, onResourcesSynced }) {
   const toast = useToast();
   const [form, setForm] = useState({
     ...lesson,
+    resources: Array.isArray(lesson.resources) ? lesson.resources : [],
     presentationPreset: LESSON_PRESENTATION_PRESET_LEGACY,
   });
   const [previewTab, setPreviewTab] = useState('edit');
@@ -795,6 +808,7 @@ function LessonEditor({ lesson, onClose, onApply }) {
       content: form.content,
       exercise: form.exercise,
       sessionNumber: Number(form.sessionNumber) || 1,
+      resources: form.resources || [],
     });
   };
 
@@ -883,6 +897,17 @@ function LessonEditor({ lesson, onClose, onApply }) {
             </span>
           </label>
         </div>
+
+        {FEATURE_LESSON_RESOURCES_ENABLED && (
+          <LessonResourcesField
+            programId={programId}
+            lessonId={lesson.id}
+            sessionNumber={Number(form.sessionNumber) || 1}
+            value={form.resources}
+            onChange={(resources) => update('resources', resources)}
+            onSynced={(resources) => onResourcesSynced?.(lesson.id, resources)}
+          />
+        )}
 
         <div className="space-y-3">
           <div className="flex items-center gap-1 rounded-lg bg-slate-100 p-1 dark:bg-slate-800">

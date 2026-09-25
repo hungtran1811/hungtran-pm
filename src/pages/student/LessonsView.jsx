@@ -37,7 +37,8 @@ import {
 } from '../../services/knowledgeReports.service.js';
 import { recordLessonOpened } from '../../services/students.service.js';
 import { getErrorMessage } from '../../lib/firestore.js';
-import { FEATURE_KNOWLEDGE_FEEDBACK_ENABLED } from '../../config/features.js';
+import { FEATURE_KNOWLEDGE_FEEDBACK_ENABLED, FEATURE_LESSON_RESOURCES_ENABLED } from '../../config/features.js';
+import { LessonResourcesCard } from '../../ui/components/LessonResourcesCard.jsx';
 
 function readStorageKey(classCode, studentId) {
   return `lessonsRead:${classCode}:${studentId}`;
@@ -848,6 +849,12 @@ function LessonDetail({
                 )}
                 {contentTab === 'lesson' && (
                   <>
+                    {FEATURE_LESSON_RESOURCES_ENABLED ? (
+                      <LessonResourcesCard
+                        sessionNumber={displayLesson.sessionNumber}
+                        resources={displayLesson.resources}
+                      />
+                    ) : null}
                     {heroUrl && (
                       <button
                         type="button"

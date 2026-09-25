@@ -1,4 +1,4 @@
-import { driveRootFolderId, getAccessToken } from './googleAuth.js';
+import { driveMaterialsRootFolderId, driveRootFolderId, getAccessToken } from './googleAuth.js';
 
 function escapeDriveQuery(value) {
   return String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -118,5 +118,21 @@ export async function createResumableUpload({
 export async function getDriveFile(fileId) {
   return driveJson(
     `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?fields=id,name,size,mimeType,parents,trashed`,
+  );
+}
+
+export async function findOrCreateMaterialFolder(programId, lessonKey) {
+  const rootId = driveMaterialsRootFolderId();
+  const programFolderId = await findOrCreateChildFolder(rootId, programId);
+  return findOrCreateChildFolder(programFolderId, lessonKey);
+}
+
+export async function shareFileAnyoneWithLink(fileId) {
+  await driveJson(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}/permissions`,
+    {
+      method: 'POST',
+      body: { role: 'reader', type: 'anyone' },
+    },
   );
 }

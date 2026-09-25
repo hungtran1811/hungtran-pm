@@ -15,3 +15,6 @@ export const FEATURE_KNOWLEDGE_FEEDBACK_ENABLED = false;
 
 /** Báo cáo tiến độ cuối khóa (admin hub /admin/reports) — vẫn dùng. */
 export const FEATURE_PROGRESS_REPORTS_ENABLED = true;
+
+/** Tài nguyên file đầu bài giảng (Drive materials + tải về máy HS). */
+export const FEATURE_LESSON_RESOURCES_ENABLED = true;

@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../config/firebase.js';
 import { hasRenderableLessonHtml, resolveLessonPresentationPreset } from '../lib/lessonHtml.js';
+import { normalizeLessonResources } from '../lib/lessonResources.js';
 import { normalizeLesson, toCurriculumProgramModel } from '../models/index.js';
 
 const programsRef = collection(db, 'curriculumPrograms');
@@ -198,6 +199,9 @@ export function serializeLesson(lesson) {
   // overwrite them with HTML, but rollback still needs the original text.
   if (hasRawContent) next.content = raw.content;
   if (hasRawExercise) next.exercise = raw.exercise;
+  next.resources = normalizeLessonResources(
+    Object.prototype.hasOwnProperty.call(lesson, 'resources') ? lesson.resources : raw.resources,
+  );
   if (lessonDocumentSizeBytes(next) > LESSON_DOCUMENT_MAX_BYTES) {
     throw new Error(
       'Bài giảng vượt quá giới hạn 750 KiB. Hãy rút gọn HTML hoặc bớt nội dung nhúng.',
@@ -341,6 +345,28 @@ export async function getCurriculumProgram(programId, { full = true } = {}) {
   if (!snapshot) return null;
   const lessons = await resolveLessonsForProgram(snapshot.data(), snapshot.id, { full });
   return toCurriculumProgramModel(snapshot, lessons);
+}
+
+export async function lessonDocumentExists(programId, lessonId) {
+  if (!programId || !lessonId) return false;
+  const docId = await getProgramDocId(programId);
+  const lessonSnap = await getDoc(doc(db, 'curriculumPrograms', docId, 'lessons', lessonId));
+  return lessonSnap.exists();
+}
+
+export async function saveLessonResources(programId, lessonId, resources) {
+  if (!programId || !lessonId) {
+    throw new Error('Thiếu mã chương trình hoặc bài giảng.');
+  }
+  const docId = await getProgramDocId(programId);
+  const lessonRef = doc(db, 'curriculumPrograms', docId, 'lessons', lessonId);
+  const lessonSnap = await getDoc(lessonRef);
+  if (!lessonSnap.exists()) {
+    throw new Error('Bài giảng chưa được lưu. Hãy Áp dụng rồi Lưu thay đổi trước khi thêm file.');
+  }
+  const next = normalizeLessonResources(resources);
+  await updateDoc(lessonRef, { resources: next });
+  return next;
 }
 
 export async function getProgramLesson(programId, lessonId) {

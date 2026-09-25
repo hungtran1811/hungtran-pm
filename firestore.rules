@@ -856,6 +856,10 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /materialUploadSessions/{docId} {
+      allow read, write: if false;
+    }
+
     match /projectCodeSubmissions/{docId} {
       allow get: if isAdmin() || isReadableCodeSubmission(docId, resource.data);
       allow list: if isAdmin() || isReadableCodeSubmission(docId, resource.data);
