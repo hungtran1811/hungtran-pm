@@ -9,10 +9,13 @@ Tài liệu này gom các việc cần nhớ khi nâng cấp/bảo trì `hungtra
 ```bash
 npm ci
 npm test
+npm run test:migration
 npm run test:rules
 npm run build
 npm run audit:security:gate
 ```
+
+`npm run ci` và GitHub Actions dùng cùng bộ lệnh trên.
 
 2. Dùng Node 22 theo `.nvmrc`. Firestore Rules tests cần Java/JDK 21 vì chạy Firebase emulator.
 3. Ưu tiên update patch/minor cho dependency runtime trước. Các major lớn như Vite, Vitest, Marked, Firebase Admin nên đi bằng branch riêng và smoke test đủ.
@@ -44,6 +47,20 @@ Các write từ cổng học sinh phải giữ đúng shape vì `firestore.rules
 - Tách theo hành vi, không theo “cho file ngắn lại”. Ví dụ: question engine, scoring, session state machine, editor form, presentation UI.
 - Không đổi schema production nếu chưa có script migrate/dry-run và rollback note.
 - Với Showdown/Spy, luôn test bằng ít nhất 2 browser/tab: admin điều khiển, học sinh join và gửi dữ liệu.
+
+## Smoke 5 phút sau push main / deploy Netlify
+
+Không cần deploy Firestore rules nếu không đổi `firestore.rules` / indexes.
+
+1. Netlify: xác nhận env nộp bài (`GOOGLE_*`, `FIREBASE_SERVICE_ACCOUNT`) và `GOOGLE_DRIVE_MATERIALS_ROOT_FOLDER_ID`.
+2. Admin → Cài đặt → **Kiểm tra Drive** — cả nộp bài và tài nguyên phải «sẵn sàng».
+3. Học sinh: nộp 1 file nhỏ hợp lệ (zip/py/html/pdf/txt) buổi hiện tại.
+4. Admin → Bài giảng: upload 1 tài nguyên đầu buổi; HS thấy nút tải.
+5. Dashboard → **Làm mới**: cột file buổi hiện tại (Lnn) khớp; nếu cache ~90s hoặc lớp Drive lỗi thì bấm lại Làm mới.
+
+Ghi kết quả vào [`SMOKE_TEST_RESULTS.md`](SMOKE_TEST_RESULTS.md). Checklist đầy đủ: [`SMOKE_TEST_CHECKLIST.md`](SMOKE_TEST_CHECKLIST.md).
+
+Tuỳ chọn: `VITE_SENTRY_DSN` để nhận lỗi Drive 5xx trên production (không bắt buộc).
 
 ## Backup Nhẹ
 

@@ -25,11 +25,18 @@ export function ProgressReportView({
   stagePrefill = null,
   onStagePrefillConsumed,
   embedded = false,
+  lessonKey: lessonKeyProp,
+  onLessonKeyChange,
+  hideLessonSelect = false,
+  hideHistory = false,
+  hideExtras = false,
+  links: linksProp,
+  onChangeLink,
 }) {
   const toast = useToast();
   const lessonOptions = useMemo(() => buildStudentLessonOptions(classDoc, program), [classDoc, program]);
   const [form, setForm] = useState({
-    lessonKey: defaultLessonKey(classDoc, program),
+    lessonKey: lessonKeyProp || defaultLessonKey(classDoc, program),
     stage: student.currentStage || STAGES[0],
     status: student.currentStatus || STATUSES[0],
     progressPercent: student.currentProgressPercent || 0,
@@ -38,20 +45,22 @@ export function ProgressReportView({
     difficulties: '',
   });
   const [recentReports, setRecentReports] = useState([]);
-  const [links, setLinks] = useState({
+  const [internalLinks, setInternalLinks] = useState({
     githubUrl: student.projectGithubUrl || '',
     canvaUrl: student.projectCanvaUrl || '',
   });
+  const links = linksProp ?? internalLinks;
   const [submitting, setSubmitting] = useState(false);
   const [justSubmitted, setJustSubmitted] = useState(false);
   const submittingRef = useRef(false);
 
   useEffect(() => {
-    setLinks({
+    if (linksProp) return;
+    setInternalLinks({
       githubUrl: student.projectGithubUrl || '',
       canvaUrl: student.projectCanvaUrl || '',
     });
-  }, [student.id, student.projectGithubUrl, student.projectCanvaUrl]);
+  }, [linksProp, student.id, student.projectGithubUrl, student.projectCanvaUrl]);
 
   useEffect(() => {
     if (!student.id) return undefined;
@@ -82,8 +91,22 @@ export function ProgressReportView({
   }, [stagePrefill, onStagePrefillConsumed]);
 
   const stageGuide = getWaterfallStage(form.stage);
-  const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
-  const updateLink = (key, value) => setLinks((prev) => ({ ...prev, [key]: value }));
+  useEffect(() => {
+    if (!lessonKeyProp) return;
+    setForm((prev) => (prev.lessonKey === lessonKeyProp ? prev : { ...prev, lessonKey: lessonKeyProp }));
+  }, [lessonKeyProp]);
+
+  const update = (key, value) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    if (key === 'lessonKey') onLessonKeyChange?.(value);
+  };
+  const updateLink = (key, value) => {
+    if (onChangeLink) {
+      onChangeLink(key, value);
+      return;
+    }
+    setInternalLinks((prev) => ({ ...prev, [key]: value }));
+  };
 
   const selectedLesson = lessonOptions.find((item) => item.value === form.lessonKey);
 
@@ -189,7 +212,13 @@ export function ProgressReportView({
         canvaUrl={student.projectCanvaUrl}
       />
 
-      {lessonOptions.length ? (
+      {hideLessonSelect ? (
+        lessonOptions.length ? null : (
+          <p className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+            Giáo viên chưa đặt buổi hiện tại cho lớp. Chưa gửi được báo cáo.
+          </p>
+        )
+      ) : lessonOptions.length ? (
         <Field label="Buổi" required>
           <Select value={form.lessonKey} onChange={(e) => update('lessonKey', e.target.value)}>
             {lessonOptions.map((option) => (
@@ -236,27 +265,29 @@ export function ProgressReportView({
         </Field>
       </div>
 
-      <Field label="Đã làm được gì?" required>
+      <Field label="Đã làm được gì?" required hint="Xuống dòng hoặc gạch đầu dòng (- ) để giáo viên đọc dễ hơn.">
         <Textarea
-          rows={3}
+          rows={6}
           value={form.doneToday}
           onChange={(e) => update('doneToday', e.target.value)}
           placeholder={stageGuide.doneTodayPlaceholder}
+          className="min-h-36"
         />
       </Field>
 
       <Field label="Mục tiêu buổi sau?" required>
         <Textarea
-          rows={3}
+          rows={5}
           value={form.nextGoal}
           onChange={(e) => update('nextGoal', e.target.value)}
           placeholder={stageGuide.nextGoalPlaceholder}
+          className="min-h-28"
         />
       </Field>
 
       <Field label="Khó khăn (tuỳ chọn)">
         <Textarea
-          rows={2}
+          rows={3}
           value={form.difficulties}
           onChange={(e) => update('difficulties', e.target.value)}
           placeholder={
@@ -301,27 +332,28 @@ export function ProgressReportView({
   ) : (
     <>
       {reportForm}
-      <ProjectExtrasPanel
-        classDoc={classDoc}
-        student={student}
-        links={links}
-        onChangeLink={updateLink}
-        onOpenGuide={onOpenGuide}
-        disabled={submitting}
-      />
+      {hideExtras ? null : (
+        <ProjectExtrasPanel
+          classDoc={classDoc}
+          student={student}
+          links={links}
+          onChangeLink={updateLink}
+          onOpenGuide={onOpenGuide}
+          disabled={submitting}
+        />
+      )}
     </>
   );
 
   return (
     <div className="space-y-4">
       {reportContent}
-      {!embedded && (
+      {hideHistory ? null : !embedded ? (
         <ProgressReportHistory
           studentId={student.id}
           latestReportId={student.latestReportId}
         />
-      )}
-      {embedded && (
+      ) : (
         <div className="border-t border-slate-200 pt-4 dark:border-slate-700">
           <ProgressReportHistory
             studentId={student.id}

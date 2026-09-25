@@ -193,7 +193,7 @@ const GITHUB_STEPS = [
   },
   {
     title: 'Dán link vào cổng học sinh',
-    body: 'Tab Báo cáo → mục Bổ sung dự án → Liên kết sản phẩm → ô GitHub → dán link → Lưu liên kết.',
+    body: 'Tab Báo cáo & nộp → mục Bổ sung dự án → Liên kết sản phẩm → ô GitHub → dán link → Lưu liên kết.',
   },
 ];
 
@@ -280,7 +280,7 @@ const GIT_FIRST_PUSH_STEPS = [
   },
   {
     title: 'Kiểm tra trên trình duyệt',
-    body: 'Mở repo trên GitHub → tab Code → phải thấy đủ file vừa push. Copy URL trang repo → dán vào cổng học sinh (tab Báo cáo → Liên kết sản phẩm → GitHub → Lưu).',
+    body: 'Mở repo trên GitHub → tab Code → phải thấy đủ file vừa push. Copy URL trang repo → dán vào cổng học sinh (tab Báo cáo & nộp → Liên kết sản phẩm → GitHub → Lưu).',
   },
 ];
 
@@ -387,7 +387,7 @@ const CANVA_STEPS = [
   },
   {
     title: 'Dán vào cổng học sinh',
-    body: 'Tab Báo cáo → Bổ sung dự án → Liên kết sản phẩm → ô Canva → dán link → Lưu liên kết.',
+    body: 'Tab Báo cáo & nộp → Bổ sung dự án → Liên kết sản phẩm → ô Canva → dán link → Lưu liên kết.',
   },
 ];
 

@@ -5,6 +5,7 @@ import { getAdminDb } from './_lib/firebaseAdmin.js';
 import { getDriveFile } from './_lib/driveFolders.js';
 import { clientIp, json, parseJsonBody, preflight } from './_lib/http.js';
 import { checkRateLimit, DRIVE_LIMITS } from './_lib/rateLimit.js';
+import { functionErrorCode, logFunctionError } from './_lib/functionLog.js';
 
 function sameSize(left, right) {
   return Number(left) === Number(right);
@@ -170,11 +171,12 @@ export async function handler(event) {
       submittedAt: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('[drive-complete-submission]', error?.message || error);
-    if (error?.code === 'SESSION_GONE') {
+    const code = functionErrorCode(error);
+    logFunctionError('drive-complete-submission', code, error);
+    if (code === 'SESSION_GONE') {
       return json(404, { error: 'Phiên nộp bài đã hết hạn hoặc không tồn tại.' });
     }
-    if (String(error?.message || '').includes('Missing')) {
+    if (code === 'CONFIG_MISSING') {
       return json(503, { error: 'Chức năng nộp bài chưa được cấu hình.' });
     }
     return json(502, { error: 'Không lưu được bài nộp. Thử lại sau.' });

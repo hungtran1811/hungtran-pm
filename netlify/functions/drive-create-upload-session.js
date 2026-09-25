@@ -16,6 +16,7 @@ import {
   validateCreateSessionInput,
 } from './_lib/submissionValidate.js';
 import { isLessonKeyOpenForClass } from '../../src/lib/sessionScope.js';
+import { functionErrorCode, logFunctionError } from './_lib/functionLog.js';
 
 export async function handler(event) {
   const early = preflight(event);
@@ -114,8 +115,9 @@ export async function handler(event) {
 
     return json(200, { uploadUrl, storedFileName, uploadToken });
   } catch (error) {
-    console.error('[drive-create-upload-session]', error?.message || error);
-    if (String(error?.message || '').includes('Missing')) {
+    const code = functionErrorCode(error);
+    logFunctionError('drive-create-upload-session', code, error);
+    if (code === 'CONFIG_MISSING') {
       return json(503, { error: 'Chức năng nộp bài chưa được cấu hình.' });
     }
     return json(502, { error: 'Không tạo được phiên tải lên. Thử lại sau.' });

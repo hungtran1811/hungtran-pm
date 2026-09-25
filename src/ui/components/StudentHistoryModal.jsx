@@ -3,6 +3,7 @@ import { Modal } from './Modal.jsx';
 import { Badge } from './Badge.jsx';
 import { Spinner } from './Spinner.jsx';
 import { EmptyState } from './EmptyState.jsx';
+import { StudentTextBlock } from './StudentTextBlock.jsx';
 import { CodeSubmissionsPanel } from './CodeSubmissionsPanel.jsx';
 import { ProjectLinksReadonly } from '../../pages/student/ProjectProductLinks.jsx';
 import { useToast } from './Toast.jsx';
@@ -11,6 +12,7 @@ import { listReportsByStudent } from '../../services/reports.service.js';
 import { listKnowledgeReportsByStudent } from '../../services/knowledgeReports.service.js';
 import { listCodeSubmissionsByStudent } from '../../services/codeSubmissions.service.js';
 import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
+import { formatLessonKey } from '../../lib/submissionFileName.js';
 import {
   FEATURE_CODE_UPLOAD_ENABLED,
   FEATURE_KNOWLEDGE_FEEDBACK_ENABLED,
@@ -188,18 +190,23 @@ function TimelineReport({ report, isLatest }) {
         <Badge tone="brand">Báo cáo tiến độ</Badge>
         {isLatest && <Badge tone="green">Mới nhất</Badge>}
         <Badge tone={STATUS_TONES[report.status] || 'slate'}>{report.status || '—'}</Badge>
-        {report.lessonKey ? <Badge tone="slate">{report.lessonKey}</Badge> : null}
+        {report.lessonKey ? <Badge tone="slate">{formatLessonKey(report.lessonKey)}</Badge> : null}
         <span className="text-xs text-slate-400">{formatDateTime(report.submittedAt)}</span>
       </div>
-      <p className="text-sm text-slate-700 dark:text-slate-200">
+      <p className="mb-3 text-sm text-slate-700 dark:text-slate-200">
         {report.stage || '—'} · {report.progressPercent ?? 0}%
       </p>
-      {report.doneToday && (
-        <p className="mt-1 text-xs text-slate-500">Đã làm: {report.doneToday}</p>
-      )}
-      {report.nextGoal && (
-        <p className="mt-1 text-xs text-slate-500">Tiếp theo: {report.nextGoal}</p>
-      )}
+      {report.doneToday ? <StudentTextBlock label="Đã làm được">{report.doneToday}</StudentTextBlock> : null}
+      {report.nextGoal ? (
+        <div className="mt-3">
+          <StudentTextBlock label="Mục tiêu tiếp">{report.nextGoal}</StudentTextBlock>
+        </div>
+      ) : null}
+      {report.difficulties?.trim() ? (
+        <div className="mt-3">
+          <StudentTextBlock label="Khó khăn">{report.difficulties}</StudentTextBlock>
+        </div>
+      ) : null}
     </div>
   );
 }

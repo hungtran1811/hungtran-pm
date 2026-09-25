@@ -1,4 +1,5 @@
 import { FUNCTIONS_BASE } from '../config/submissionConfig.js';
+import { reportDriveFunctionError } from '../lib/driveFunctionErrors.js';
 import { validateCreateSessionInput } from '../lib/submissionValidate.js';
 
 function functionsUrl(name) {
@@ -47,7 +48,12 @@ async function postJson(name, body, { retries = 2 } = {}) {
     );
     const localDown =
       typeof payload.error === 'string' && payload.error.includes('dev:functions');
-    if (localDown || !isRetryableStatus(response.status) || attempt === retries) throw lastError;
+    if (localDown || !isRetryableStatus(response.status) || attempt === retries) {
+      if (response.status >= 500 || response.status === 429) {
+        reportDriveFunctionError(lastError, { function: name, status: response.status });
+      }
+      throw lastError;
+    }
     await sleep(400 * 2 ** attempt + Math.random() * 250);
   }
   throw lastError;

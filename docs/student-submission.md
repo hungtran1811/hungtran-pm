@@ -33,6 +33,7 @@ Không dùng prefix `VITE_` cho secret.
 | `GOOGLE_CLIENT_SECRET` | OAuth secret |
 | `GOOGLE_REFRESH_TOKEN` | Refresh token tài khoản giáo viên |
 | `GOOGLE_DRIVE_ROOT_FOLDER_ID` | ID thư mục gốc `HungTranPM - Submissions` |
+| `GOOGLE_DRIVE_MATERIALS_ROOT_FOLDER_ID` | ID thư mục `HungTranPM - Lesson Materials` (tài nguyên đầu buổi). Thiếu biến này → upload bài giảng 502 |
 | `FIREBASE_SERVICE_ACCOUNT` | JSON service account (một dòng). `private_key` có thể dùng `\n` |
 
 Tuỳ chọn frontend: `VITE_NETLIFY_FUNCTIONS_BASE` (mặc định `/.netlify/functions`).

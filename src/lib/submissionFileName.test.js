@@ -3,6 +3,7 @@ import {
   buildStoredFileName,
   buildSubmissionDrivePath,
   formatDateStamp,
+  formatLessonKey,
   getFileExtension,
   isValidLessonKey,
   lessonKeysEqual,
@@ -16,6 +17,8 @@ describe('submission file names', () => {
     expect(normalizeLessonKey('3')).toBe('L03');
     expect(normalizeLessonKey('b3')).toBe('L03');
     expect(normalizeLessonKey('L3')).toBe('L03');
+    expect(formatLessonKey('B03')).toBe('L03');
+    expect(formatLessonKey('')).toBe('');
     expect(isValidLessonKey('L03')).toBe(true);
     expect(isValidLessonKey('B03')).toBe(true);
     expect(isValidLessonKey('lesson')).toBe(false);

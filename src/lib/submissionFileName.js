@@ -32,6 +32,10 @@ export function normalizeLessonKey(lesson) {
   return `L${String(session).padStart(2, '0')}`;
 }
 
+export function formatLessonKey(lessonKey) {
+  return normalizeLessonKey(lessonKey) || String(lessonKey || '').trim();
+}
+
 export function isValidLessonKey(lessonKey) {
   return /^[BL]\d{2,3}$/.test(String(lessonKey || ''));
 }

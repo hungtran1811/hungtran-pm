@@ -1,6 +1,6 @@
 import { formatDateTime } from '../../../lib/firestore.js';
 import { findStudentSubmissionNote } from '../../../lib/submissionStudentNotes.js';
-import { lessonKeysEqual } from '../../../lib/submissionFileName.js';
+import { formatLessonKey, lessonKeysEqual } from '../../../lib/submissionFileName.js';
 
 function NoteLine({ note }) {
   const timeLabel = note.submittedAt ? formatDateTime(note.submittedAt) : '';
@@ -31,7 +31,8 @@ export function SelectedLessonNote({ notes, lessonKey }) {
 export function StudentSubmissionNotes({ notes, lessonOptions = [] }) {
   if (!notes.length) return null;
   const lessonLabel = (lessonKey) =>
-    lessonOptions.find((item) => lessonKeysEqual(item.value, lessonKey))?.label || lessonKey;
+    lessonOptions.find((item) => lessonKeysEqual(item.value, lessonKey))?.label ||
+    formatLessonKey(lessonKey);
 
   return (
     <section className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/40">

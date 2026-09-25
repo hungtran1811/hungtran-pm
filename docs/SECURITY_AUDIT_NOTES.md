@@ -40,5 +40,6 @@ firebase deploy --only firestore:rules,firestore:indexes --dry-run
 
 - Đã nâng `marked` lên `18.0.5`, `vite` lên `8.1.0`, `vitest` lên `4.1.9`, `@vitejs/plugin-react` lên `6.0.3`, và `firebase-admin` lên `14.1.0`.
 - Giữ `firebase-tools@15.22.3`; không dùng `npm audit fix --force` vì npm vẫn đề xuất hướng breaking/downgrade khó kiểm soát.
-- Audit hiện còn 9 cảnh báo moderate trong chuỗi tooling `firebase-tools`/`firebase-admin` và transitive Google Cloud SDK.
+- Audit hiện còn **17 moderate** (2026-09-25): `firebase-tools` / `firebase-admin` + transitive (`@opentelemetry/core`, `csv-parse`, `morgan`, `qs`, `stream-json`, `uuid`) và `vitest`/`@vitest/mocker`. Không có high/critical — `audit:security:gate` pass.
 - CI dùng `npm run audit:security:gate`, chỉ fail khi có high/critical. Dùng `npm run audit:security:full` để xem toàn bộ moderate còn lại.
+- Không chạy `npm audit fix` trên nhánh vận hành: npm vẫn kéo thay đổi tooling khó dự đoán.

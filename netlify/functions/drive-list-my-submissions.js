@@ -9,6 +9,7 @@ import {
   validateStudentIdentityInput,
 } from './_lib/submissionValidate.js';
 import { toStudentSubmissionNotes } from '../../src/lib/submissionStudentNotes.js';
+import { functionErrorCode, logFunctionError } from './_lib/functionLog.js';
 
 export async function handler(event) {
   const early = preflight(event);
@@ -74,8 +75,9 @@ export async function handler(event) {
 
     return json(200, { submissions });
   } catch (error) {
-    console.error('[drive-list-my-submissions]', error?.message || error);
-    if (String(error?.message || '').includes('Missing')) {
+    const code = functionErrorCode(error);
+    logFunctionError('drive-list-my-submissions', code, error);
+    if (code === 'CONFIG_MISSING') {
       return json(503, { error: 'Chức năng nộp bài chưa được cấu hình.' });
     }
     return json(502, { error: 'Không tải được bài đã nộp.' });

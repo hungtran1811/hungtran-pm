@@ -12,6 +12,7 @@ import { ClassFilterBar } from '../../ui/components/ClassFilterBar.jsx';
 import { Field, Input, Select } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { StudentHistoryModal } from '../../ui/components/StudentHistoryModal.jsx';
+import { StudentTextBlock } from '../../ui/components/StudentTextBlock.jsx';
 import { STAGES, STATUSES, STATUS_TONES } from '../../constants/index.js';
 import { subscribeClasses } from '../../services/classes.service.js';
 import { listCurriculumPrograms } from '../../services/curriculum.service.js';
@@ -400,35 +401,13 @@ function ProjectProposalDetails({ student }) {
         </div>
       )}
 
-      <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/60">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Tên dự án</p>
-          <p className="mt-1 font-medium text-slate-800 dark:text-slate-100">
-            {projectProposalName(student) || '—'}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Chủ đề</p>
-          <p className="mt-1 whitespace-pre-wrap text-slate-700 dark:text-slate-200">
-            {student.projectTopic?.trim() || '— Chưa có nội dung'}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Vấn đề — cách giải quyết
-          </p>
-          <p className="mt-1 whitespace-pre-wrap text-slate-700 dark:text-slate-200">
-            {student.projectProblemSolution?.trim() || '— Chưa có nội dung'}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-            Tính năng dự kiến
-          </p>
-          <p className="mt-1 whitespace-pre-wrap text-slate-700 dark:text-slate-200">
-            {student.projectPlannedFeatures?.trim() || '— Chưa có nội dung'}
-          </p>
-        </div>
+      <div className="space-y-3">
+        <StudentTextBlock label="Tên dự án">{projectProposalName(student)}</StudentTextBlock>
+        <StudentTextBlock label="Chủ đề">{student.projectTopic}</StudentTextBlock>
+        <StudentTextBlock label="Vấn đề — cách giải quyết">
+          {student.projectProblemSolution}
+        </StudentTextBlock>
+        <StudentTextBlock label="Tính năng dự kiến">{student.projectPlannedFeatures}</StudentTextBlock>
       </div>
     </div>
   );

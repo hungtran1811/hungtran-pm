@@ -1,4 +1,5 @@
 import { formatDateTime } from '../lib/firestore.js';
+import { formatLessonKey } from '../lib/submissionFileName.js';
 import { UNDERSTANDING_LEVELS } from '../constants/index.js';
 
 const UNDERSTANDING_LABELS = UNDERSTANDING_LEVELS.reduce((acc, item) => {
@@ -15,7 +16,7 @@ export function formatProgressReport(report, { displayName } = {}) {
   return [
     `Học sinh: ${studentName}`,
     `Dự án: ${report.projectName || '—'}`,
-    report.lessonKey ? `Buổi: ${report.lessonKey}` : '',
+    report.lessonKey ? `Buổi: ${formatLessonKey(report.lessonKey)}` : '',
     `Tiến độ: ${report.progressPercent}% - ${report.stage} - ${report.status}`,
     `Đã làm: ${report.doneToday}`,
     `Mục tiêu tiếp theo: ${report.nextGoal}`,

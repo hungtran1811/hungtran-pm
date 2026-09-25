@@ -53,7 +53,7 @@ describe('labels', () => {
     );
     expect(classStudentsHref('K24')).toBe('/admin/students?class=K24');
     expect(classStudentsHref('K24', { review: true })).toBe('/admin/students?class=K24&review=1');
-    expect(classSessionLabel(3)).toBe('B03');
+    expect(classSessionLabel(3)).toBe('L03');
     expect(classSessionLabel(0)).toBe('—');
     expect(classPhaseLabel('learning')).toBe('Học kiến thức');
     expect(classPhaseLabel('final')).toBe('Làm sản phẩm cuối khóa');

@@ -22,9 +22,7 @@ export function classStudentsHref(classCode, { review = false } = {}) {
 }
 
 export function classSessionLabel(sessionNumber) {
-  const session = Number(sessionNumber) || 0;
-  if (session <= 0) return '—';
-  return `B${String(session).padStart(2, '0')}`;
+  return normalizeLessonKey(sessionNumber) || '—';
 }
 
 export function classPhaseLabel(phase) {

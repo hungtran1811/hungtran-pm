@@ -5,6 +5,7 @@ import { getDriveFile, shareFileAnyoneWithLink } from './_lib/driveFolders.js';
 import { getAdminDb } from './_lib/firebaseAdmin.js';
 import { clientIp, json, parseJsonBody, preflight } from './_lib/http.js';
 import { checkRateLimit, DRIVE_LIMITS } from './_lib/rateLimit.js';
+import { functionErrorCode, logFunctionError } from './_lib/functionLog.js';
 
 function sameSize(left, right) {
   return Number(left) === Number(right);
@@ -84,8 +85,9 @@ export async function handler(event) {
       },
     });
   } catch (error) {
-    console.error('[drive-complete-material]', error?.message || error);
-    if (String(error?.message || '').includes('Missing')) {
+    const code = functionErrorCode(error);
+    logFunctionError('drive-complete-material', code, error);
+    if (code === 'CONFIG_MISSING') {
       return json(503, { error: 'Chưa cấu hình thư mục tài nguyên Drive.' });
     }
     return json(502, { error: 'Không hoàn tất được tài nguyên. Thử lại sau.' });

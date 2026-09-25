@@ -51,6 +51,7 @@ import {
   findProgramForClass,
 } from '../../lib/studentWorkspace.js';
 import { sortByRecentActivity } from '../../lib/reportSignals.js';
+import { formatLessonKey } from '../../lib/submissionFileName.js';
 
 function matchesCompletionFilter(item, filter) {
   if (filter === 'done') return item.isComplete;
@@ -65,7 +66,7 @@ function readCompletionFilter(params) {
 
 function shortLessonLabel(option) {
   if (option.sessionNumber) return String(option.sessionNumber);
-  const match = String(option.value || '').match(/^B0*(\d+)$/i);
+  const match = String(option.value || '').match(/^[BL]?0*(\d+)$/i);
   return match ? match[1] : option.value;
 }
 
@@ -437,7 +438,7 @@ export function ReportsPanel({
 
   const copyAll = async () => {
     if (!reportsForCopy.length) return;
-    const lessonSuffix = reviewLessonKey ? ` · Buổi ${reviewLessonKey}` : '';
+    const lessonSuffix = reviewLessonKey ? ` · Buổi ${formatLessonKey(reviewLessonKey)}` : '';
     const header = isAllClasses
       ? `BÁO CÁO TIẾN ĐỘ - TẤT CẢ LỚP${lessonSuffix}`
       : (() => {

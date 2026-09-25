@@ -8,6 +8,7 @@ export function SubmissionSuccess({
   storedFileName,
   submittedAt,
   requiresReport = false,
+  samePageReport = false,
   onAgain,
 }) {
   const timeLabel = submittedAt
@@ -20,7 +21,9 @@ export function SubmissionSuccess({
         <CheckCircle2 className="mt-0.5 h-7 w-7 shrink-0 text-emerald-600 dark:text-emerald-400" />
         <div>
           <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-50">Đã nộp bài</h2>
-          {requiresReport ? (
+          {samePageReport ? (
+            <p className="mt-1 text-sm text-slate-500">File đã lưu. Gửi báo cáo ở bước 1 nếu chưa gửi.</p>
+          ) : requiresReport ? (
             <p className="mt-1 text-sm text-slate-500">File đã lưu. Gửi báo cáo ở tab Dự án nếu chưa gửi.</p>
           ) : null}
         </div>

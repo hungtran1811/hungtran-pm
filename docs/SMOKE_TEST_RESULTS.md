@@ -2,6 +2,31 @@
 
 Ghi kết quả smoke test thủ công trước khi merge hoặc deploy. Checklist chi tiết nằm ở `docs/SMOKE_TEST_CHECKLIST.md`.
 
+## 2026-09-25 Vận hành (local commands)
+
+- Date: 2026-09-25
+- Branch: `main` (uncommitted ops slices)
+- Environment: Windows local workspace
+- Tester: Cursor Agent
+- Browser: Not run — `/admin/login` (cần giáo viên smoke production: Kiểm tra Drive, nộp 1 file, upload tài nguyên, Dashboard Làm mới)
+
+### Commands
+
+| Check | Result | Notes |
+|------|--------|-------|
+| `npm test` | Pass | 39 files, 253 tests |
+| `npm run test:migration` | Pass | 40 tests |
+| `npm run build` | Pass | Vite 8.1.0 |
+| `npm run audit:security:gate` | Pass | 17 moderate tooling; 0 high/critical |
+
+### Manual Flows
+
+| Flow | Result | Notes |
+|------|--------|-------|
+| Admin Dashboard cache hint + Làm mới | Not run | Cần đăng nhập |
+| Cài đặt → Kiểm tra Drive | Not run | Cần `npm run dev:functions` restart để nhận `drive-health` |
+| HS nộp file + admin tài nguyên | Not run | Production 5 phút: `docs/MAINTENANCE.md` |
+
 ## 2026-08-28 Pre-push verification
 
 - Date: 2026-08-28

@@ -7,6 +7,7 @@ import { createResumableUpload, findOrCreateMaterialFolder } from './_lib/driveF
 import { getAdminDb } from './_lib/firebaseAdmin.js';
 import { clientIp, json, parseJsonBody, preflight, requestOrigin } from './_lib/http.js';
 import { checkRateLimit, DRIVE_LIMITS } from './_lib/rateLimit.js';
+import { functionErrorCode, logFunctionError } from './_lib/functionLog.js';
 
 export async function handler(event) {
   const early = preflight(event);
@@ -65,8 +66,9 @@ export async function handler(event) {
 
     return json(200, { uploadUrl, storedFileName: input.storedFileName, uploadToken });
   } catch (error) {
-    console.error('[drive-create-material-session]', error?.message || error);
-    if (String(error?.message || '').includes('Missing')) {
+    const code = functionErrorCode(error);
+    logFunctionError('drive-create-material-session', code, error);
+    if (code === 'CONFIG_MISSING') {
       return json(503, { error: 'Chưa cấu hình thư mục tài nguyên Drive.' });
     }
     return json(502, { error: 'Không tạo được phiên tải tài nguyên. Thử lại sau.' });

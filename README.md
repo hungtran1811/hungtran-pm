@@ -186,7 +186,7 @@ Ghi từ cổng học sinh được kiểm soát bởi `firestore.rules` (batche
 | `npm run test:migration`      | Chạy unit test sanitizer/planner migration lesson HTML   |
 | `npm run test:rules`          | Chạy Firestore Rules tests qua emulator (cần Java/JDK)   |
 | `npm run verify`              | Chạy test rồi build production                           |
-| `npm run ci`                  | Chạy unit tests, rules tests, build và audit gate        |
+| `npm run ci`                  | Unit + migration + rules + build + audit gate (khớp GitHub Actions) |
 | `npm run audit:security`      | Alias audit đầy đủ                                       |
 | `npm run audit:security:gate` | Audit chỉ fail khi có high/critical                      |
 | `npm run audit:security:full` | Audit đầy đủ, có thể fail vì moderate tooling đã ghi chú |

@@ -43,4 +43,4 @@ jobs:
         run: npm run lint
 
       - name: Run CI checks
-        run: npm test && npm run test:rules && npm run build && npm run audit:security:gate
+        run: npm test && npm run test:migration && npm run test:rules && npm run build && npm run audit:security:gate

@@ -18,6 +18,7 @@ import {
   uniqueLessonKeys,
 } from '../../lib/submissionAdmin.js';
 import { formatUploadSize } from '../../lib/submissionValidate.js';
+import { formatLessonKey } from '../../lib/submissionFileName.js';
 import { listCurriculumPrograms } from '../../services/curriculum.service.js';
 import { listSubmissionsByClass } from '../../services/submissions.service.js';
 
@@ -262,10 +263,10 @@ export function SubmissionsPage() {
                               <p className="truncate font-medium text-slate-800 dark:text-slate-100">
                                 {row.studentName}
                               </p>
-                              <p className="text-xs text-slate-500 md:hidden">{row.lessonKey}</p>
+                              <p className="text-xs text-slate-500 md:hidden">{formatLessonKey(row.lessonKey)}</p>
                             </div>
                             <p className="hidden text-sm text-slate-600 md:block dark:text-slate-300">
-                              {row.lessonKey}
+                              {formatLessonKey(row.lessonKey)}
                             </p>
                             <div className="min-w-0">
                               <p className="truncate text-sm text-slate-700 dark:text-slate-200">

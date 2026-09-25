@@ -1,5 +1,6 @@
 import { verifyFirebaseIdToken } from '../../../src/lib/firebaseIdToken.js';
 import { getAdminDb, getFirebaseProjectId } from './firebaseAdmin.js';
+import { logFunctionError } from './functionLog.js';
 
 function bearerToken(event) {
   const header = event?.headers?.authorization || event?.headers?.Authorization || '';
@@ -27,7 +28,7 @@ export async function requireAdmin(event) {
 
     return { ok: true, email: claims.email, uid: claims.uid };
   } catch (error) {
-    console.error('[requireAdmin]', error?.message || error);
+    logFunctionError('requireAdmin', 'ADMIN_AUTH_FAILED', error);
     return { ok: false, status: 401, error: 'Phiên đăng nhập không hợp lệ. Hãy đăng xuất rồi đăng nhập lại.' };
   }
 }

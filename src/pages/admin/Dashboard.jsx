@@ -22,11 +22,16 @@ import { useToast } from '../../ui/components/Toast.jsx';
 import { ClassOpsBoard, OpsAttentionList } from '../../ui/components/ClassOpsBoard.jsx';
 import { CURRICULUM_PHASES, CURRICULUM_PHASE_LABELS } from '../../constants/index.js';
 import { setClassCurriculumQuick } from '../../services/classes.service.js';
-import { invalidateAdminSnapshots, loadDashboardOpsSnapshot } from '../../lib/adminPanelData.js';
+import {
+  DASHBOARD_OPS_CACHE_TTL_MS,
+  invalidateAdminSnapshots,
+  loadDashboardOpsSnapshot,
+} from '../../lib/adminPanelData.js';
 import {
   buildClassOpsRows,
   buildOpsAttentionItems,
   computeDashboardStats,
+  classSessionLabel,
   computeOpsKpis,
 } from '../../lib/dashboardStats.js';
 import { getErrorMessage } from '../../lib/firestore.js';
@@ -161,7 +166,7 @@ function SessionQuickSet({ classes, onUpdated }) {
         <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-50">Đổi buổi</h2>
         {selected && (
           <Badge tone="brand" className="ml-auto">
-            B{selected.curriculumCurrentSession ?? 0}
+            {classSessionLabel(selected.curriculumCurrentSession)}
           </Badge>
         )}
       </div>
@@ -226,6 +231,8 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadedAt, setLoadedAt] = useState(null);
+  const [fromCache, setFromCache] = useState(false);
+  const [failedClassCodes, setFailedClassCodes] = useState([]);
 
   const loadDashboard = useCallback(async (force = false) => {
     try {
@@ -233,6 +240,8 @@ export function DashboardPage() {
       setClasses(ops.classes);
       setStudents(ops.students);
       setSubmissionsByClass(ops.submissionsByClass || {});
+      setFromCache(Boolean(ops.fromCache));
+      setFailedClassCodes(ops.failedClassCodes || []);
       setLoadedAt(new Date());
       if (!ops.fromCache && ops.failedClassCodes?.length) {
         toast.error(
@@ -315,6 +324,17 @@ export function DashboardPage() {
         </div>
       ) : (
         <div className="space-y-5">
+          {fromCache || failedClassCodes.length ? (
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {fromCache
+                ? `Dữ liệu cache ~${Math.round(DASHBOARD_OPS_CACHE_TTL_MS / 1000)} giây. `
+                : ''}
+              {failedClassCodes.length
+                ? `Không tải được Drive: ${failedClassCodes.join(', ')}. `
+                : ''}
+              Bấm Làm mới để lấy bản mới.
+            </p>
+          ) : null}
           <div className="space-y-3">
             <div className={kpiGridClass}>
               <CompactKpi

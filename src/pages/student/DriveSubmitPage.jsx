@@ -16,12 +16,23 @@ import { classRequiresProgressAndProduct } from '../../lib/studentWorkspace.js';
 
 const BUSY_STATES = new Set(['validating', 'creating_session', 'uploading', 'saving']);
 
-export function DriveSubmitPage() {
+export function DriveSubmitPage({
+  embedded = false,
+  lessonKey: lessonKeyProp,
+  onLessonKeyChange,
+  hideLessonSelect = false,
+} = {}) {
   const { classCode, classDoc, program, student } = useOutletContext();
   const toast = useToast();
   const catalogOptions = useMemo(() => buildLessonOptions(classDoc, program), [classDoc, program]);
   const lessonOptions = useMemo(() => buildStudentLessonOptions(classDoc, program), [classDoc, program]);
-  const [lessonKey, setLessonKey] = useState(() => defaultLessonKey(classDoc, program));
+  const [internalLessonKey, setInternalLessonKey] = useState(() => defaultLessonKey(classDoc, program));
+  const lessonKey = lessonKeyProp ?? internalLessonKey;
+  const setLessonKey = (next) => {
+    const value = typeof next === 'function' ? next(lessonKey) : next;
+    if (lessonKeyProp === undefined) setInternalLessonKey(value);
+    onLessonKeyChange?.(value);
+  };
   const [file, setFile] = useState(null);
   const [fileError, setFileError] = useState('');
   const [status, setStatus] = useState('idle');
@@ -146,32 +157,45 @@ export function DriveSubmitPage() {
 
   if (status === 'success' && result) {
     return (
-      <div className="mx-auto max-w-lg">
+      <div className={embedded ? '' : 'mx-auto max-w-lg'}>
         <SubmissionSuccess
           studentName={student.fullName}
           classCode={classLabel}
           lessonLabel={selectedLesson?.label || lessonKey}
           storedFileName={result.storedFileName}
           submittedAt={result.submittedAt}
-          requiresReport={requiresBoth}
+          requiresReport={requiresBoth && !embedded}
+          samePageReport={embedded && requiresBoth}
           onAgain={resetForm}
         />
-        <div className="mt-5">
-          <StudentSubmissionNotes notes={notes} lessonOptions={catalogOptions} />
-        </div>
+        {embedded ? null : (
+          <div className="mt-5">
+            <StudentSubmissionNotes notes={notes} lessonOptions={catalogOptions} />
+          </div>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="mx-auto max-w-lg">
-      <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-50">Nộp bài</h2>
-      <p className="mt-1 text-sm text-slate-500">
-        {student.fullName} · {classLabel}
-      </p>
+    <div className={embedded ? '' : 'mx-auto max-w-lg'}>
+      {embedded ? null : (
+        <>
+          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-50">Nộp bài</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            {student.fullName} · {classLabel}
+          </p>
+        </>
+      )}
 
-      <form className="mt-5 space-y-4" onSubmit={handleSubmit}>
-        {lessonOptions.length ? (
+      <form className={embedded ? 'space-y-4' : 'mt-5 space-y-4'} onSubmit={handleSubmit}>
+        {hideLessonSelect ? (
+          lessonOptions.length ? null : (
+            <p className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+              Giáo viên chưa đặt buổi hiện tại cho lớp. Hỏi giáo viên trước khi nộp.
+            </p>
+          )
+        ) : lessonOptions.length ? (
           <Field label="Buổi" required>
             <Select
               value={lessonKey}

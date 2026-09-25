@@ -10,6 +10,7 @@ import {
   uniqueLessonKeys,
 } from '../../lib/submissionAdmin.js';
 import { formatUploadSize } from '../../lib/submissionValidate.js';
+import { formatLessonKey } from '../../lib/submissionFileName.js';
 
 const driveLinkClass =
   'inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:border-brand-300 hover:text-brand-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-brand-500/50 dark:hover:text-brand-300';
@@ -114,10 +115,10 @@ export function ClassDriveSubmissionsList({
                     <p className="truncate font-medium text-slate-800 dark:text-slate-100">
                       {row.studentName}
                     </p>
-                    <p className="text-xs text-slate-500 md:hidden">{row.lessonKey}</p>
+                    <p className="text-xs text-slate-500 md:hidden">{formatLessonKey(row.lessonKey)}</p>
                   </div>
                   <p className="hidden text-sm text-slate-600 md:block dark:text-slate-300">
-                    {row.lessonKey}
+                    {formatLessonKey(row.lessonKey)}
                   </p>
                   <div className="min-w-0">
                     <p className="truncate text-sm text-slate-700 dark:text-slate-200">

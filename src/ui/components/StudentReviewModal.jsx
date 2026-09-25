@@ -7,7 +7,7 @@ import { Spinner } from './Spinner.jsx';
 import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
 import { driveFileViewUrl } from '../../lib/submissionAdmin.js';
 import { completionSignal, signalLabel } from '../../lib/reportSignals.js';
-import { lessonKeysEqual } from '../../lib/submissionFileName.js';
+import { formatLessonKey, lessonKeysEqual } from '../../lib/submissionFileName.js';
 import { listReportsByStudent } from '../../services/reports.service.js';
 import { ProjectSummaryDisclosure } from './ProjectSummaryDisclosure.jsx';
 import { StudentReportDetail, productLinksOf } from './StudentReportDetail.jsx';
@@ -27,7 +27,7 @@ function groupFilesByLesson(files = []) {
   const groups = [];
   const index = new Map();
   for (const file of files) {
-    const key = file.lessonKey || '—';
+    const key = formatLessonKey(file.lessonKey) || '—';
     if (!index.has(key)) {
       index.set(key, []);
       groups.push([key, index.get(key)]);
@@ -96,7 +96,7 @@ function HistoryFile({ file, canDelete, onDelete }) {
       <div className="pt-2">
         <div className="flex flex-wrap items-center gap-1.5">
           <Badge tone="slate">File</Badge>
-          {file.lessonKey ? <Badge tone="slate">{file.lessonKey}</Badge> : null}
+          {file.lessonKey ? <Badge tone="slate">{formatLessonKey(file.lessonKey)}</Badge> : null}
           {file.isLatest ? <Badge tone="green">Mới nhất</Badge> : null}
         </div>
       </div>
@@ -286,7 +286,7 @@ export function StudentReviewModal({
             {signalLabel(signal, { showReport, showDrive })}
           </Badge>
           {item.showClass ? <Badge tone="slate">{item.student.classCode}</Badge> : null}
-          {lessonKey ? <Badge tone="slate">{lessonKey}</Badge> : null}
+          {lessonKey ? <Badge tone="slate">{formatLessonKey(lessonKey)}</Badge> : null}
         </div>
 
         {showReport ? (

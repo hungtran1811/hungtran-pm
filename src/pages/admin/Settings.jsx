@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Database, Download, Music, Play, Trash2, Volume2 } from 'lucide-react';
+import { Database, Download, HardDrive, Music, Play, Trash2, Volume2 } from 'lucide-react';
 import { AppShell } from '../../ui/components/AppShell.jsx';
 import { Button } from '../../ui/components/Button.jsx';
 import { Field } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { useGameSound } from '../../hooks/useGameSound.js';
-import { FEEDBACK_CACHE_TTL_MS, invalidateAdminSnapshots } from '../../lib/adminPanelData.js';
+import { DASHBOARD_OPS_CACHE_TTL_MS, invalidateAdminSnapshots } from '../../lib/adminPanelData.js';
+import { checkDriveHealth } from '../../services/driveHealth.service.js';
 import { clearLocalDrafts } from '../../lib/localDraftCleanup.js';
 import { useSettings } from '../../state/settings.store.jsx';
 import { buildInfo } from '../../config/buildInfo.js';
@@ -130,12 +131,27 @@ function SoundLibrary() {
 
 function DataSettings() {
   const toast = useToast();
-  const cacheSeconds = Math.round(FEEDBACK_CACHE_TTL_MS / 1000);
+  const cacheSeconds = Math.round(DASHBOARD_OPS_CACHE_TTL_MS / 1000);
   const [exporting, setExporting] = useState(false);
+  const [checkingDrive, setCheckingDrive] = useState(false);
 
   const handleClearCache = () => {
     invalidateAdminSnapshots();
-    toast.success('Đã xóa bộ nhớ đệm báo cáo và điểm số.');
+    toast.success('Đã xóa bộ nhớ đệm lớp, học sinh và dashboard.');
+  };
+
+  const handleCheckDrive = async () => {
+    setCheckingDrive(true);
+    try {
+      const health = await checkDriveHealth();
+      const driveLabel = health.drive === 'ok' ? 'sẵn sàng' : 'chưa cấu hình';
+      const materialsLabel = health.materials === 'ok' ? 'sẵn sàng' : 'chưa cấu hình';
+      toast.success(`Nộp bài Drive: ${driveLabel}. Tài nguyên bài giảng: ${materialsLabel}.`);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setCheckingDrive(false);
+    }
   };
 
   const handleClearDrafts = () => {
@@ -190,16 +206,20 @@ function DataSettings() {
     <SettingsSection
       icon={Database}
       title="Dữ liệu & bộ nhớ đệm"
-      description={`Báo cáo và điểm số được cache tạm ${cacheSeconds} giây để tải nhanh hơn.`}
+      description={`Dashboard, danh sách lớp và học sinh được cache tạm ${cacheSeconds} giây. Bấm Làm mới trên Tổng quan để lấy bản mới.`}
     >
       <div className="flex flex-wrap gap-3">
         <Button type="button" onClick={handleExportBackup} loading={exporting}>
           <Download className="h-4 w-4" />
           Tải backup JSON
         </Button>
+        <Button type="button" variant="secondary" onClick={handleCheckDrive} loading={checkingDrive}>
+          <HardDrive className="h-4 w-4" />
+          Kiểm tra Drive
+        </Button>
         <Button type="button" variant="secondary" onClick={handleClearCache}>
           <Trash2 className="h-4 w-4" />
-          Xóa cache báo cáo/điểm
+          Xóa cache lớp/HS/dashboard
         </Button>
         <Button type="button" variant="secondary" onClick={handleClearDrafts}>
           <Trash2 className="h-4 w-4" />

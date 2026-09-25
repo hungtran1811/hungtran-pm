@@ -3,6 +3,7 @@ import {
   FEATURE_KNOWLEDGE_FEEDBACK_ENABLED,
   FEATURE_PROGRESS_REPORTS_ENABLED,
 } from '../config/features.js';
+import { normalizeLessonKey } from './submissionFileName.js';
 
 export function weekLabel(date) {
   if (!date?.getTime) return '—';
@@ -53,7 +54,7 @@ export function sessionUnderstandingHeatmap(feedbacks) {
   return [...bySession.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([session, { sum, count }]) => ({
-      session: `B${session}`,
+      session: normalizeLessonKey(session),
       avg: Number((sum / count).toFixed(1)),
       count,
     }));

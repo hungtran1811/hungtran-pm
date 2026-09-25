@@ -1,7 +1,7 @@
 import { FEATURE_DRIVE_SUBMISSION_ENABLED } from '../config/features.js';
 import { listKnowledgeReportsByClass } from '../services/knowledgeReports.service.js';
 import { loadLatestReportsForStudents } from '../services/reports.service.js';
-import { listSubmissionsByClass } from '../services/submissions.service.js';
+import { listLatestSubmissionsByClassLesson } from '../services/submissions.service.js';
 import { fetchAdminBaseData, invalidateAdminDataCache } from './adminDataCache.js';
 import { collectSettledSubmissions } from './dashboardStats.js';
 
@@ -82,11 +82,18 @@ async function loadActiveClassSubmissions(classes = []) {
   if (!FEATURE_DRIVE_SUBMISSION_ENABLED) {
     return { submissionsByClass: {}, failedClassCodes: [] };
   }
-  const classCodes = classes.filter((cls) => cls.status === 'active').map((cls) => cls.classCode);
+  const active = classes.filter((cls) => cls.status === 'active');
+  const classCodes = active.map((cls) => cls.classCode);
   if (!classCodes.length) {
     return { submissionsByClass: {}, failedClassCodes: [] };
   }
-  const results = await Promise.allSettled(classCodes.map((code) => listSubmissionsByClass(code)));
+  const results = await Promise.allSettled(
+    active.map((cls) => {
+      const session = Number(cls.curriculumCurrentSession || 0);
+      if (session <= 0) return Promise.resolve([]);
+      return listLatestSubmissionsByClassLesson(cls.classCode, session);
+    }),
+  );
   return collectSettledSubmissions(classCodes, results);
 }
 

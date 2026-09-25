@@ -1,5 +1,6 @@
 import { FUNCTIONS_BASE } from '../config/submissionConfig.js';
 import { auth } from '../config/firebase.js';
+import { reportDriveFunctionError } from '../lib/driveFunctionErrors.js';
 import { canAddLessonResource, validateCreateMaterialInput } from '../lib/lessonResources.js';
 
 function functionsUrl(name) {
@@ -40,12 +41,16 @@ async function postAdminJson(name, body) {
 
   if (response.ok) return payload;
   const serverError = payload.error || payload.errorMessage;
-  if (serverError) throw new Error(serverError);
-  throw new Error(
-    response.status >= 500
-      ? 'Máy chủ tài nguyên đang lỗi. Thử lại sau vài phút.'
-      : `Không xử lý được yêu cầu (${response.status}).`,
+  const error = new Error(
+    serverError ||
+      (response.status >= 500
+        ? 'Máy chủ tài nguyên đang lỗi. Thử lại sau vài phút.'
+        : `Không xử lý được yêu cầu (${response.status}).`),
   );
+  if (response.status >= 500 || response.status === 401 || response.status === 429) {
+    reportDriveFunctionError(error, { function: name, status: response.status });
+  }
+  throw error;
 }
 
 function putFileWithProgress(uploadUrl, file, { onProgress } = {}) {

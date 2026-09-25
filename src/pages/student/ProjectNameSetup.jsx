@@ -81,21 +81,23 @@ export function ProjectNameSetup({ student }) {
 
           <Field label="Vấn đề — cách giải quyết" required>
             <Textarea
-              rows={3}
+              rows={6}
               value={problem}
               onChange={(e) => setProblem(e.target.value)}
               placeholder="Ai gặp khó khăn gì? Sản phẩm của bạn giúp họ như thế nào?"
               maxLength={800}
+              className="min-h-36"
             />
           </Field>
 
           <Field label="Các tính năng dự kiến" required>
             <Textarea
-              rows={3}
+              rows={6}
               value={features}
               onChange={(e) => setFeatures(e.target.value)}
               placeholder="Liệt kê 3–5 tính năng chính bạn dự định làm (mỗi dòng một ý)."
               maxLength={800}
+              className="min-h-36"
             />
           </Field>
 

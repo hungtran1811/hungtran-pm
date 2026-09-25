@@ -5,11 +5,13 @@ import { EmptyState } from '../../ui/components/EmptyState.jsx';
 import { Spinner } from '../../ui/components/Spinner.jsx';
 import { STATUS_TONES } from '../../constants/index.js';
 import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
+import { formatLessonKey } from '../../lib/submissionFileName.js';
 import {
   getReport,
   listReportsByStudent,
   subscribeReportsByStudent,
 } from '../../services/reports.service.js';
+import { StudentTextBlock } from '../../ui/components/StudentTextBlock.jsx';
 import { ProjectLinksReadonly } from './ProjectProductLinks.jsx';
 
 function ReportHistoryCard({ report }) {
@@ -28,7 +30,7 @@ function ReportHistoryCard({ report }) {
               {report.progressPercent}%
             </span>
             <Badge tone={STATUS_TONES[report.status] || 'slate'}>{report.status}</Badge>
-            {report.lessonKey && <Badge tone="slate">{report.lessonKey}</Badge>}
+            {report.lessonKey && <Badge tone="slate">{formatLessonKey(report.lessonKey)}</Badge>}
             {report.stage && <Badge tone="slate">{report.stage}</Badge>}
           </div>
           <p className="mt-1 text-xs text-slate-500">
@@ -38,23 +40,12 @@ function ReportHistoryCard({ report }) {
         <span className="text-xs text-slate-400">{open ? 'Thu gọn' : 'Chi tiết'}</span>
       </button>
       {open && (
-        <div className="space-y-3 border-t border-slate-100 px-4 py-3 text-sm dark:border-slate-800">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Đã làm được</p>
-            <p className="mt-1 whitespace-pre-wrap text-slate-700 dark:text-slate-200">{report.doneToday}</p>
-          </div>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Mục tiêu tiếp</p>
-            <p className="mt-1 whitespace-pre-wrap text-slate-700 dark:text-slate-200">{report.nextGoal}</p>
-          </div>
-          {report.difficulties?.trim() && (
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Khó khăn</p>
-              <p className="mt-1 whitespace-pre-wrap text-slate-700 dark:text-slate-200">
-                {report.difficulties}
-              </p>
-            </div>
-          )}
+        <div className="space-y-3 border-t border-slate-100 px-4 py-3 dark:border-slate-800">
+          <StudentTextBlock label="Đã làm được">{report.doneToday}</StudentTextBlock>
+          <StudentTextBlock label="Mục tiêu tiếp">{report.nextGoal}</StudentTextBlock>
+          {report.difficulties?.trim() ? (
+            <StudentTextBlock label="Khó khăn">{report.difficulties}</StudentTextBlock>
+          ) : null}
           <ProjectLinksReadonly
             githubUrl={report.projectGithubUrl}
             canvaUrl={report.projectCanvaUrl}
