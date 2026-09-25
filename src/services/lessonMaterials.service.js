@@ -27,7 +27,7 @@ async function postAdminJson(name, body) {
     });
   } catch {
     throw new Error(
-      'Không kết nối được máy chủ tài nguyên. Chạy npm run dev:functions rồi tải lại trang.',
+      'Không kết nối được máy chủ tài nguyên. Thử lại sau; nếu đang test local hãy chạy npm run dev:functions.',
     );
   }
 
@@ -39,11 +39,12 @@ async function postAdminJson(name, body) {
   }
 
   if (response.ok) return payload;
+  const serverError = payload.error || payload.errorMessage;
+  if (serverError) throw new Error(serverError);
   throw new Error(
-    payload.error ||
-      (response.status >= 500
-        ? 'Máy chủ tài nguyên đang lỗi. Nếu đang test local, chạy npm run dev:functions rồi thử lại.'
-        : `Không xử lý được yêu cầu (${response.status}).`),
+    response.status >= 500
+      ? 'Máy chủ tài nguyên đang lỗi. Thử lại sau vài phút.'
+      : `Không xử lý được yêu cầu (${response.status}).`,
   );
 }
 
