@@ -18,3 +18,6 @@ export const FEATURE_PROGRESS_REPORTS_ENABLED = true;
 
 /** Tài nguyên file đầu bài giảng (Drive materials + tải về máy HS). */
 export const FEATURE_LESSON_RESOURCES_ENABLED = true;
+
+/** HTML bài giảng vượt 750 KiB đưa lên Drive, bài nhỏ vẫn Firestore. */
+export const FEATURE_DRIVE_LESSON_HTML_ENABLED = true;

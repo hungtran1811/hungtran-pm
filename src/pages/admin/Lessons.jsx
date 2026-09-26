@@ -25,7 +25,9 @@ import { ImageUpload } from '../../ui/components/ImageUpload.jsx';
 import { ImageGalleryUpload } from '../../ui/components/ImageGalleryUpload.jsx';
 import { LessonResourcesField } from '../../ui/components/LessonResourcesField.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
-import { FEATURE_LESSON_RESOURCES_ENABLED } from '../../config/features.js';
+import { FEATURE_DRIVE_LESSON_HTML_ENABLED, FEATURE_LESSON_RESOURCES_ENABLED } from '../../config/features.js';
+import { LESSON_HTML_DRIVE_MAX_BYTES } from '../../config/lessonHtmlDrive.js';
+import { formatLessonHtmlDriveBadge } from '../../lib/lessonHtmlDrive.js';
 import {
   createProgram,
   getCurriculumProgram,
@@ -51,7 +53,9 @@ import {
   hasRenderableLessonHtml,
   sanitizeLessonHtml,
 } from '../../lib/lessonHtml.js';
-const LESSON_HTML_IMPORT_MAX_BYTES = 750 * 1024;
+const LESSON_HTML_IMPORT_MAX_BYTES = FEATURE_DRIVE_LESSON_HTML_ENABLED
+  ? LESSON_HTML_DRIVE_MAX_BYTES
+  : 750 * 1024;
 
 function markdownToLessonHtml(content = '') {
   return content ? sanitizeLessonHtml(renderSafeMarkdown(content)) : '';
@@ -168,6 +172,9 @@ export function LessonsPage() {
       if (!full) {
         toast.error('Không tải được bài giảng này.');
         return;
+      }
+      if (full.htmlHydrationError) {
+        toast.error(full.htmlHydrationError);
       }
       setEditingLesson(prepareLessonForHtmlEditor({ ...full, _slim: false }));
       setShowEditor(true);
@@ -692,7 +699,7 @@ function LessonPreviewWorkspace({ form }) {
 }
 
 
-function HtmlSourceField({ label, value, onChange, onImport, rows, placeholder }) {
+function HtmlSourceField({ label, value, onChange, onImport, rows, placeholder, drivePointer }) {
   const toast = useToast();
   const textareaId = useId();
   const fileInputRef = useRef(null);
@@ -708,7 +715,11 @@ function HtmlSourceField({ label, value, onChange, onImport, rows, placeholder }
       return;
     }
     if (file.size > LESSON_HTML_IMPORT_MAX_BYTES) {
-      toast.error('File HTML vượt quá giới hạn 750 KiB.');
+      toast.error(
+        FEATURE_DRIVE_LESSON_HTML_ENABLED
+          ? 'File HTML vượt quá 2 MiB. Hãy rút gọn hoặc bỏ ảnh nhúng base64.'
+          : 'File HTML vượt quá giới hạn 750 KiB.',
+      );
       return;
     }
     try {
@@ -741,6 +752,9 @@ function HtmlSourceField({ label, value, onChange, onImport, rows, placeholder }
         <label htmlFor={textareaId} className="label-base mb-0">
           {label}
         </label>
+        {drivePointer ? (
+          <Badge tone="slate">{formatLessonHtmlDriveBadge(drivePointer)}</Badge>
+        ) : null}
         <Button size="sm" onClick={() => fileInputRef.current?.click()}>
           <Upload className="h-3.5 w-3.5" />
           Nhập file HTML
@@ -826,6 +840,7 @@ function LessonEditor({ lesson, programId, onClose, onApply, onResourcesSynced }
         onChange={(value) => update('content', value)}
         onImport={() => handleHtmlImport()}
         placeholder="Nhập file .html hoặc dán HTML vào đây."
+        drivePointer={form.lectureHtmlDrive}
       />
       <HtmlSourceField
         label="Bài tập (HTML)"
@@ -834,6 +849,7 @@ function LessonEditor({ lesson, programId, onClose, onApply, onResourcesSynced }
         onChange={(value) => update('exercise', value)}
         onImport={() => handleHtmlImport()}
         placeholder="Nhập file .html bài tập hoặc dán HTML vào đây."
+        drivePointer={form.exerciseHtmlDrive}
       />
     </div>
   );

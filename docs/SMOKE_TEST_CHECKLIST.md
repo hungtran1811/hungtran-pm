@@ -7,7 +7,8 @@ Chạy sau khi update dependency, sửa rules/indexes, hoặc refactor service/p
 Kiểm tra đã có trên Netlify (và `.env` local khi chạy functions):
 
 - Nộp bài: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, `GOOGLE_DRIVE_ROOT_FOLDER_ID`, `FIREBASE_SERVICE_ACCOUNT`
-- Tài nguyên bài giảng: `GOOGLE_DRIVE_MATERIALS_ROOT_FOLDER_ID` — thiếu → upload đầu buổi 502
+- Tài nguyên bài giảng: `GOOGLE_DRIVE_MATERIALS_ROOT_FOLDER_ID` — thiếu → upload đầu buổi / HTML overflow 502/503
+- HTML bài giảng >750 KiB dùng cùng thư mục materials (`LessonHtml/{programId}`). Không thêm collection Firestore; session tái sử dụng `materialUploadSessions` — **không** cần deploy rules nếu chưa đổi `firestore.rules`.
 - Tuỳ chọn: `VITE_SENTRY_DSN` (báo lỗi production)
 
 Admin → Cài đặt → **Kiểm tra Drive** để xác nhận cấu hình (không lộ tên biến).
@@ -19,7 +20,7 @@ Admin → Cài đặt → **Kiểm tra Drive** để xác nhận cấu hình (kh
 - Chỉnh nhanh buổi hiện tại và phase cho một lớp test (badge Đổi buổi hiện Lnn).
 - Mở `Lớp học`, tạo/sửa lớp test, copy link lớp.
 - Mở `Học sinh`, tạo/sửa học sinh test, duyệt hoặc từ chối tên dự án.
-- Mở `Bài giảng`, tạo/sửa bài, preview HTML/Markdown, upload ảnh Cloudinary nếu có env. Lọc chương trình bằng tìm kiếm và chip môn → trình độ.
+- Mở `Bài giảng`, tạo/sửa bài, preview HTML/Markdown, upload ảnh Cloudinary nếu có env. Lọc chương trình bằng tìm kiếm và chip môn → trình độ. Import HTML ~1.2 MiB: Lưu thành công + badge Drive; bài ~200 KiB vẫn Firestore. Restart `dev:functions` nếu handler lesson-html chưa có.
 - **Tài nguyên buổi:** upload 1 file allowlist ≤100MB; đóng editor không mất file; học sinh thấy nút tải ở đầu buổi.
 - Mở `Cài đặt`, tải backup JSON, xóa cache lớp/HS/dashboard, Kiểm tra Drive.
 

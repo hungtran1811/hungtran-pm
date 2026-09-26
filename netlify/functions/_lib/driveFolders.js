@@ -1,3 +1,4 @@
+import { LESSON_HTML_DRIVE_FOLDER } from '../../../src/config/lessonHtmlDrive.js';
 import { driveMaterialsRootFolderId, driveRootFolderId, getAccessToken } from './googleAuth.js';
 
 function escapeDriveQuery(value) {
@@ -125,6 +126,36 @@ export async function findOrCreateMaterialFolder(programId, lessonKey) {
   const rootId = driveMaterialsRootFolderId();
   const programFolderId = await findOrCreateChildFolder(rootId, programId);
   return findOrCreateChildFolder(programFolderId, lessonKey);
+}
+
+export async function findOrCreateLessonHtmlFolder(programId) {
+  const rootId = driveMaterialsRootFolderId();
+  const htmlRootId = await findOrCreateChildFolder(rootId, LESSON_HTML_DRIVE_FOLDER);
+  return findOrCreateChildFolder(htmlRootId, programId);
+}
+
+export async function getDriveFileMedia(fileId) {
+  const id = String(fileId || '').trim();
+  if (!id) throw new Error('Missing Drive file id');
+  const token = await getAccessToken();
+  const response = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  if (!response.ok) {
+    const err = new Error(`Drive media ${response.status}`);
+    err.status = response.status;
+    throw err;
+  }
+  return response.text();
+}
+
+export async function deleteDriveFile(fileId) {
+  const id = String(fileId || '').trim();
+  if (!id) return;
+  await driveJson(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
 }
 
 export async function shareFileAnyoneWithLink(fileId) {

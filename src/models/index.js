@@ -4,6 +4,7 @@ import {
   isFullHtmlDocument,
   resolveLessonPresentationPreset,
 } from '../lib/lessonHtml.js';
+import { normalizeLessonHtmlDrivePointer } from '../lib/lessonHtmlDrive.js';
 import { normalizeLessonResources } from '../lib/lessonResources.js';
 import { DEFAULT_STAGE, DEFAULT_STATUS } from '../constants/index.js';
 
@@ -205,8 +206,13 @@ export function normalizeLesson(lesson = {}, index = 0) {
     ? lesson.images.map(normalizeImageRecord).filter(Boolean)
     : [];
   const coverImage = images[0] || normalizeImageRecord(lesson.coverImage);
+  const lectureHtmlDrive = normalizeLessonHtmlDrivePointer(lesson.lectureHtmlDrive);
+  const exerciseHtmlDrive = normalizeLessonHtmlDrivePointer(lesson.exerciseHtmlDrive);
+  const hasDriveHtml = Boolean(lectureHtmlDrive || exerciseHtmlDrive);
   const hasAnyHtmlSource =
-    typeof lesson.lectureHtml === 'string' || typeof lesson.exerciseHtml === 'string';
+    typeof lesson.lectureHtml === 'string' ||
+    typeof lesson.exerciseHtml === 'string' ||
+    hasDriveHtml;
   const contentFormat = lesson.contentFormat === 'html' && hasAnyHtmlSource ? 'html' : 'markdown';
   const htmlSources = [lesson.lectureHtml, lesson.exerciseHtml].filter(
     (value) => typeof value === 'string',
@@ -219,18 +225,22 @@ export function normalizeLesson(lesson = {}, index = 0) {
   );
   const markdownContent = lesson.lectureMarkdown ?? lesson.contentMarkdown ?? lesson.content ?? '';
   const markdownExercise = lesson.exerciseMarkdown ?? lesson.exercise ?? '';
-  const contentRenderFormat = resolveLessonPartRenderFormat({
-    contentFormat,
-    html: lesson.lectureHtml,
-    markdown: markdownContent,
-  });
-  const exerciseRenderFormat = resolveLessonPartRenderFormat({
-    contentFormat,
-    html: lesson.exerciseHtml,
-    markdown: markdownExercise,
-  });
-  const content = contentRenderFormat === 'html' ? lesson.lectureHtml : markdownContent;
-  const exercise = exerciseRenderFormat === 'html' ? lesson.exerciseHtml : markdownExercise;
+  const contentRenderFormat = lectureHtmlDrive
+    ? 'html'
+    : resolveLessonPartRenderFormat({
+        contentFormat,
+        html: lesson.lectureHtml,
+        markdown: markdownContent,
+      });
+  const exerciseRenderFormat = exerciseHtmlDrive
+    ? 'html'
+    : resolveLessonPartRenderFormat({
+        contentFormat,
+        html: lesson.exerciseHtml,
+        markdown: markdownExercise,
+      });
+  const content = contentRenderFormat === 'html' ? (lesson.lectureHtml || '') : markdownContent;
+  const exercise = exerciseRenderFormat === 'html' ? (lesson.exerciseHtml || '') : markdownExercise;
 
   return {
     id: lesson.id ?? `lesson-${index + 1}`,
@@ -252,6 +262,9 @@ export function normalizeLesson(lesson = {}, index = 0) {
     bannerImageUrl: bannerImage?.secureUrl ?? null,
     coverImageUrl: coverImage?.secureUrl ?? null,
     resources: normalizeLessonResources(lesson.resources),
+    htmlSource: hasDriveHtml ? 'drive' : 'inline',
+    lectureHtmlDrive,
+    exerciseHtmlDrive,
     _raw: lesson,
   };
 }

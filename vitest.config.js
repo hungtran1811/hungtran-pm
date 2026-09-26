@@ -3,6 +3,6 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['src/**/*.test.js', 'netlify/functions/_lib/*.test.js'],
+    include: ['src/**/*.test.js', 'netlify/functions/**/*.test.js'],
   },
 });

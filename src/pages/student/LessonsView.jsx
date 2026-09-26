@@ -75,6 +75,31 @@ function saveLessonRailCollapsed(collapsed) {
   }
 }
 
+function needsLessonHtmlHydration(item, retrying = false) {
+  if (!item) return false;
+  return (
+    retrying ||
+    Boolean(item._slim) ||
+    item.htmlSource === 'drive' ||
+    Boolean(item.lectureHtmlDrive || item.exerciseHtmlDrive) ||
+    (!item.content && !item.exercise)
+  );
+}
+
+function LessonHtmlLoadError({ message, onRetry }) {
+  return (
+    <div
+      role="alert"
+      className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100"
+    >
+      <p>{message || 'Không tải được bài giảng. Thử lại.'}</p>
+      <Button className="mt-3" variant="secondary" onClick={onRetry}>
+        Thử lại
+      </Button>
+    </div>
+  );
+}
+
 function loadLastLessonId(classCode, studentId) {
   try {
     return localStorage.getItem(lastLessonStorageKey(classCode, studentId)) || null;
@@ -587,6 +612,7 @@ function LessonDetail({
   const [contentTab, setContentTab] = useState('lesson');
   const [fullLesson, setFullLesson] = useState(lesson);
   const [loadingContent, setLoadingContent] = useState(false);
+  const [contentRetryTick, setContentRetryTick] = useState(0);
   const [railCollapsed, setRailCollapsed] = useState(loadLessonRailCollapsed);
   const [focusMode, setFocusMode] = useState(false);
   const focusContainerRef = useRef(null);
@@ -600,6 +626,7 @@ function LessonDetail({
 
   useEffect(() => {
     setContentTab('lesson');
+    setContentRetryTick(0);
   }, [lesson.id]);
 
   useEffect(() => {
@@ -662,7 +689,7 @@ function LessonDetail({
   useEffect(() => {
     setFullLesson(lesson);
     if (!programId || !lesson?.id) return undefined;
-    if (lesson.content || lesson.exercise) return undefined;
+    if (!needsLessonHtmlHydration(lesson, contentRetryTick > 0)) return undefined;
 
     let cancelled = false;
     setLoadingContent(true);
@@ -676,7 +703,7 @@ function LessonDetail({
     return () => {
       cancelled = true;
     };
-  }, [programId, lesson]);
+  }, [programId, lesson, contentRetryTick]);
 
   const setIndex = (i) => openLightbox(images, i);
   const handleRailCollapsedChange = useCallback((collapsed) => {
@@ -914,12 +941,17 @@ function LessonDetail({
                       </div>
                     )}
 
-                    {displayLesson.content ? (
+                    {displayLesson.htmlHydrationError && !displayLesson.content ? (
+                      <LessonHtmlLoadError
+                        message={displayLesson.htmlHydrationError}
+                        onRetry={() => setContentRetryTick((tick) => tick + 1)}
+                      />
+                    ) : displayLesson.content ? (
                       <LessonContent
                         format={displayLesson.contentRenderFormat ?? displayLesson.contentFormat}
                         content={displayLesson.content}
                       />
-                    ) : (
+                    ) : loadingContent ? null : (
                       <p className="py-8 text-center text-sm text-slate-400">
                         Chưa có nội dung bài giảng.
                       </p>
@@ -960,7 +992,14 @@ function LessonDetail({
                         content={displayLesson.exercise}
                       />
                     </div>
-                  ) : (
+                  ) : displayLesson.htmlHydrationError &&
+                    displayLesson.exerciseVisible &&
+                    displayLesson.exerciseHtmlDrive ? (
+                    <LessonHtmlLoadError
+                      message={displayLesson.htmlHydrationError}
+                      onRetry={() => setContentRetryTick((tick) => tick + 1)}
+                    />
+                  ) : loadingContent ? null : (
                     <p className="py-8 text-center text-sm text-slate-400">
                       Buổi này chưa có bài tập.
                     </p>

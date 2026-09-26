@@ -172,6 +172,49 @@ describe('lesson content serialization', () => {
     ).toThrow(/750 KiB/);
   });
 
+  it('stores a Drive pointer and clears inline HTML when the lesson overflows', () => {
+    const stored = serializeLesson({
+      ...baseLesson,
+      contentFormat: 'html',
+      content: `<p>${'x'.repeat(LESSON_DOCUMENT_MAX_BYTES)}</p>`,
+      exercise: '<p>ok</p>',
+      lectureHtmlDrive: {
+        driveFileId: 'file-lecture',
+        fileName: 'L01-lecture.html',
+        byteSize: LESSON_DOCUMENT_MAX_BYTES,
+        updatedAt: '2026-09-26T00:00:00.000Z',
+      },
+      _raw: {},
+    });
+
+    expect(stored.lectureHtml).toBe('');
+    expect(stored.exerciseHtml).toBe('<p>ok</p>');
+    expect(stored.htmlSource).toBe('drive');
+    expect(stored.lectureHtmlDrive).toMatchObject({ driveFileId: 'file-lecture' });
+    expect(stored.exerciseHtmlDrive).toBeNull();
+    expect(lessonDocumentSizeBytes(stored)).toBeLessThanOrEqual(LESSON_DOCUMENT_MAX_BYTES);
+  });
+
+  it('keeps a small lesson inline and does not keep a stale Drive pointer', () => {
+    const stored = serializeLesson({
+      ...baseLesson,
+      contentFormat: 'html',
+      content: '<p>Nhỏ</p>',
+      exercise: '',
+      lectureHtmlDrive: {
+        driveFileId: 'stale',
+        fileName: 'L01-lecture.html',
+        byteSize: 12,
+        updatedAt: '2026-09-26T00:00:00.000Z',
+      },
+      _raw: {},
+    });
+
+    expect(stored.lectureHtml).toBe('<p>Nhỏ</p>');
+    expect(stored.htmlSource).toBe('inline');
+    expect(stored.lectureHtmlDrive).toBeNull();
+  });
+
   it('measures UTF-8 bytes rather than JavaScript character count', () => {
     expect(lessonDocumentSizeBytes('ă')).toBeGreaterThan('ă'.length);
   });

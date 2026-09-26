@@ -9,6 +9,7 @@ export const DRIVE_LIMITS = {
   create: { ip: 80, student: 10 },
   complete: { ip: 80, student: 12 },
   material: { ip: 40, admin: 20 },
+  lessonHtml: { ip: 80, student: 40, admin: 20 },
 };
 
 export function checkRateLimit(key, { max = 12, windowMs = WINDOW_MS } = {}) {

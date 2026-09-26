@@ -244,6 +244,37 @@ describe('LessonsView reading workspace', () => {
     expect(container.querySelector('a[href*="id=slim"]')?.textContent).toContain('Starter Python');
   });
 
+  it('shows a retry when Drive HTML hydration fails', async () => {
+    getProgramLesson.mockResolvedValue({
+      id: 'lesson-1',
+      sessionNumber: 1,
+      title: 'HTML cơ bản',
+      content: '',
+      htmlSource: 'drive',
+      lectureHtmlDrive: { driveFileId: 'file-1', byteSize: 1_200_000 },
+      htmlHydrationError: 'Không tải được bài giảng. Thử lại.',
+    });
+
+    await renderLessonsView({
+      program: {
+        id: 'web-basic',
+        lessons: [{ id: 'lesson-1', sessionNumber: 1, title: 'HTML cơ bản', _slim: true }],
+      },
+    });
+    await act(async () => findButton('HTML cơ bản').click());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('Không tải được bài giảng. Thử lại.');
+    expect(findButton('Thử lại')).toBeTruthy();
+    await act(async () => findButton('Thử lại').click());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(getProgramLesson.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
   it('collapses the desktop rail to session numbers by default', async () => {
     await renderLessonsView();
     await act(async () => findButton('HTML cơ bản').click());

@@ -57,6 +57,11 @@ Không cần deploy Firestore rules nếu không đổi `firestore.rules` / inde
 3. Học sinh: nộp 1 file nhỏ hợp lệ (zip/py/html/pdf/txt) buổi hiện tại.
 4. Admin → Bài giảng: upload 1 tài nguyên đầu buổi; HS thấy nút tải.
 5. Dashboard → **Làm mới**: cột file buổi hiện tại (Lnn) khớp; nếu cache ~90s hoặc lớp Drive lỗi thì bấm lại Làm mới.
+6. HTML bài giảng overflow (cần `npm run dev:functions` local / functions mới trên Netlify): nhập ~1.2 MiB → Lưu thành công, badge «Lưu trên Drive»; HS `/learn` thấy đúng iframe. Bài ~200 KiB vẫn Firestore. Tắt functions → bài Drive báo «Không tải được… Thử lại», bài inline vẫn mở.
+
+Không cần deploy Firestore rules cho overflow: tái sử dụng `materialUploadSessions` (deny-all sẵn). Chỉ deploy rules nếu sau này thêm collection session mới.
+
+HTML lớn nằm `HungTranPM - Lesson Materials / LessonHtml / {programId} / Lnn-lecture.html` (không share anyoneWithLink). Cờ `FEATURE_DRIVE_LESSON_HTML_ENABLED` tắt = giữ trần 750 KiB, không upload Drive.
 
 Ghi kết quả vào [`SMOKE_TEST_RESULTS.md`](SMOKE_TEST_RESULTS.md). Checklist đầy đủ: [`SMOKE_TEST_CHECKLIST.md`](SMOKE_TEST_CHECKLIST.md).
 

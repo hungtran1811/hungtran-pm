@@ -28,6 +28,7 @@ npx firebase-tools@latest deploy --only firestore:rules
 | 8 | Đầu buổi có tài nguyên | HS thấy nút tải file; thiếu `GOOGLE_DRIVE_MATERIALS_ROOT_FOLDER_ID` thì admin upload báo lỗi cấu hình |
 | 9 | `/admin/reports` (admin đã login) | Lớp cuối khóa (project): lọc buổi chung, «Đủ» = báo cáo + file cùng buổi. Lớp đang học: chỉ file nộp, không hiện «chưa báo cáo». **Mở file** ra Drive; badge buổi hiện Lnn. HS không thấy trang này |
 | 10 | `/admin` Dashboard | Làm mới: KPI thiếu file theo buổi hiện tại (Lnn); cache ~90s có hint; lớp Drive lỗi hiện — + toast |
+| 11 | Admin Bài giảng: nhập HTML ~1.2 MiB rồi Lưu; mở bài ~200 KiB | 1.2 MiB lưu được, badge Drive; HS `/learn` iframe như bài nhỏ. 200 KiB không lên Drive. Functions tắt: bài Drive lỗi + Thử lại; bài inline vẫn mở |
 
 ---
 

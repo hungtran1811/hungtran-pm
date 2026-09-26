@@ -5,6 +5,10 @@ import { handler as listMySubmissions } from '../netlify/functions/drive-list-my
 import { handler as createMaterialSession } from '../netlify/functions/drive-create-material-session.js';
 import { handler as completeMaterial } from '../netlify/functions/drive-complete-material.js';
 import { handler as driveHealth } from '../netlify/functions/drive-health.js';
+import { handler as createLessonHtmlSession } from '../netlify/functions/drive-create-lesson-html-session.js';
+import { handler as completeLessonHtml } from '../netlify/functions/drive-complete-lesson-html.js';
+import { handler as getLessonHtml } from '../netlify/functions/drive-get-lesson-html.js';
+import { handler as deleteLessonHtml } from '../netlify/functions/drive-delete-lesson-html.js';
 
 const handlers = new Map([
   ['/drive-create-upload-session', createUploadSession],
@@ -13,12 +17,20 @@ const handlers = new Map([
   ['/drive-create-material-session', createMaterialSession],
   ['/drive-complete-material', completeMaterial],
   ['/drive-health', driveHealth],
+  ['/drive-create-lesson-html-session', createLessonHtmlSession],
+  ['/drive-complete-lesson-html', completeLessonHtml],
+  ['/drive-get-lesson-html', getLessonHtml],
+  ['/drive-delete-lesson-html', deleteLessonHtml],
   ['/.netlify/functions/drive-create-upload-session', createUploadSession],
   ['/.netlify/functions/drive-complete-submission', completeSubmission],
   ['/.netlify/functions/drive-list-my-submissions', listMySubmissions],
   ['/.netlify/functions/drive-create-material-session', createMaterialSession],
   ['/.netlify/functions/drive-complete-material', completeMaterial],
   ['/.netlify/functions/drive-health', driveHealth],
+  ['/.netlify/functions/drive-create-lesson-html-session', createLessonHtmlSession],
+  ['/.netlify/functions/drive-complete-lesson-html', completeLessonHtml],
+  ['/.netlify/functions/drive-get-lesson-html', getLessonHtml],
+  ['/.netlify/functions/drive-delete-lesson-html', deleteLessonHtml],
 ]);
 
 const port = Number(process.env.FUNCTIONS_PORT || 8888);

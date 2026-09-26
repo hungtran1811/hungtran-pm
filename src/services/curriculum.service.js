@@ -13,9 +13,22 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '../config/firebase.js';
+import { FEATURE_DRIVE_LESSON_HTML_ENABLED } from '../config/features.js';
+import { LESSON_DOCUMENT_MAX_BYTES, lessonDocumentSizeBytes } from '../lib/curriculumSize.js';
 import { hasRenderableLessonHtml, resolveLessonPresentationPreset } from '../lib/lessonHtml.js';
+import {
+  normalizeLessonHtmlDrivePointer,
+  planLessonHtmlOverflow,
+} from '../lib/lessonHtmlDrive.js';
 import { normalizeLessonResources } from '../lib/lessonResources.js';
 import { normalizeLesson, toCurriculumProgramModel } from '../models/index.js';
+import {
+  deleteLessonHtmlFile,
+  hydrateLessonHtml,
+  uploadLessonHtmlPart,
+} from './lessonHtmlDrive.service.js';
+
+export { LESSON_DOCUMENT_MAX_BYTES, lessonDocumentSizeBytes } from '../lib/curriculumSize.js';
 
 const programsRef = collection(db, 'curriculumPrograms');
 
@@ -111,12 +124,6 @@ function collectLessonGalleryImages(lesson) {
   return list;
 }
 
-export const LESSON_DOCUMENT_MAX_BYTES = 750 * 1024;
-
-export function lessonDocumentSizeBytes(value) {
-  return new TextEncoder().encode(JSON.stringify(value)).byteLength;
-}
-
 function normalizeHtmlPartForStorage(source, label) {
   const rawSource = typeof source === 'string' ? source : source == null ? '' : String(source);
   if (rawSource.trim() && !hasRenderableLessonHtml(rawSource)) {
@@ -202,6 +209,56 @@ export function serializeLesson(lesson) {
   next.resources = normalizeLessonResources(
     Object.prototype.hasOwnProperty.call(lesson, 'resources') ? lesson.resources : raw.resources,
   );
+
+  const lectureDrive = normalizeLessonHtmlDrivePointer(
+    Object.prototype.hasOwnProperty.call(lesson, 'lectureHtmlDrive')
+      ? lesson.lectureHtmlDrive
+      : raw.lectureHtmlDrive,
+  );
+  const exerciseDrive = normalizeLessonHtmlDrivePointer(
+    Object.prototype.hasOwnProperty.call(lesson, 'exerciseHtmlDrive')
+      ? lesson.exerciseHtmlDrive
+      : raw.exerciseHtmlDrive,
+  );
+  let overflowLecture = false;
+  let overflowExercise = false;
+
+  if (FEATURE_DRIVE_LESSON_HTML_ENABLED && contentFormat === 'html') {
+    const plan = planLessonHtmlOverflow(next);
+    if (!plan.ok) throw new Error(plan.error);
+    overflowLecture = plan.overflowLecture;
+    overflowExercise = plan.overflowExercise;
+  }
+
+  if (overflowLecture) {
+    if (!lectureDrive) {
+      throw new Error(
+        FEATURE_DRIVE_LESSON_HTML_ENABLED
+          ? 'Bài giảng vượt quá 750 KiB. Lưu lại để đưa HTML lớn lên Drive, hoặc rút gọn nội dung.'
+          : 'Bài giảng vượt quá giới hạn 750 KiB. Hãy rút gọn HTML hoặc bớt nội dung nhúng.',
+      );
+    }
+    next.lectureHtml = '';
+    next.lectureHtmlDrive = lectureDrive;
+  } else {
+    next.lectureHtmlDrive = null;
+  }
+  if (overflowExercise) {
+    if (!exerciseDrive) {
+      throw new Error(
+        FEATURE_DRIVE_LESSON_HTML_ENABLED
+          ? 'Bài giảng vượt quá 750 KiB. Lưu lại để đưa HTML lớn lên Drive, hoặc rút gọn nội dung.'
+          : 'Bài giảng vượt quá giới hạn 750 KiB. Hãy rút gọn HTML hoặc bớt nội dung nhúng.',
+      );
+    }
+    next.exerciseHtml = '';
+    next.exerciseHtmlDrive = exerciseDrive;
+  } else {
+    next.exerciseHtmlDrive = null;
+  }
+  next.htmlSource = next.lectureHtmlDrive || next.exerciseHtmlDrive ? 'drive' : 'inline';
+  delete next.htmlHydrationError;
+
   if (lessonDocumentSizeBytes(next) > LESSON_DOCUMENT_MAX_BYTES) {
     throw new Error(
       'Bài giảng vượt quá giới hạn 750 KiB. Hãy rút gọn HTML hoặc bớt nội dung nhúng.',
@@ -374,21 +431,26 @@ export async function getProgramLesson(programId, lessonId) {
   const snapshot = await readProgramSnapshot(programId);
   if (!snapshot) return null;
 
+  let loaded = null;
   for (const candidateId of programDocIdCandidates(snapshot.id)) {
     const lessonSnap = await getDoc(
       doc(db, 'curriculumPrograms', candidateId, 'lessons', lessonId),
     );
     if (lessonSnap.exists()) {
-      return normalizeLesson({ ...lessonSnap.data(), id: lessonSnap.id }, 0);
+      loaded = normalizeLesson({ ...lessonSnap.data(), id: lessonSnap.id }, 0);
+      break;
     }
   }
 
-  const embedded = snapshot.data()?.lessons;
-  if (Array.isArray(embedded)) {
-    const found = embedded.find((lesson, index) => (lesson.id || `lesson-${index + 1}`) === lessonId);
-    if (found) return normalizeLesson({ ...found, id: found.id || lessonId }, 0);
+  if (!loaded) {
+    const embedded = snapshot.data()?.lessons;
+    if (Array.isArray(embedded)) {
+      const found = embedded.find((lesson, index) => (lesson.id || `lesson-${index + 1}`) === lessonId);
+      if (found) loaded = normalizeLesson({ ...found, id: found.id || lessonId }, 0);
+    }
   }
-  return null;
+  if (!loaded) return null;
+  return hydrateLessonHtml(loaded, { programId: snapshot.id });
 }
 
 export function subscribeCurriculumProgram(programId, onData, onError) {
@@ -432,6 +494,60 @@ export function subscribeCurriculumProgram(programId, onData, onError) {
   };
 }
 
+async function prepareLessonForSave(programId, lesson) {
+  if (!FEATURE_DRIVE_LESSON_HTML_ENABLED || lesson.contentFormat !== 'html') {
+    return lesson;
+  }
+
+  const base = serializeLesson({
+    ...lesson,
+    content: '',
+    exercise: '',
+    lectureHtmlDrive: null,
+    exerciseHtmlDrive: null,
+  });
+  const trial = {
+    ...base,
+    lectureHtml: lesson.content || '',
+    exerciseHtml: lesson.exercise || '',
+  };
+  const plan = planLessonHtmlOverflow(trial);
+  if (!plan.ok) throw new Error(plan.error);
+
+  const next = { ...lesson };
+  if (plan.overflowLecture) {
+    next.lectureHtmlDrive = await uploadLessonHtmlPart({
+      programId,
+      lessonId: lesson.id,
+      sessionNumber: lesson.sessionNumber,
+      part: 'lecture',
+      html: lesson.content,
+      previousFileId: lesson.lectureHtmlDrive?.driveFileId,
+    });
+  } else {
+    if (lesson.lectureHtmlDrive?.driveFileId) {
+      await deleteLessonHtmlFile(lesson.lectureHtmlDrive.driveFileId);
+    }
+    next.lectureHtmlDrive = null;
+  }
+  if (plan.overflowExercise) {
+    next.exerciseHtmlDrive = await uploadLessonHtmlPart({
+      programId,
+      lessonId: lesson.id,
+      sessionNumber: lesson.sessionNumber,
+      part: 'exercise',
+      html: lesson.exercise,
+      previousFileId: lesson.exerciseHtmlDrive?.driveFileId,
+    });
+  } else {
+    if (lesson.exerciseHtmlDrive?.driveFileId) {
+      await deleteLessonHtmlFile(lesson.exerciseHtmlDrive.driveFileId);
+    }
+    next.exerciseHtmlDrive = null;
+  }
+  return next;
+}
+
 export async function saveProgramLessons(programId, lessons) {
   const docId = await getProgramDocId(programId);
   const snapshot = await readProgramSnapshot(programId);
@@ -439,12 +555,21 @@ export async function saveProgramLessons(programId, lessons) {
     throw new Error('Không tìm thấy chương trình học.');
   }
 
+  const prepared = [];
+  for (const lesson of lessons) {
+    if (isSlimLesson(lesson)) {
+      prepared.push(lesson);
+      continue;
+    }
+    prepared.push(await prepareLessonForSave(docId, lesson));
+  }
+
   const progRef = doc(db, 'curriculumPrograms', docId);
   const existing = await getDocs(collection(db, 'curriculumPrograms', docId, 'lessons'));
-  const nextIds = new Set(lessons.map((lesson) => lesson.id));
+  const nextIds = new Set(prepared.map((lesson) => lesson.id));
 
   const batch = writeBatch(db);
-  lessons.forEach((lesson) => {
+  prepared.forEach((lesson) => {
     if (isSlimLesson(lesson)) return;
     batch.set(doc(db, 'curriculumPrograms', docId, 'lessons', lesson.id), serializeLesson(lesson), {
       merge: true,
