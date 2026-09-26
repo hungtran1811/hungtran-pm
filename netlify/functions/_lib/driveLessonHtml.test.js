@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('./_lib/adminAuth.js', () => ({
+vi.mock('./adminAuth.js', () => ({
   requireAdmin: vi.fn(),
 }));
 
-vi.mock('./_lib/firebaseAdmin.js', () => ({
+vi.mock('./firebaseAdmin.js', () => ({
   getAdminDb: vi.fn(),
 }));
 
-vi.mock('./_lib/driveFolders.js', () => ({
+vi.mock('./driveFolders.js', () => ({
   findOrCreateLessonHtmlFolder: vi.fn(),
   createResumableUpload: vi.fn(),
   getDriveFileMedia: vi.fn(),
@@ -16,12 +16,12 @@ vi.mock('./_lib/driveFolders.js', () => ({
   deleteDriveFile: vi.fn(),
 }));
 
-vi.mock('./_lib/rateLimit.js', () => ({
+vi.mock('./rateLimit.js', () => ({
   checkRateLimit: () => true,
   DRIVE_LIMITS: { lessonHtml: { ip: 80, student: 40, admin: 20 } },
 }));
 
-vi.mock('./_lib/functionLog.js', () => ({
+vi.mock('./functionLog.js', () => ({
   functionErrorCode: (error) => {
     const message = String(error?.message || '');
     return message.includes('Missing') ? 'CONFIG_MISSING' : 'UPSTREAM_FAILED';
@@ -29,11 +29,11 @@ vi.mock('./_lib/functionLog.js', () => ({
   logFunctionError: vi.fn(),
 }));
 
-import { requireAdmin } from './_lib/adminAuth.js';
-import { findOrCreateLessonHtmlFolder, getDriveFileMedia } from './_lib/driveFolders.js';
-import { getAdminDb } from './_lib/firebaseAdmin.js';
-import { handler as createLessonHtmlSession } from './drive-create-lesson-html-session.js';
-import { handler as getLessonHtml } from './drive-get-lesson-html.js';
+import { requireAdmin } from './adminAuth.js';
+import { findOrCreateLessonHtmlFolder, getDriveFileMedia } from './driveFolders.js';
+import { getAdminDb } from './firebaseAdmin.js';
+import { handler as createLessonHtmlSession } from '../drive-create-lesson-html-session.js';
+import { handler as getLessonHtml } from '../drive-get-lesson-html.js';
 
 function postEvent(body, headers = {}) {
   return {
