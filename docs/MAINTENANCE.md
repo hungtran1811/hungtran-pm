@@ -54,7 +54,7 @@ Không cần deploy Firestore rules nếu không đổi `firestore.rules` / inde
 
 1. Netlify: xác nhận env nộp bài (`GOOGLE_*`, `FIREBASE_SERVICE_ACCOUNT`) và `GOOGLE_DRIVE_MATERIALS_ROOT_FOLDER_ID`.
 2. Admin → Cài đặt → **Kiểm tra Drive** — cả nộp bài và tài nguyên phải «sẵn sàng».
-3. Học sinh: nộp 1 file nhỏ hợp lệ (zip/py/html/pdf/txt) buổi hiện tại.
+3. Học sinh: nộp 1 file nhỏ hợp lệ (zip/yyz/py/html/pdf/txt) buổi hiện tại.
 4. Admin → Bài giảng: upload 1 tài nguyên đầu buổi; HS thấy nút tải.
 5. Dashboard → **Làm mới**: cột file buổi hiện tại (Lnn) khớp; nếu cache ~90s hoặc lớp Drive lỗi thì bấm lại Làm mới.
 6. HTML bài giảng overflow (cần `npm run dev:functions` local / functions mới trên Netlify): nhập ~1.2 MiB → Lưu thành công, badge «Lưu trên Drive»; HS `/learn` thấy đúng iframe. Bài ~200 KiB vẫn Firestore. Tắt functions → bài Drive báo «Không tải được… Thử lại», bài inline vẫn mở.

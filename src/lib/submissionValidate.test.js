@@ -17,6 +17,16 @@ describe('validateSubmissionFile', () => {
     ).toBe(true);
   });
 
+  it('accepts a GameMaker .yyz export', () => {
+    expect(
+      validateSubmissionFile({
+        fileName: 'game.yyz',
+        fileSize: 2048,
+        mimeType: 'application/octet-stream',
+      }).ok,
+    ).toBe(true);
+  });
+
   it('rejects blocked and unknown extensions', () => {
     expect(validateSubmissionFile({ fileName: 'setup.exe', fileSize: 10 }).ok).toBe(false);
     expect(validateSubmissionFile({ fileName: 'notes.docx', fileSize: 10 }).ok).toBe(false);

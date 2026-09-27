@@ -4,7 +4,7 @@
 export const MAX_UPLOAD_SIZE_MB = 150;
 export const MAX_UPLOAD_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
 
-export const ALLOWED_EXTENSIONS = ['.zip', '.py', '.html', '.css', '.js', '.pdf', '.txt'];
+export const ALLOWED_EXTENSIONS = ['.zip', '.yyz', '.py', '.html', '.css', '.js', '.pdf', '.txt'];
 
 export const BLOCKED_EXTENSIONS = [
   '.exe',

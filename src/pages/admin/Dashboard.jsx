@@ -12,6 +12,7 @@ import {
   UserRound,
   Upload,
   FileWarning,
+  ExternalLink,
 } from 'lucide-react';
 import { AppShell } from '../../ui/components/AppShell.jsx';
 import { SkeletonCardGrid, SkeletonRows } from '../../ui/components/Skeleton.jsx';
@@ -181,7 +182,7 @@ function SessionQuickSet({ classes, onUpdated }) {
             ))}
           </Select>
         </Field>
-        <div className="flex items-end gap-2">
+        <div className="flex flex-wrap items-end gap-2">
           <Field label="Buổi số" className="min-w-0 flex-1">
             <Input
               type="number"
@@ -194,6 +195,19 @@ function SessionQuickSet({ classes, onUpdated }) {
           <Button onClick={handleSave} loading={saving} className="shrink-0">
             Lưu
           </Button>
+          {classCode ? (
+            <Link to={`/c/${encodeURIComponent(classCode)}`} target="_blank" rel="noreferrer">
+              <Button variant="secondary" className="shrink-0">
+                <ExternalLink className="h-4 w-4" />
+                Mở lớp
+              </Button>
+            </Link>
+          ) : (
+            <Button variant="secondary" disabled className="shrink-0">
+              <ExternalLink className="h-4 w-4" />
+              Mở lớp
+            </Button>
+          )}
         </div>
         <div>
           <p className="mb-1.5 text-xs font-medium text-slate-500">Giai đoạn</p>
