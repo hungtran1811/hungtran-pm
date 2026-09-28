@@ -181,6 +181,7 @@ describe('student Firestore write shapes', () => {
         difficulties: '',
         projectGithubUrl: '',
         projectCanvaUrl: '',
+        projectSlidesUrl: '',
       },
     });
 

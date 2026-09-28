@@ -92,7 +92,7 @@ service cloud.firestore {
       return request.resource.data.keys().hasOnly([
           'classId', 'classCode', 'studentId', 'studentName', 'projectName',
           'progressPercent', 'stage', 'status', 'doneToday', 'nextGoal',
-          'difficulties', 'projectGithubUrl', 'projectCanvaUrl',
+          'difficulties', 'projectGithubUrl', 'projectCanvaUrl', 'projectSlidesUrl',
           'submittedAt', 'submittedDateKey', 'lessonKey', 'source', 'createdAt'
         ])
         && request.resource.data.classId == request.resource.data.classCode
@@ -112,6 +112,7 @@ service cloud.firestore {
         && request.resource.data.difficulties is string
         && isValidOptionalProjectLink(request.resource.data.projectGithubUrl)
         && isValidOptionalProjectLink(request.resource.data.projectCanvaUrl)
+        && isValidOptionalProjectLink(request.resource.data.projectSlidesUrl)
         && (request.resource.data.status != 'Cần hỗ trợ' || request.resource.data.difficulties.size() >= 15)
         && (request.resource.data.status != 'Hoàn thành' || request.resource.data.progressPercent == 100)
         && request.resource.data.submittedAt == request.time
@@ -660,12 +661,13 @@ service cloud.firestore {
 
     function isValidPublicProjectLinksUpdate(studentId) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'projectGithubUrl', 'projectCanvaUrl', 'updatedAt'
+          'projectGithubUrl', 'projectCanvaUrl', 'projectSlidesUrl', 'updatedAt'
         ])
         && resource.data.active == true
         && isOpenClass(resource.data.classId)
         && isValidOptionalProjectLink(request.resource.data.projectGithubUrl)
         && isValidOptionalProjectLink(request.resource.data.projectCanvaUrl)
+        && isValidOptionalProjectLink(request.resource.data.projectSlidesUrl)
         && request.resource.data.updatedAt == request.time;
     }
 
@@ -747,7 +749,7 @@ service cloud.firestore {
           'currentProgressPercent', 'currentStage', 'currentStatus',
           'currentDifficulties', 'lastReportedAt', 'latestReportId',
           'progressStalledCount', 'projectGithubUrl', 'projectCanvaUrl',
-          'updatedAt'
+          'projectSlidesUrl', 'updatedAt'
         ])
         && resource.data.active == true
         && isOpenClass(resource.data.classId)
@@ -757,6 +759,7 @@ service cloud.firestore {
         && request.resource.data.currentDifficulties is string
         && isValidOptionalProjectLink(request.resource.data.projectGithubUrl)
         && isValidOptionalProjectLink(request.resource.data.projectCanvaUrl)
+        && isValidOptionalProjectLink(request.resource.data.projectSlidesUrl)
         && request.resource.data.lastReportedAt == request.time
         && request.resource.data.updatedAt == request.time
         && request.resource.data.latestReportId is string

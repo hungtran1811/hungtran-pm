@@ -433,6 +433,7 @@ export function ReportsPanel({
       currentProgressPercent: report?.progressPercent ?? student.currentProgressPercent,
       projectGithubUrl: student.projectGithubUrl,
       projectCanvaUrl: student.projectCanvaUrl,
+      projectSlidesUrl: student.projectSlidesUrl,
     });
   };
 

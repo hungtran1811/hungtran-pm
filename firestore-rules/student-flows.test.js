@@ -432,6 +432,7 @@ describe('student-facing Firestore rules', () => {
       difficulties: '',
       projectGithubUrl: 'https://github.com/example/final-learning-app',
       projectCanvaUrl: '',
+      projectSlidesUrl: '',
       submittedAt: serverTimestamp(),
       submittedDateKey: '2026-06-29',
       lessonKey: 'B02',
@@ -448,6 +449,7 @@ describe('student-facing Firestore rules', () => {
       progressStalledCount: 0,
       projectGithubUrl: 'https://github.com/example/final-learning-app',
       projectCanvaUrl: '',
+      projectSlidesUrl: '',
       updatedAt: serverTimestamp(),
     });
 
@@ -473,6 +475,7 @@ describe('student-facing Firestore rules', () => {
       difficulties: '',
       projectGithubUrl: 'https://github.com/example/final-learning-app',
       projectCanvaUrl: '',
+      projectSlidesUrl: '',
       submittedAt: serverTimestamp(),
       submittedDateKey: '2026-06-29',
       source: 'student-form',
@@ -488,6 +491,7 @@ describe('student-facing Firestore rules', () => {
       progressStalledCount: 0,
       projectGithubUrl: 'https://github.com/example/final-learning-app',
       projectCanvaUrl: '',
+      projectSlidesUrl: '',
       updatedAt: serverTimestamp(),
     });
 
@@ -508,6 +512,7 @@ describe('student-facing Firestore rules', () => {
         progressStalledCount: 0,
         projectGithubUrl: 'https://github.com/example/final-learning-app',
         projectCanvaUrl: '',
+        projectSlidesUrl: '',
         updatedAt: serverTimestamp(),
       }),
     );

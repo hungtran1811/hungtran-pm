@@ -9,6 +9,7 @@ export function productLinksOf(report, student) {
   return {
     githubUrl: String(report?.projectGithubUrl || student?.projectGithubUrl || '').trim(),
     canvaUrl: String(report?.projectCanvaUrl || student?.projectCanvaUrl || '').trim(),
+    slidesUrl: String(report?.projectSlidesUrl || student?.projectSlidesUrl || '').trim(),
   };
 }
 
@@ -38,7 +39,13 @@ export function StudentReportDetail({ report, student, showLinks = true }) {
       {doneToday ? <StudentTextBlock label="Đã làm được">{doneToday}</StudentTextBlock> : null}
       {nextGoal ? <StudentTextBlock label="Mục tiêu tiếp">{nextGoal}</StudentTextBlock> : null}
       {difficulties ? <StudentTextBlock label="Khó khăn">{difficulties}</StudentTextBlock> : null}
-      {showLinks ? <ProjectLinksReadonly githubUrl={links.githubUrl} canvaUrl={links.canvaUrl} /> : null}
+      {showLinks ? (
+        <ProjectLinksReadonly
+          githubUrl={links.githubUrl}
+          canvaUrl={links.canvaUrl}
+          slidesUrl={links.slidesUrl}
+        />
+      ) : null}
       {report.submittedAt ? (
         <p className="text-xs text-slate-400">{formatDateTime(report.submittedAt)}</p>
       ) : null}

@@ -317,7 +317,11 @@ export function StudentReviewModal({
             {!item.hasReport ? (
               <div className="space-y-3">
                 <p className="text-sm text-amber-800 dark:text-amber-200">Chưa báo cáo</p>
-                <ProjectLinksReadonly githubUrl={links.githubUrl} canvaUrl={links.canvaUrl} />
+                <ProjectLinksReadonly
+                  githubUrl={links.githubUrl}
+                  canvaUrl={links.canvaUrl}
+                  slidesUrl={links.slidesUrl}
+                />
               </div>
             ) : (
               <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">

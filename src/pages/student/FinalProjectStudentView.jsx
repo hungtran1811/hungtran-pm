@@ -29,14 +29,16 @@ export function FinalProjectStudentView({ classDoc, program, student, onOpenLess
   const [links, setLinks] = useState({
     githubUrl: student?.projectGithubUrl || '',
     canvaUrl: student?.projectCanvaUrl || '',
+    slidesUrl: student?.projectSlidesUrl || '',
   });
 
   useEffect(() => {
     setLinks({
       githubUrl: student?.projectGithubUrl || '',
       canvaUrl: student?.projectCanvaUrl || '',
+      slidesUrl: student?.projectSlidesUrl || '',
     });
-  }, [student?.id, student?.projectGithubUrl, student?.projectCanvaUrl]);
+  }, [student?.id, student?.projectGithubUrl, student?.projectCanvaUrl, student?.projectSlidesUrl]);
 
   useEffect(() => {
     setWorkspaceLessonKey((prev) => {

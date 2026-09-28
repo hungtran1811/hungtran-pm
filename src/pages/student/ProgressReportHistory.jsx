@@ -49,6 +49,7 @@ function ReportHistoryCard({ report }) {
           <ProjectLinksReadonly
             githubUrl={report.projectGithubUrl}
             canvaUrl={report.projectCanvaUrl}
+            slidesUrl={report.projectSlidesUrl}
           />
         </div>
       )}

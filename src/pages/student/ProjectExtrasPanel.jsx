@@ -37,14 +37,13 @@ function AccordionSection({ icon: Icon, title, hint, badge, defaultOpen = false,
 export function ProjectExtrasPanel({ classDoc, student, links, onChangeLink, onOpenGuide, disabled = false }) {
   const hasGithub = Boolean(student.projectGithubUrl?.trim());
   const hasCanva = Boolean(student.projectCanvaUrl?.trim());
-  const linkHint =
-    hasGithub && hasCanva
-      ? 'GitHub · Canva'
-      : hasGithub
-        ? 'GitHub'
-        : hasCanva
-          ? 'Canva'
-          : 'Chưa có liên kết';
+  const hasSlides = Boolean(student.projectSlidesUrl?.trim());
+  const linkParts = [
+    hasGithub ? 'GitHub' : null,
+    hasCanva ? 'Canva' : null,
+    hasSlides ? 'Slides' : null,
+  ].filter(Boolean);
+  const linkHint = linkParts.length ? linkParts.join(' · ') : 'Chưa có liên kết';
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
@@ -69,7 +68,7 @@ export function ProjectExtrasPanel({ classDoc, student, links, onChangeLink, onO
         title="Liên kết sản phẩm"
         hint={linkHint}
         badge={
-          hasGithub || hasCanva ? (
+          hasGithub || hasCanva || hasSlides ? (
             <span className="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-500/15 dark:text-green-300">
               Đã lưu
             </span>

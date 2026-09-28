@@ -174,6 +174,7 @@ export async function createStudent(payload) {
     projectPlannedFeatures: '',
     projectGithubUrl: '',
     projectCanvaUrl: '',
+    projectSlidesUrl: '',
     currentStatus: payload.currentStatus ?? DEFAULT_STATUS,
     currentStage: payload.currentStage ?? DEFAULT_STAGE,
     currentProgressPercent: Number(payload.currentProgressPercent ?? 0),
@@ -263,8 +264,8 @@ export async function submitProjectName(studentId, {
   });
 }
 
-export async function submitProjectLinks(studentId, { githubUrl, canvaUrl }) {
-  const validated = validateProjectLinks({ githubUrl, canvaUrl });
+export async function submitProjectLinks(studentId, { githubUrl, canvaUrl, slidesUrl }) {
+  const validated = validateProjectLinks({ githubUrl, canvaUrl, slidesUrl });
   if (validated.error) {
     throw new Error(validated.error);
   }
@@ -275,6 +276,7 @@ export async function submitProjectLinks(studentId, { githubUrl, canvaUrl }) {
   await updateDoc(doc(db, 'students', studentId), {
     projectGithubUrl: validated.githubUrl,
     projectCanvaUrl: validated.canvaUrl,
+    projectSlidesUrl: validated.slidesUrl,
     updatedAt: serverTimestamp(),
   });
 }

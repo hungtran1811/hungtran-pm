@@ -48,6 +48,7 @@ export function ProgressReportView({
   const [internalLinks, setInternalLinks] = useState({
     githubUrl: student.projectGithubUrl || '',
     canvaUrl: student.projectCanvaUrl || '',
+    slidesUrl: student.projectSlidesUrl || '',
   });
   const links = linksProp ?? internalLinks;
   const [submitting, setSubmitting] = useState(false);
@@ -59,8 +60,9 @@ export function ProgressReportView({
     setInternalLinks({
       githubUrl: student.projectGithubUrl || '',
       canvaUrl: student.projectCanvaUrl || '',
+      slidesUrl: student.projectSlidesUrl || '',
     });
-  }, [linksProp, student.id, student.projectGithubUrl, student.projectCanvaUrl]);
+  }, [linksProp, student.id, student.projectGithubUrl, student.projectCanvaUrl, student.projectSlidesUrl]);
 
   useEffect(() => {
     if (!student.id) return undefined;
@@ -143,6 +145,7 @@ export function ProgressReportView({
           ...form,
           projectGithubUrl: links.githubUrl,
           projectCanvaUrl: links.canvaUrl,
+          projectSlidesUrl: links.slidesUrl,
         },
       });
       toast.success('Đã gửi báo cáo.');
@@ -159,6 +162,7 @@ export function ProgressReportView({
         currentDifficulties: form.difficulties.trim(),
         projectGithubUrl: links.githubUrl.trim(),
         projectCanvaUrl: links.canvaUrl.trim(),
+        projectSlidesUrl: (links.slidesUrl || '').trim(),
         lastReportedAt: new Date(),
       });
       setForm((prev) => ({ ...prev, doneToday: '', nextGoal: '', difficulties: '' }));
@@ -210,6 +214,7 @@ export function ProgressReportView({
       <ProjectLinksReadonly
         githubUrl={student.projectGithubUrl}
         canvaUrl={student.projectCanvaUrl}
+        slidesUrl={student.projectSlidesUrl}
       />
 
       {hideLessonSelect ? (

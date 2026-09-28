@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Code2, ExternalLink, Link2, Palette, Save } from 'lucide-react';
+import { Code2, ExternalLink, Link2, Palette, Presentation, Save } from 'lucide-react';
 import { Button } from '../../ui/components/Button.jsx';
 import { Field, Input } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
@@ -39,8 +39,9 @@ export function ProjectProductLinks({
   };
 
   const dirty =
-    links.githubUrl.trim() !== (student.projectGithubUrl || '').trim() ||
-    links.canvaUrl.trim() !== (student.projectCanvaUrl || '').trim();
+    (links.githubUrl || '').trim() !== (student.projectGithubUrl || '').trim() ||
+    (links.canvaUrl || '').trim() !== (student.projectCanvaUrl || '').trim() ||
+    (links.slidesUrl || '').trim() !== (student.projectSlidesUrl || '').trim();
 
   return (
     <div className={compact ? 'space-y-3' : 'card space-y-4 p-5'}>
@@ -84,16 +85,31 @@ export function ProjectProductLinks({
         >
           <div className="relative">
             <Palette className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              type="url"
-              inputMode="url"
-              value={links.canvaUrl}
-              onChange={(e) => update('canvaUrl', e.target.value)}
-              placeholder="https://www.canva.com/design/... hoặc canva.link/..."
+          <Input
+            type="url"
+            inputMode="url"
+            value={links.canvaUrl}
+            onChange={(e) => update('canvaUrl', e.target.value)}
+            placeholder="https://www.canva.com/design/... hoặc canva.link/..."
             className="pl-9"
             disabled={disabled || saving}
           />
         </div>
+        </Field>
+
+        <Field label="Google Slides">
+          <div className="relative">
+            <Presentation className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              type="url"
+              inputMode="url"
+              value={links.slidesUrl || ''}
+              onChange={(e) => update('slidesUrl', e.target.value)}
+              placeholder="https://docs.google.com/presentation/d/..."
+              className="pl-9"
+              disabled={disabled || saving}
+            />
+          </div>
         </Field>
       </div>
 
@@ -134,8 +150,8 @@ function GithubGuideHints({ onOpenGuide }) {
   );
 }
 
-export function ProjectLinksReadonly({ githubUrl, canvaUrl, className = '' }) {
-  if (!githubUrl && !canvaUrl) return null;
+export function ProjectLinksReadonly({ githubUrl, canvaUrl, slidesUrl, className = '' }) {
+  if (!githubUrl && !canvaUrl && !slidesUrl) return null;
 
   return (
     <div className={`flex flex-wrap gap-2 ${className}`}>
@@ -162,6 +178,19 @@ export function ProjectLinksReadonly({ githubUrl, canvaUrl, className = '' }) {
         >
           <Palette className="h-3.5 w-3.5" />
           Canva
+          <ExternalLink className="h-3 w-3 opacity-60" />
+        </a>
+      )}
+      {slidesUrl && (
+        <a
+          href={slidesUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:border-brand-300 hover:text-brand-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-brand-500/50 dark:hover:text-brand-300"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Presentation className="h-3.5 w-3.5" />
+          Slides
           <ExternalLink className="h-3 w-3 opacity-60" />
         </a>
       )}

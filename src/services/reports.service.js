@@ -68,6 +68,7 @@ export function reportFromStudentSnapshot(student) {
     difficulties: student.currentDifficulties || '',
     projectGithubUrl: student.projectGithubUrl || '',
     projectCanvaUrl: student.projectCanvaUrl || '',
+    projectSlidesUrl: student.projectSlidesUrl || '',
     submittedAt: student.lastReportedAt,
     submittedDateKey: '',
     lessonKey: '',
@@ -153,6 +154,7 @@ async function writeProgressReport({ student, classDoc, form }) {
   const linkValidation = validateProjectLinks({
     githubUrl: form.projectGithubUrl ?? student.projectGithubUrl ?? '',
     canvaUrl: form.projectCanvaUrl ?? student.projectCanvaUrl ?? '',
+    slidesUrl: form.projectSlidesUrl ?? student.projectSlidesUrl ?? '',
   });
   if (linkValidation.error) {
     throw new Error(linkValidation.error);
@@ -172,6 +174,7 @@ async function writeProgressReport({ student, classDoc, form }) {
     difficulties,
     projectGithubUrl: linkValidation.githubUrl,
     projectCanvaUrl: linkValidation.canvaUrl,
+    projectSlidesUrl: linkValidation.slidesUrl,
     submittedAt: serverTimestamp(),
     submittedDateKey: dateKey(),
     lessonKey,
@@ -191,6 +194,7 @@ async function writeProgressReport({ student, classDoc, form }) {
     currentDifficulties: difficulties,
     projectGithubUrl: linkValidation.githubUrl,
     projectCanvaUrl: linkValidation.canvaUrl,
+    projectSlidesUrl: linkValidation.slidesUrl,
     lastReportedAt: serverTimestamp(),
     latestReportId: reportRef.id,
     progressStalledCount: stalled,

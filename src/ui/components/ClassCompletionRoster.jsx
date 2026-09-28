@@ -151,7 +151,7 @@ export function ClassCompletionRoster({
                     ) : null}
                   </div>
                 </button>
-                {showCopy || links.githubUrl || links.canvaUrl ? (
+                {showCopy || links.githubUrl || links.canvaUrl || links.slidesUrl ? (
                   <div className="flex flex-wrap items-center gap-2 px-3 pb-3">
                     {showCopy ? (
                       <button
@@ -164,7 +164,11 @@ export function ClassCompletionRoster({
                         Copy
                       </button>
                     ) : null}
-                    <ProjectLinksReadonly githubUrl={links.githubUrl} canvaUrl={links.canvaUrl} />
+                    <ProjectLinksReadonly
+                      githubUrl={links.githubUrl}
+                      canvaUrl={links.canvaUrl}
+                      slidesUrl={links.slidesUrl}
+                    />
                   </div>
                 ) : null}
               </div>

@@ -91,12 +91,28 @@ describe('sessionScope', () => {
 });
 
 describe('projectLinks', () => {
-  it('normalizes supported GitHub and Canva links', () => {
-    expect(validateProjectLinks({ githubUrl: 'github.com/me/app', canvaUrl: 'canva.com/design/abc' }))
-      .toEqual({
-        githubUrl: 'https://github.com/me/app',
-        canvaUrl: 'https://canva.com/design/abc',
-      });
+  it('normalizes supported GitHub, Canva, and Google Slides links', () => {
+    expect(
+      validateProjectLinks({
+        githubUrl: 'github.com/me/app',
+        canvaUrl: 'canva.com/design/abc',
+        slidesUrl: 'docs.google.com/presentation/d/xyz/edit',
+      }),
+    ).toEqual({
+      githubUrl: 'https://github.com/me/app',
+      canvaUrl: 'https://canva.com/design/abc',
+      slidesUrl: 'https://docs.google.com/presentation/d/xyz/edit',
+    });
+  });
+
+  it('accepts a Google Slides share path with /u/0/', () => {
+    expect(
+      validateProjectLinks({
+        slidesUrl: 'https://docs.google.com/presentation/u/0/d/abc/edit',
+      }),
+    ).toMatchObject({
+      slidesUrl: 'https://docs.google.com/presentation/u/0/d/abc/edit',
+    });
   });
 
   it('rejects unsupported hosts', () => {
@@ -106,5 +122,13 @@ describe('projectLinks', () => {
     expect(validateProjectLinks({ githubUrl: '', canvaUrl: 'figma.com/file/1' }).error).toMatch(
       /Canva/,
     );
+    expect(
+      validateProjectLinks({ githubUrl: '', canvaUrl: '', slidesUrl: 'docs.google.com/document/d/1' })
+        .error,
+    ).toMatch(/Google Slides/);
+    expect(
+      validateProjectLinks({ githubUrl: '', canvaUrl: '', slidesUrl: 'drive.google.com/file/d/1' })
+        .error,
+    ).toMatch(/Google Slides/);
   });
 });
