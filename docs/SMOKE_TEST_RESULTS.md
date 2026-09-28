@@ -2,6 +2,32 @@
 
 Ghi kết quả smoke test thủ công trước khi merge hoặc deploy. Checklist chi tiết nằm ở `docs/SMOKE_TEST_CHECKLIST.md`.
 
+## 2026-09-28 Khóa production (Slides rules + bundle)
+
+- Date: 2026-09-28
+- Branch: `main` `a103b79` (Google Slides) trên `c5f56e9` (.yyz + Mở lớp)
+- Environment: hungtranpm.com + Firebase `hungtran-pm`
+- Tester: Cursor Agent
+
+### Commands / deploy
+
+| Check | Result | Notes |
+|------|--------|-------|
+| `git push origin main` | Pass | `a103b79` Cho phép học sinh dán link Google Slides cạnh Canva |
+| `npm run deploy:firestore` | Pass | Rules + indexes released |
+| Live Firestore rules | Pass | MCP `firebase_get_security_rules`: `projectSlidesUrl` trên students + reports |
+| Production JS | Pass | `index-BaFSk_TJ.js`. Dashboard `Mở lớp` + `/c/`. ProductLinks `projectSlidesUrl` + Canva/GitHub + `docs.google.com/presentation`. models `.yyz`. Lessons `2 MiB` + `lectureHtmlDrive`. LessonsView iframe Drive |
+| Trang chủ hungtranpm.com | Pass | Cổng HS: mã lớp + Vào lớp |
+| `/admin/login` | Pass | Form email/mật khẩu + Google |
+| HS nộp `.yyz` / dán Slides / Mở lớp / HTML overflow trên tài khoản thật | Not run | Cần giáo viên đã login |
+
+### Manual còn lại cho giáo viên
+
+- HS nộp `.yyz` ≤150MB
+- Dashboard Đổi buổi → Mở lớp mở `/c/{mã}`
+- Dán `docs.google.com/presentation/...` → Lưu → nút Slides; Canva/GitHub vẫn lưu
+- HTML ~200KB Firestore; bài >750KB badge Drive + iframe HS
+
 ## 2026-09-25 Vận hành (local commands)
 
 - Date: 2026-09-25
