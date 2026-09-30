@@ -16,11 +16,16 @@ export function SubmissionSuccess({
     : '';
 
   return (
-    <div className="space-y-5">
+    <div className="card space-y-5 p-5 sm:p-6">
       <div className="flex items-start gap-3">
-        <CheckCircle2 className="mt-0.5 h-7 w-7 shrink-0 text-emerald-600 dark:text-emerald-400" />
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+          <CheckCircle2 className="h-6 w-6" />
+        </span>
         <div>
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-50">Đã nộp bài</h2>
+          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+            Xong
+          </p>
+          <h2 className="mt-0.5 text-lg font-semibold text-slate-800 dark:text-slate-50">Đã nộp bài</h2>
           {samePageReport ? (
             <p className="mt-1 text-sm text-slate-500">File đã lưu. Gửi báo cáo ở bước 1 nếu chưa gửi.</p>
           ) : requiresReport ? (
@@ -29,7 +34,7 @@ export function SubmissionSuccess({
         </div>
       </div>
 
-      <dl className="space-y-2 text-sm">
+      <dl className="space-y-2 rounded-xl bg-slate-50 px-4 py-3 text-sm dark:bg-slate-800/50">
         <div className="flex justify-between gap-4">
           <dt className="text-slate-500">Học sinh</dt>
           <dd className="font-medium text-slate-800 dark:text-slate-100">{studentName}</dd>

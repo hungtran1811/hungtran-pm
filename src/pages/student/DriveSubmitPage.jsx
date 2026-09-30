@@ -181,14 +181,14 @@ export function DriveSubmitPage({
     <div className={embedded ? '' : 'mx-auto max-w-lg'}>
       {embedded ? null : (
         <>
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-50">Nộp bài</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            {student.fullName} · {classLabel}
+          <p className="text-xs font-semibold uppercase tracking-wider text-brand-600 dark:text-brand-400">
+            Nộp bài
           </p>
+          <h2 className="mt-1 text-xl font-semibold text-slate-800 dark:text-slate-50">Gửi file buổi này</h2>
         </>
       )}
 
-      <form className={embedded ? 'space-y-4' : 'mt-5 space-y-4'} onSubmit={handleSubmit}>
+      <form className={embedded ? 'space-y-4' : 'card mt-4 space-y-4 p-5'} onSubmit={handleSubmit}>
         {hideLessonSelect ? (
           lessonOptions.length ? null : (
             <p className="rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">

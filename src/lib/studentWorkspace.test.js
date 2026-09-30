@@ -5,6 +5,7 @@ import {
   studentLearnPath,
   studentLessonsPath,
   studentProjectPath,
+  studentSessionContextLabel,
   studentSubmitPath,
   studentUsesProjectWorkspace,
   studentWorkspaceHomePath,
@@ -32,6 +33,19 @@ describe('student workspace paths', () => {
     expect(studentUsesProjectWorkspace(classDoc)).toBe(false);
     expect(studentLearnPath('EX1')).toBe('/c/EX1/learn');
     expect(studentSubmitPath('EX1')).toBe('/c/EX1/submit');
+  });
+});
+
+describe('studentSessionContextLabel', () => {
+  it('shows session and a short phase label', () => {
+    expect(studentSessionContextLabel({ curriculumCurrentSession: 3, curriculumPhase: 'learning' })).toBe(
+      'Buổi 3 · Học',
+    );
+    expect(
+      studentSessionContextLabel({ curriculumCurrentSession: 12, curriculumPhase: 'final' }, 12),
+    ).toBe('Buổi 12 · Sản phẩm');
+    expect(studentSessionContextLabel({}, 4)).toBe('Buổi 4');
+    expect(studentSessionContextLabel({})).toBe('');
   });
 });
 

@@ -66,11 +66,15 @@ export function FinalProjectStudentView({ classDoc, program, student, onOpenLess
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-brand-200 bg-gradient-to-r from-brand-50 to-white px-4 py-3 dark:border-brand-500/30 dark:from-brand-500/10 dark:to-slate-900 sm:px-5">
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge tone="brand">Sản phẩm cuối khóa</Badge>
-          {!nameApproved ? <Badge tone="amber">Chưa có tên dự án được duyệt</Badge> : null}
-        </div>
+      <div className="rounded-2xl border border-brand-200 bg-gradient-to-r from-brand-50 to-white px-4 py-4 dark:border-brand-500/30 dark:from-brand-500/10 dark:to-slate-900 sm:px-5">
+        <p className="text-xs font-semibold uppercase tracking-wider text-brand-600 dark:text-brand-400">
+          Sản phẩm cuối khóa
+        </p>
+        {!nameApproved ? (
+          <div className="mt-2">
+            <Badge tone="amber">Chưa có tên dự án được duyệt</Badge>
+          </div>
+        ) : null}
         {nameApproved ? (
           <ProjectSummaryDisclosure student={{ ...student, currentStage }} className="mt-2" />
         ) : (

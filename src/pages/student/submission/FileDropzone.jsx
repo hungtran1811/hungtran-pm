@@ -52,7 +52,7 @@ export function FileDropzone({ file, disabled, error, onFileChange, id, ...input
           className={`flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed px-4 py-6 text-center transition ${
             dragOver
               ? 'border-brand-400 bg-brand-50/80 dark:border-brand-400 dark:bg-brand-500/10'
-              : 'border-slate-300 bg-white hover:border-brand-300 hover:bg-slate-50 dark:border-slate-600 dark:bg-slate-900 dark:hover:border-brand-500/50 dark:hover:bg-slate-900/80'
+              : 'border-brand-200 bg-brand-50/40 hover:border-brand-400 hover:bg-brand-50/80 dark:border-brand-500/30 dark:bg-brand-500/5 dark:hover:border-brand-400 dark:hover:bg-brand-500/10'
           } ${disabled ? 'pointer-events-none opacity-60' : ''}`}
           onDragOver={(event) => {
             event.preventDefault();

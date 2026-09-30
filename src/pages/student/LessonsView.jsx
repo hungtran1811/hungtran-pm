@@ -449,8 +449,8 @@ function LessonSessionStrip({ lessons, activeIndex, onSelectLesson }) {
   }, [activeIndex]);
 
   return (
-    <div className="student-sticky-below-header -mx-4 mb-4 border-b border-slate-200/80 bg-slate-50/95 px-4 py-3 backdrop-blur dark:border-slate-800/80 dark:bg-slate-950/95 sm:mx-0 sm:rounded-xl sm:border sm:px-3 sm:backdrop-blur-none xl:hidden">
-      <div className="mb-2 flex items-center gap-2">
+    <div className="student-sticky-below-header -mx-4 mb-4 border-b border-slate-200/80 bg-slate-50/95 px-4 py-2.5 backdrop-blur dark:border-slate-800/80 dark:bg-slate-950/95 sm:mx-0 sm:rounded-xl sm:border sm:px-3 sm:backdrop-blur-none xl:hidden">
+      <div className="flex items-center gap-2">
         <Button
           variant="secondary"
           size="sm"
@@ -461,10 +461,25 @@ function LessonSessionStrip({ lessons, activeIndex, onSelectLesson }) {
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <p className="min-w-0 flex-1 text-center text-sm font-semibold text-slate-800 dark:text-slate-100">
-          Buổi {lessons[activeIndex]?.sessionNumber}
-          <span className="font-normal text-slate-400"> / {lessons.length}</span>
-        </p>
+        <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto py-0.5" aria-label="Danh sách buổi học">
+          {lessons.map((item, itemIndex) => (
+            <button
+              key={item.id}
+              ref={itemIndex === activeIndex ? activeButtonRef : undefined}
+              type="button"
+              onClick={() => onSelectLesson(itemIndex)}
+              aria-label={`Buổi ${item.sessionNumber}: ${item.title || ''}`}
+              aria-current={itemIndex === activeIndex ? 'true' : undefined}
+              className={`min-h-10 min-w-12 shrink-0 rounded-xl px-3 text-sm font-semibold tabular-nums transition ${
+                itemIndex === activeIndex
+                  ? 'bg-brand-600 text-white shadow-sm'
+                  : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-brand-300 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700'
+              }`}
+            >
+              {item.sessionNumber}
+            </button>
+          ))}
+        </div>
         <Button
           variant="secondary"
           size="sm"
@@ -475,25 +490,6 @@ function LessonSessionStrip({ lessons, activeIndex, onSelectLesson }) {
         >
           <ArrowRight className="h-4 w-4" />
         </Button>
-      </div>
-      <div className="flex gap-2 overflow-x-auto py-1" aria-label="Danh sách buổi học">
-        {lessons.map((item, itemIndex) => (
-          <button
-            key={item.id}
-            ref={itemIndex === activeIndex ? activeButtonRef : undefined}
-            type="button"
-            onClick={() => onSelectLesson(itemIndex)}
-            aria-label={`Buổi ${item.sessionNumber}: ${item.title || ''}`}
-            aria-current={itemIndex === activeIndex ? 'true' : undefined}
-            className={`min-h-10 min-w-12 shrink-0 rounded-xl px-3 text-sm font-semibold tabular-nums transition ${
-              itemIndex === activeIndex
-                ? 'bg-brand-600 text-white shadow-sm'
-                : 'bg-white text-slate-700 ring-1 ring-slate-200 hover:ring-brand-300 dark:bg-slate-900 dark:text-slate-200 dark:ring-slate-700'
-            }`}
-          >
-            {item.sessionNumber}
-          </button>
-        ))}
       </div>
     </div>
   );
@@ -794,20 +790,16 @@ function LessonDetail({
         </div>
       )}
 
-      {!focusMode && (
+      {!focusMode && showBack && (
         <div className="mb-3 flex items-center justify-between gap-3">
-          {showBack ? (
-            <button
-              type="button"
-              onClick={onBack}
-              className="inline-flex min-h-10 items-center gap-1.5 rounded-lg text-sm font-medium text-slate-500 transition hover:text-brand-600 dark:hover:text-brand-300"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              {backLabel}
-            </button>
-          ) : (
-            <span />
-          )}
+          <button
+            type="button"
+            onClick={onBack}
+            className="inline-flex min-h-10 items-center gap-1.5 rounded-lg text-sm font-medium text-slate-500 transition hover:text-brand-600 dark:hover:text-brand-300"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            {backLabel}
+          </button>
           <button
             ref={focusTriggerRef}
             type="button"
@@ -851,12 +843,27 @@ function LessonDetail({
 
         <div className="min-w-0">
           <article className="card overflow-hidden">
-              <div className="border-b border-slate-200 px-5 py-4 dark:border-slate-700 sm:px-6 lg:px-8">
-                <Badge tone="brand">Buổi {displayLesson.sessionNumber}</Badge>
-                <h1 className="mt-2 text-xl font-bold text-slate-800 dark:text-slate-50 sm:text-2xl lg:text-3xl">
-                  {displayLesson.title || `Buổi ${displayLesson.sessionNumber}`}
-                </h1>
+              {!focusMode && (
+              <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-3 dark:border-slate-700 sm:px-6 sm:py-4 lg:px-8">
+                <div className="min-w-0">
+                  <Badge tone="brand">Buổi {displayLesson.sessionNumber}</Badge>
+                  <h1 className="mt-1.5 text-lg font-bold text-slate-800 dark:text-slate-50 sm:text-2xl lg:text-3xl">
+                    {displayLesson.title || `Buổi ${displayLesson.sessionNumber}`}
+                  </h1>
+                </div>
+                {!showBack ? (
+                  <button
+                    ref={focusTriggerRef}
+                    type="button"
+                    onClick={() => setFocusMode(true)}
+                    className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 transition hover:border-brand-300 hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-brand-500/50 dark:hover:text-brand-300"
+                  >
+                    <Maximize2 className="h-4 w-4" />
+                    Chế độ tập trung
+                  </button>
+                ) : null}
               </div>
+              )}
 
               {!focusMode && (
                 <div className="flex gap-1 border-b border-slate-200 bg-slate-50 px-2 py-2 dark:border-slate-700 dark:bg-slate-800/50 sm:px-3">

@@ -39,3 +39,13 @@ export function studentLearnPath(classCode) {
 export function studentSubmitPath(classCode) {
   return `${studentClassBasePath(classCode)}/submit`;
 }
+
+/** Ngữ cảnh buổi/phase trên header HS — không phải CTA. */
+export function studentSessionContextLabel(classDoc, activeLessonSession = null) {
+  const session = activeLessonSession ?? classDoc?.curriculumCurrentSession;
+  const parts = [];
+  if (session) parts.push(`Buổi ${session}`);
+  if (classDoc?.curriculumPhase === 'final') parts.push('Sản phẩm');
+  else if (classDoc?.curriculumPhase === 'learning') parts.push('Học');
+  return parts.join(' · ');
+}

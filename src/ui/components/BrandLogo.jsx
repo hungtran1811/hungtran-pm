@@ -63,6 +63,7 @@ export function BrandLogo({
   subtitle,
   showWordmark = false,
   className = '',
+  subtitleClassName = '',
 }) {
   const s = SIZES[size] || SIZES.md;
 
@@ -89,9 +90,11 @@ export function BrandLogo({
   }
 
   return (
-    <div className={`flex min-w-0 max-w-[11rem] flex-col ${s.block} ${className}`}>
+    <div className={`flex min-w-0 max-w-[14rem] flex-col sm:max-w-[18rem] ${s.block} ${className}`}>
       <LogoImage sizeKey={size} />
-      <p className={`truncate font-medium text-slate-500 dark:text-slate-400 ${s.sub}`}>{subtitle}</p>
+      <p className={`truncate font-medium text-slate-500 dark:text-slate-400 ${s.sub} ${subtitleClassName}`}>
+        {subtitle}
+      </p>
     </div>
   );
 }

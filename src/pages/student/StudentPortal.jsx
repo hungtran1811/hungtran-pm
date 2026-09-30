@@ -4,7 +4,7 @@ import { ArrowRight, Ban, UserRound, Users } from 'lucide-react';
 import { StudentShell } from './StudentShell.jsx';
 import { StudentGameJoinNotice } from './StudentGameJoinNotice.jsx';
 import { Button } from '../../ui/components/Button.jsx';
-import { Input } from '../../ui/components/Field.jsx';
+import { Field, Input } from '../../ui/components/Field.jsx';
 import { EmptyState } from '../../ui/components/EmptyState.jsx';
 import { FullPageLoader } from '../../ui/components/Spinner.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
@@ -30,6 +30,7 @@ import {
   studentLearnPath,
   studentLessonsPath,
   studentProjectPath,
+  studentSessionContextLabel,
   studentSubmitPath,
   studentUsesProjectWorkspace,
   studentWorkspaceHomePath,
@@ -369,11 +370,8 @@ export function StudentPortalPage() {
     return items;
   }, [usesProjectWorkspace, classCode]);
 
-  const shellSubtitle = useMemo(() => {
-    const base = classDoc?.className || classDoc?.classCode || '';
-    if (activeLessonSession == null) return base;
-    return `${base} · Buổi ${activeLessonSession}`;
-  }, [classDoc?.className, classDoc?.classCode, activeLessonSession]);
+  const shellSubtitle = classDoc?.className || classDoc?.classCode || '';
+  const sessionContext = studentSessionContextLabel(classDoc, activeLessonSession);
 
   const showShowdownBanner =
     FEATURE_CODING_SHOWDOWN_ENABLED &&
@@ -440,7 +438,11 @@ export function StudentPortalPage() {
   if (!selectedStudent) {
     return (
       <StudentShell subtitle={classDoc.className || classDoc.classCode}>
-        <StudentPicker students={students} onPick={chooseStudent} />
+        <StudentPicker
+          students={students}
+          onPick={chooseStudent}
+          classLabel={classDoc.className || classDoc.classCode}
+        />
       </StudentShell>
     );
   }
@@ -502,6 +504,7 @@ export function StudentPortalPage() {
   return (
     <StudentShell
       subtitle={shellSubtitle}
+      hideSubtitleOnMobile
       activeLessonSession={activeLessonSession}
       bottomNavItems={bottomNavItems}
       compactMain={onProjectHome}
@@ -556,11 +559,22 @@ export function StudentPortalPage() {
           <div className="min-w-0 text-right">
             <Link
               to={workspaceHome}
-              className="block max-w-[5.5rem] truncate text-sm font-semibold text-slate-800 hover:text-brand-700 sm:max-w-[14rem] dark:text-slate-100 dark:hover:text-brand-300"
+              className="block truncate text-sm font-semibold text-slate-800 hover:text-brand-700 dark:text-slate-100 dark:hover:text-brand-300"
               title={selectedStudent.fullName}
             >
               {selectedStudent.fullName}
             </Link>
+            <p
+              className="truncate text-[11px] text-slate-500 sm:hidden dark:text-slate-400"
+              title={[shellSubtitle, sessionContext].filter(Boolean).join(' · ')}
+            >
+              {[shellSubtitle, sessionContext].filter(Boolean).join(' · ')}
+            </p>
+            {sessionContext ? (
+              <p className="hidden truncate text-[11px] text-slate-500 sm:block dark:text-slate-400" title={sessionContext}>
+                {sessionContext}
+              </p>
+            ) : null}
             {displayProject && isProjectNameApproved(selectedStudent) && (
               <p
                 className="hidden max-w-[14rem] truncate text-xs text-slate-500 sm:block dark:text-slate-400"
@@ -571,14 +585,14 @@ export function StudentPortalPage() {
             )}
           </div>
           <Button
-            variant="subtle"
-            size="md"
+            variant="ghost"
+            size="sm"
             onClick={clearStudent}
-            className="min-h-11 shadow-sm"
+            className="min-h-11 min-w-11 px-2 sm:min-w-0 sm:px-3"
             title="Đổi tên học sinh"
           >
             <UserRound className="h-5 w-5" />
-            Đổi tên
+            <span className="hidden sm:inline">Đổi tên</span>
           </Button>
         </div>
       }
@@ -760,7 +774,7 @@ function studentInitial(name = '') {
   return (parts[0]?.[0] || '?').toUpperCase();
 }
 
-function StudentPicker({ students, onPick }) {
+function StudentPicker({ students, onPick, classLabel }) {
   const [search, setSearch] = useState('');
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -769,22 +783,35 @@ function StudentPicker({ students, onPick }) {
   }, [students, search]);
 
   if (students.length === 0) {
-    return <EmptyState icon={<Users className="h-7 w-7" />} title="Chưa có học sinh" />;
+    return (
+      <EmptyState
+        icon={<Users className="h-7 w-7" />}
+        title="Chưa có học sinh"
+        description={classLabel ? `Lớp ${classLabel} chưa có danh sách tên.` : undefined}
+      />
+    );
   }
 
   return (
-    <div>
-      <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Chọn tên của bạn</h2>
+    <div className="mx-auto max-w-lg">
+      {classLabel ? (
+        <p className="text-xs font-semibold uppercase tracking-wider text-brand-600 dark:text-brand-400">
+          {classLabel}
+        </p>
+      ) : null}
+      <h2 className="mt-1 text-xl font-semibold text-slate-800 dark:text-slate-100">Chọn tên của bạn</h2>
       <div className="mt-4">
-        <Input
-          placeholder="Tìm tên..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          autoFocus
-          className="text-base"
-        />
+        <Field label="Tìm tên">
+          <Input
+            placeholder="Gõ vài chữ trong tên..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            autoFocus
+            className="text-base"
+          />
+        </Field>
       </div>
-      <div className="mt-4 space-y-2">
+      <div className="mt-3 space-y-2">
         {filtered.map((s) => (
           <button
             key={s.id}

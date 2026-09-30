@@ -17,6 +17,7 @@ export function StudentShell({
   bottomNavItems,
   activeLessonSession = null,
   compactMain = false,
+  hideSubtitleOnMobile = false,
   children,
 }) {
   const isReadingLesson = activeLessonSession != null;
@@ -61,11 +62,15 @@ export function StudentShell({
           <Link
             to="/"
             title="Nhập mã lớp khác"
-            className="group flex min-w-0 flex-1 items-center rounded-xl py-0.5 pr-2 transition hover:bg-slate-100/80 dark:hover:bg-slate-800/60"
+            className="group flex min-w-0 shrink-0 items-center rounded-xl py-0.5 pr-2 transition hover:bg-slate-100/80 dark:hover:bg-slate-800/60"
           >
-            <BrandLogo size="md" subtitle={subtitle} />
+            <BrandLogo
+              size="md"
+              subtitle={subtitle}
+              subtitleClassName={hideSubtitleOnMobile ? 'hidden sm:block' : ''}
+            />
           </Link>
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5 sm:gap-2">
             {right}
             <ThemeToggle />
           </div>
