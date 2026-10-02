@@ -42,5 +42,6 @@ firebase deploy --only firestore:rules,firestore:indexes --dry-run
 - Giữ `firebase-tools@15.22.3`; không dùng `npm audit fix --force` vì npm vẫn đề xuất hướng breaking/downgrade khó kiểm soát.
 - Audit hiện còn **5 moderate** (2026-09-30): `firebase-tools` transitive (`@opentelemetry/core`, `gaxios`/`uuid`). Không có high/critical — `audit:security:gate` pass.
 - 2026-09-30: `npm audit fix` (không `--force`) vá high `brace-expansion`, `fast-uri`, `undici`; lockfile kéo patch `vitest` 4.1.11, `firebase-admin` 14.5.0, `firebase-tools` 15.32.0 trong range `^` hiện có.
+- 2026-10-02: `audit:security:gate` fail vì high mới: `dompurify` 3.4.14 (GHSA-p98j-92pf-mc4p), `@grpc/grpc-js` (Firebase/google-gax), `basic-ftp` (firebase-tools/`get-uri`). Nâng `dompurify` lên `3.4.16`; pin override `@grpc/grpc-js@1.14.5` và `basic-ftp@6.2.1`. Không dùng `npm audit fix --force` (npm vẫn đề xuất firebase@9 / firebase-tools@14). Moderate tooling còn lại (`@opentelemetry/core`, `hono`, `uuid`/`gaxios`) không fail gate.
 - CI dùng `npm run audit:security:gate`, chỉ fail khi có high/critical. Dùng `npm run audit:security:full` để xem toàn bộ moderate còn lại.
 - Không chạy `npm audit fix` trên nhánh vận hành: npm vẫn kéo thay đổi tooling khó dự đoán.
