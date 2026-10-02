@@ -9,6 +9,7 @@ import {
   lessonKeysEqual,
   normalizeLessonKey,
   sanitizeClassCodeForFile,
+  sanitizeOriginalFileStem,
 } from './submissionFileName.js';
 
 describe('submission file names', () => {
@@ -45,6 +46,11 @@ describe('submission file names', () => {
     });
   });
 
+  it('sanitizes the original file stem', () => {
+    expect(sanitizeOriginalFileStem('Final Project - Lesson_05.ZIP')).toBe('Final-Project-Lesson-05');
+    expect(sanitizeOriginalFileStem('.zip')).toBe('file');
+  });
+
   it('builds the stored Drive file name', () => {
     const date = new Date(2026, 8, 12);
     expect(
@@ -55,6 +61,6 @@ describe('submission file names', () => {
         originalFileName: 'bai-tap.ZIP',
         date,
       }),
-    ).toBe(`PVD-CSB02_NguyenVanAn_L03_${formatDateStamp(date)}.zip`);
+    ).toBe(`PVD-CSB02_NguyenVanAn_L03_${formatDateStamp(date)}_bai-tap.zip`);
   });
 });

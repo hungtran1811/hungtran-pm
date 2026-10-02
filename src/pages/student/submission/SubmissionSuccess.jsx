@@ -6,6 +6,7 @@ export function SubmissionSuccess({
   classCode,
   lessonLabel,
   storedFileName,
+  storedFileNames,
   submittedAt,
   requiresReport = false,
   samePageReport = false,
@@ -14,11 +15,16 @@ export function SubmissionSuccess({
   const timeLabel = submittedAt
     ? new Date(submittedAt).toLocaleString('vi-VN', { hour12: false })
     : '';
+  const names = Array.isArray(storedFileNames) && storedFileNames.length
+    ? storedFileNames.filter(Boolean)
+    : storedFileName
+      ? [storedFileName]
+      : [];
 
   return (
     <div className="card space-y-5 p-5 sm:p-6">
       <div className="flex items-start gap-3">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
+        <span className="student-success-pop flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
           <CheckCircle2 className="h-6 w-6" />
         </span>
         <div>
@@ -49,8 +55,18 @@ export function SubmissionSuccess({
         </div>
         <div className="flex justify-between gap-4">
           <dt className="text-slate-500">File</dt>
-          <dd className="max-w-[16rem] truncate text-right font-medium text-slate-800 dark:text-slate-100">
-            {storedFileName}
+          <dd className="max-w-[16rem] text-right font-medium text-slate-800 dark:text-slate-100">
+            {names.length ? (
+              <ul className="space-y-1">
+                {names.map((name) => (
+                  <li key={name} className="truncate">
+                    {name}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              storedFileName
+            )}
           </dd>
         </div>
         {timeLabel ? (

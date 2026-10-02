@@ -13,7 +13,7 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
-import { nextLatestReport } from '../lib/progressReports.js';
+import { nextLatestReport, resolveDifficulties } from '../lib/progressReports.js';
 import { db } from '../config/firebase.js';
 import { toReportModel } from '../models/index.js';
 import { dateKey } from '../lib/firestore.js';
@@ -150,7 +150,7 @@ async function writeProgressReport({ student, classDoc, form }) {
   }
 
   const progressPercent = Number(form.progressPercent);
-  const difficulties = form.difficulties?.trim() ?? '';
+  const difficulties = resolveDifficulties(form.status, form.difficulties);
   const linkValidation = validateProjectLinks({
     githubUrl: form.projectGithubUrl ?? student.projectGithubUrl ?? '',
     canvaUrl: form.projectCanvaUrl ?? student.projectCanvaUrl ?? '',

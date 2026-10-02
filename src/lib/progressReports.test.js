@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_DIFFICULTIES } from '../constants/index.js';
 import {
+  countBulletLines,
   hasOverlappingLesson,
   latestReportForLesson,
   latestReportsByStudentLesson,
   nextLatestReport,
+  reportTextError,
   reportsForStudentLesson,
+  resolveDifficulties,
   scopeDriveToLesson,
 } from './progressReports.js';
 
@@ -61,5 +65,33 @@ describe('progress report lesson helpers', () => {
       'new-b01',
     ]);
     expect(nextLatestReport(reportsForStudentLesson(reports, 'a', 'B01'), 'new-b01').id).toBe('old');
+  });
+});
+
+describe('resolveDifficulties', () => {
+  it('fills empty difficulties unless the student needs support', () => {
+    expect(resolveDifficulties('Đang làm', '')).toBe(DEFAULT_DIFFICULTIES);
+    expect(resolveDifficulties('Đang làm', '   ')).toBe(DEFAULT_DIFFICULTIES);
+    expect(resolveDifficulties('Hoàn thành', 'Mắc lỗi CSS')).toBe('Mắc lỗi CSS');
+  });
+
+  it('keeps empty text when status is Cần hỗ trợ', () => {
+    expect(resolveDifficulties('Cần hỗ trợ', '')).toBe('');
+    expect(resolveDifficulties('Cần hỗ trợ', '  Nút nộp không chạy  ')).toBe('Nút nộp không chạy');
+  });
+});
+
+describe('report text bullets', () => {
+  it('counts non-empty bullet lines and requires three plus 40 characters', () => {
+    expect(countBulletLines('- Một\n- Hai\n- Ba việc đã làm được hôm nay')).toBe(3);
+    expect(countBulletLines('- Một\n\n-  ')).toBe(1);
+    expect(reportTextError('đã làm được', '- Một\n- Hai')).toMatch(/3 gạch đầu dòng/);
+    expect(
+      reportTextError(
+        'đã làm được',
+        '- Dựng trang chủ\n- Nối nút nộp bài\n- Chỉnh chữ trên điện thoại',
+      ),
+    ).toBeNull();
+    expect(reportTextError('khó khăn', '', { required: false })).toBeNull();
   });
 });

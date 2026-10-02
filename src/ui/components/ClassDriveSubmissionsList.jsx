@@ -38,7 +38,7 @@ export function ClassDriveSubmissionsList({
         <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">File nộp trên Drive</h3>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <Badge tone="brand">{studentCount} HS đã nộp</Badge>
-          <Badge tone="slate">{latestCount} bài mới nhất</Badge>
+          <Badge tone="slate">{latestCount} file lần nộp mới</Badge>
           {classFolderUrl ? (
             <a
               href={classFolderUrl}
@@ -80,7 +80,7 @@ export function ClassDriveSubmissionsList({
             checked={latestOnly}
             onChange={(event) => onLatestOnlyChange(event.target.checked)}
           />
-          Chỉ bản mới nhất
+          Chỉ lần nộp mới
         </label>
       </div>
 

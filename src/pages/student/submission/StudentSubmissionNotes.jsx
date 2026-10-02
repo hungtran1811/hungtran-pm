@@ -1,16 +1,17 @@
 import { formatDateTime } from '../../../lib/firestore.js';
-import { findStudentSubmissionNote } from '../../../lib/submissionStudentNotes.js';
+import { findStudentSubmissionNote, noteFileNames } from '../../../lib/submissionStudentNotes.js';
 import { formatLessonKey, lessonKeysEqual } from '../../../lib/submissionFileName.js';
 
 function NoteLine({ note }) {
   const timeLabel = note.submittedAt ? formatDateTime(note.submittedAt) : '';
+  const names = noteFileNames(note);
   return (
     <p className="text-sm text-emerald-800 dark:text-emerald-300">
       Đã nộp{timeLabel ? ` lúc ${timeLabel}` : ''}
-      {note.originalFileName ? (
+      {names.length ? (
         <>
           {' '}
-          · File <span className="font-medium">{note.originalFileName}</span>
+          · File <span className="font-medium">{names.join(', ')}</span>
         </>
       ) : null}
       {note.attempt > 1 ? ` · Lần ${note.attempt}` : null}

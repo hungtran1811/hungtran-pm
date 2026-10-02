@@ -170,6 +170,8 @@ describe('ClassCompletionRoster', () => {
     expect(container.textContent).toContain('GitHub');
     expect(container.textContent).toContain('Canva');
     expect(container.textContent).toContain('Copy');
+    expect(container.textContent).toContain('Làm sản phẩm');
+    expect(container.textContent).toContain('Đang làm');
     expect(container.textContent).not.toContain('Xong trang chủ');
     expect(container.textContent).not.toContain('Thêm trang chi tiết quán');
 

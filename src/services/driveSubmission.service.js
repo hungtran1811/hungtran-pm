@@ -1,6 +1,6 @@
 import { FUNCTIONS_BASE } from '../config/submissionConfig.js';
 import { reportDriveFunctionError } from '../lib/driveFunctionErrors.js';
-import { validateCreateSessionInput } from '../lib/submissionValidate.js';
+import { validateCreateSessionInput, validateSubmissionFiles } from '../lib/submissionValidate.js';
 
 function functionsUrl(name) {
   const base = (import.meta.env.VITE_NETLIFY_FUNCTIONS_BASE || FUNCTIONS_BASE).replace(/\/$/, '');
@@ -101,58 +101,101 @@ function putFileWithProgress(uploadUrl, file, { onProgress, signal } = {}) {
   });
 }
 
-export async function submitDriveFile({
+export async function submitDriveFile(args = {}) {
+  const files = args.files || (args.file ? [args.file] : []);
+  return submitDriveFiles({ ...args, files });
+}
+
+export async function submitDriveFiles({
   classCode,
   studentId,
   studentName,
   lessonKey,
+  files,
   file,
   onStatus,
   onProgress,
   signal,
 } = {}) {
-  const input = validateCreateSessionInput({
-    classCode,
-    studentId,
-    studentName,
-    lessonKey,
-    fileName: file?.name,
-    fileSize: file?.size,
-    mimeType: file?.type,
-  });
-  if (!input.ok) throw new Error(input.error);
+  const list = Array.isArray(files) && files.length ? files : file ? [file] : [];
+  const batch = validateSubmissionFiles(list);
+  if (!batch.ok) throw new Error(batch.error);
 
-  onStatus?.('creating_session');
-  const session = await postJson('drive-create-upload-session', {
-    classCode: input.classCode,
-    studentId: input.studentId,
-    studentName: input.studentName,
-    lessonKey: input.lessonKey,
-    fileName: input.fileName,
-    fileSize: input.fileSize,
-    mimeType: input.mimeType,
-  });
+  const items = [];
+  const uploadedMeta = [];
+  const totalBytes = list.reduce((sum, item) => sum + Number(item.size || 0), 0);
+  let uploadedBytes = 0;
+  let identity = null;
 
-  if (!session.uploadUrl || !session.uploadToken) {
-    throw new Error('Không tạo được phiên tải lên.');
+  for (const nextFile of list) {
+    const input = validateCreateSessionInput({
+      classCode,
+      studentId,
+      studentName,
+      lessonKey,
+      fileName: nextFile.name,
+      fileSize: nextFile.size,
+      mimeType: nextFile.type,
+    });
+    if (!input.ok) throw new Error(input.error);
+    identity = input;
+
+    onStatus?.('creating_session');
+    const session = await postJson('drive-create-upload-session', {
+      classCode: input.classCode,
+      studentId: input.studentId,
+      studentName: input.studentName,
+      lessonKey: input.lessonKey,
+      fileName: input.fileName,
+      fileSize: input.fileSize,
+      mimeType: input.mimeType,
+    });
+
+    if (!session.uploadUrl || !session.uploadToken) {
+      throw new Error('Không tạo được phiên tải lên.');
+    }
+
+    onStatus?.('uploading');
+    const driveFileId = await putFileWithProgress(session.uploadUrl, nextFile, {
+      signal,
+      onProgress: (_percent, loaded) => {
+        const overallLoaded = uploadedBytes + loaded;
+        const percent = totalBytes ? Math.round((overallLoaded / totalBytes) * 100) : 0;
+        onProgress?.(percent, overallLoaded, totalBytes);
+      },
+    });
+    uploadedBytes += Number(nextFile.size || 0);
+    items.push({ uploadToken: session.uploadToken, driveFileId });
+    uploadedMeta.push({
+      storedFileName: session.storedFileName || '',
+      originalFileName: input.fileName,
+    });
   }
 
-  onStatus?.('uploading');
-  const driveFileId = await putFileWithProgress(session.uploadUrl, file, { onProgress, signal });
-
   onStatus?.('saving');
-  const completed = await postJson('drive-complete-submission', {
-    uploadToken: session.uploadToken,
-    driveFileId,
-  });
-  invalidateMyDriveSubmissions(input.classCode, input.studentId);
+  const completed = await postJson('drive-complete-submission', { items });
+  if (identity) invalidateMyDriveSubmissions(identity.classCode, identity.studentId);
+
+  const completedFiles =
+    Array.isArray(completed.files) && completed.files.length
+      ? completed.files.map((row, index) => ({
+          submissionId: row.submissionId || '',
+          storedFileName: row.storedFileName || uploadedMeta[index]?.storedFileName || '',
+          originalFileName: row.originalFileName || uploadedMeta[index]?.originalFileName || '',
+        }))
+      : uploadedMeta.map((row, index) => ({
+          submissionId: index === 0 ? completed.submissionId || '' : '',
+          storedFileName: row.storedFileName,
+          originalFileName: row.originalFileName,
+        }));
 
   return {
-    storedFileName: completed.storedFileName || session.storedFileName,
-    originalFileName: completed.originalFileName || input.fileName,
+    storedFileName: completed.storedFileName || completedFiles[0]?.storedFileName || '',
+    originalFileName: completed.originalFileName || completedFiles[0]?.originalFileName || '',
     submittedAt: completed.submittedAt || new Date().toISOString(),
-    submissionId: completed.submissionId || '',
+    submissionId: completed.submissionId || completedFiles[0]?.submissionId || '',
     attempt: completed.attempt || 1,
+    files: completedFiles,
   };
 }
 

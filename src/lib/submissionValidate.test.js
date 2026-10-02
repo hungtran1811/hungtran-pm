@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_UPLOAD_SIZE } from '../config/submissionConfig.js';
 import {
+  normalizeCompleteSubmissionItems,
   validateCreateSessionInput,
   validateStudentIdentityInput,
   validateSubmissionFile,
+  validateSubmissionFiles,
 } from './submissionValidate.js';
 
 describe('validateSubmissionFile', () => {
@@ -49,6 +51,68 @@ describe('validateSubmissionFile', () => {
         mimeType: 'application/zip',
       }).ok,
     ).toBe(true);
+  });
+});
+
+describe('validateSubmissionFiles', () => {
+  const py = (name) => ({ name, size: 12, type: 'text/x-python' });
+
+  it('accepts one to three valid files', () => {
+    expect(validateSubmissionFiles([py('a.py')]).ok).toBe(true);
+    expect(validateSubmissionFiles([py('a.py'), py('b.py'), py('c.py')]).ok).toBe(true);
+  });
+
+  it('rejects empty, overflow, and duplicate names', () => {
+    expect(validateSubmissionFiles([]).ok).toBe(false);
+    expect(validateSubmissionFiles([py('a.py'), py('b.py'), py('c.py'), py('d.py')]).ok).toBe(false);
+    expect(validateSubmissionFiles([py('a.py'), py('A.py')]).ok).toBe(false);
+  });
+});
+
+describe('normalizeCompleteSubmissionItems', () => {
+  it('accepts the legacy single-file body', () => {
+    expect(
+      normalizeCompleteSubmissionItems({
+        uploadToken: 'tok-1',
+        driveFileId: 'drv-1',
+      }),
+    ).toEqual({
+      ok: true,
+      items: [{ uploadToken: 'tok-1', driveFileId: 'drv-1' }],
+    });
+  });
+
+  it('accepts a batch of up to three items', () => {
+    const result = normalizeCompleteSubmissionItems({
+      items: [
+        { uploadToken: 't1', driveFileId: 'd1' },
+        { uploadToken: 't2', driveFileId: 'd2' },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    expect(result.items).toHaveLength(2);
+  });
+
+  it('rejects missing, duplicate, or too many items', () => {
+    expect(normalizeCompleteSubmissionItems({}).ok).toBe(false);
+    expect(
+      normalizeCompleteSubmissionItems({
+        items: [
+          { uploadToken: 't1', driveFileId: 'd1' },
+          { uploadToken: 't1', driveFileId: 'd2' },
+        ],
+      }).ok,
+    ).toBe(false);
+    expect(
+      normalizeCompleteSubmissionItems({
+        items: [
+          { uploadToken: 't1', driveFileId: 'd1' },
+          { uploadToken: 't2', driveFileId: 'd2' },
+          { uploadToken: 't3', driveFileId: 'd3' },
+          { uploadToken: 't4', driveFileId: 'd4' },
+        ],
+      }).ok,
+    ).toBe(false);
   });
 });
 

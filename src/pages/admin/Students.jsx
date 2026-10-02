@@ -13,7 +13,7 @@ import { Field, Input, Select } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { StudentHistoryModal } from '../../ui/components/StudentHistoryModal.jsx';
 import { StudentTextBlock } from '../../ui/components/StudentTextBlock.jsx';
-import { STAGES, STATUSES, STATUS_TONES } from '../../constants/index.js';
+import { STAGES, STAGE_TONES, STATUSES, STATUS_TONES } from '../../constants/index.js';
 import { subscribeClasses } from '../../services/classes.service.js';
 import { listCurriculumPrograms } from '../../services/curriculum.service.js';
 import {
@@ -654,22 +654,32 @@ function StudentFormModal({ initial, classCode, onClose, onSaved }) {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Trạng thái">
-            <Select value={form.currentStatus} onChange={(e) => update('currentStatus', e.target.value)}>
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </Select>
+            <div className="space-y-2">
+              {form.currentStatus ? (
+                <Badge tone={STATUS_TONES[form.currentStatus] || 'slate'}>{form.currentStatus}</Badge>
+              ) : null}
+              <Select value={form.currentStatus} onChange={(e) => update('currentStatus', e.target.value)}>
+                {STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </Field>
           <Field label="Giai đoạn">
-            <Select value={form.currentStage} onChange={(e) => update('currentStage', e.target.value)}>
-              {STAGES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </Select>
+            <div className="space-y-2">
+              {form.currentStage ? (
+                <Badge tone={STAGE_TONES[form.currentStage] || 'slate'}>{form.currentStage}</Badge>
+              ) : null}
+              <Select value={form.currentStage} onChange={(e) => update('currentStage', e.target.value)}>
+                {STAGES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </Field>
         </div>
 

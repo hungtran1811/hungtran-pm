@@ -7,7 +7,7 @@ import { StudentTextBlock } from './StudentTextBlock.jsx';
 import { CodeSubmissionsPanel } from './CodeSubmissionsPanel.jsx';
 import { ProjectLinksReadonly } from '../../pages/student/ProjectProductLinks.jsx';
 import { useToast } from './Toast.jsx';
-import { STATUS_TONES, UNDERSTANDING_LEVELS } from '../../constants/index.js';
+import { STAGE_TONES, STATUS_TONES, UNDERSTANDING_LEVELS } from '../../constants/index.js';
 import { listReportsByStudent } from '../../services/reports.service.js';
 import { listKnowledgeReportsByStudent } from '../../services/knowledgeReports.service.js';
 import { listCodeSubmissionsByStudent } from '../../services/codeSubmissions.service.js';
@@ -192,11 +192,12 @@ function TimelineReport({ report, isLatest }) {
         <Badge tone="brand">Báo cáo tiến độ</Badge>
         {isLatest && <Badge tone="green">Mới nhất</Badge>}
         <Badge tone={STATUS_TONES[report.status] || 'slate'}>{report.status || '—'}</Badge>
+        {report.stage ? <Badge tone={STAGE_TONES[report.stage] || 'slate'}>{report.stage}</Badge> : null}
         {report.lessonKey ? <Badge tone="slate">{formatLessonKey(report.lessonKey)}</Badge> : null}
         <span className="text-xs text-slate-400">{formatDateTime(report.submittedAt)}</span>
       </div>
       <p className="mb-3 text-sm text-slate-700 dark:text-slate-200">
-        {report.stage || '—'} · {report.progressPercent ?? 0}%
+        {report.progressPercent ?? 0}%
       </p>
       {report.doneToday ? <StudentTextBlock label="Đã làm được">{report.doneToday}</StudentTextBlock> : null}
       {report.nextGoal ? (

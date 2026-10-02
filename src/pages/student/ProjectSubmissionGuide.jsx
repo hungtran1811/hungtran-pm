@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
+  Archive,
   CheckCircle2,
   ChevronDown,
   Circle,
@@ -17,7 +18,7 @@ import {
   CODE_SUBMISSION_MAX_FILE_BYTES,
 } from '../../lib/codeSubmissionLimits.js';
 
-const GUIDE_UPDATED = '18/06/2026';
+const GUIDE_UPDATED = '02/10/2026';
 const MAX_FILE_KB = Math.round(CODE_SUBMISSION_MAX_FILE_BYTES / 1024);
 const EXT_LIST = CODE_SUBMISSION_EXTENSIONS.join(', ');
 
@@ -26,6 +27,7 @@ export const GUIDE_SECTIONS = {
   github: 'github',
   git: 'git',
   canva: 'canva',
+  zip: 'zip',
   code: 'code',
 };
 
@@ -391,6 +393,26 @@ const CANVA_STEPS = [
   },
 ];
 
+const ZIP_STEPS = [
+  {
+    title: 'Chuột phải vào thư mục muốn nén',
+    body: 'Mở File Explorer, tìm thư mục dự án (ví dụ FinalProject). Click chuột phải vào chính thư mục đó — không click vào từng file bên trong.',
+  },
+  {
+    title: 'Chọn Compress to → ZIP file',
+    body: 'Trong menu, chọn Compress to (Nén thành), rồi chọn ZIP file. Windows tạo file .zip ngay cạnh thư mục.',
+  },
+  {
+    title: 'Đổi tên file ZIP theo buổi',
+    body: 'Giữ tên thư mục, thêm buổi học theo cú pháp Tên_dự_án - Lesson_ rồi điền số buổi vào sau Lesson_.',
+    tip: 'Ví dụ thư mục FinalProject, buổi 5 → FinalProject - Lesson_05.zip',
+  },
+  {
+    title: 'Nộp file ZIP trên cổng học sinh',
+    body: 'Vào Nộp bài hoặc tab Báo cáo & nộp, chọn đúng buổi, chọn file ZIP vừa đặt tên. File nhỏ rời (ví dụ .py, .html, .css) có thể nộp tối đa 3 file trong một lần.',
+  },
+];
+
 const CODE_STEPS = [
   {
     title: 'Mở mục nộp file theo buổi',
@@ -445,10 +467,9 @@ export function ProjectSubmissionGuide({ initialSection = GUIDE_SECTIONS.overvie
       <header className="space-y-2">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Hướng dẫn nộp dự án</h2>
         <p className="text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-          Làm theo từng bước bên dưới để nộp GitHub và Canva
-          {FEATURE_CODE_UPLOAD_ENABLED ? ' và file code theo buổi' : ''}. Bạn có thể đọc một lần rồi quay
-          lại tab <strong>Báo cáo</strong> để điền link
-          {FEATURE_CODE_UPLOAD_ENABLED ? ' và upload' : ''}.
+          Làm theo từng bước bên dưới để nộp GitHub, Canva và file/ZIP theo buổi
+          {FEATURE_CODE_UPLOAD_ENABLED ? ' và file code' : ''}. Bạn có thể đọc một lần rồi quay lại tab{' '}
+          <strong>Báo cáo</strong> để điền link và nộp file.
         </p>
         <p className="text-xs text-slate-400">Cập nhật: {GUIDE_UPDATED}</p>
       </header>
@@ -469,6 +490,13 @@ export function ProjectSubmissionGuide({ initialSection = GUIDE_SECTIONS.overvie
             <Palette className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
               <strong>Canva</strong> — slide hoặc thiết kế trình bày (link xem, không cần quyền chỉnh sửa).
+            </span>
+          </li>
+          <li className="flex gap-2">
+            <Archive className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              <strong>File theo buổi / ZIP</strong> — nén thư mục (Compress to → ZIP file), đặt tên{' '}
+              <span className="font-mono">Tên_dự_án - Lesson_</span> rồi nộp trên cổng. Tối đa 3 file mỗi lần.
             </span>
           </li>
           {FEATURE_CODE_UPLOAD_ENABLED && (
@@ -625,6 +653,40 @@ export function ProjectSubmissionGuide({ initialSection = GUIDE_SECTIONS.overvie
             {
               problem: 'Link hết hạn hoặc thiết kế đã xóa',
               fix: 'Mở lại thiết kế trên Canva, tạo link share mới và cập nhật trên cổng.',
+            },
+          ]}
+        />
+      </GuideAccordion>
+
+      <GuideAccordion
+        id={GUIDE_SECTIONS.zip}
+        icon={Archive}
+        title="Nén thư mục thành ZIP"
+        subtitle="Compress to → ZIP file · Tên_dự_án - Lesson_"
+        open={openSections.has(GUIDE_SECTIONS.zip)}
+        onToggle={() => toggle(GUIDE_SECTIONS.zip)}
+      >
+        <StepList steps={ZIP_STEPS} />
+        <Checklist
+          items={[
+            'Đã chuột phải vào thư mục dự án, chọn Compress to → ZIP file.',
+            'Tên file dạng Tên_dự_án - Lesson_ rồi thêm số buổi (ví dụ FinalProject - Lesson_05.zip).',
+            'Nộp đúng buổi trên cổng; thư mục lớn nên nộp 1 file ZIP, file nhỏ rời tối đa 3 file / lần.',
+          ]}
+        />
+        <CommonErrors
+          items={[
+            {
+              problem: 'Quên đổi tên hoặc thiếu số buổi',
+              fix: 'Đổi thành Tên_dự_án - Lesson_ rồi điền số buổi, ví dụ FinalProject - Lesson_05.zip.',
+            },
+            {
+              problem: 'Nén nhầm file lẻ thay vì cả thư mục',
+              fix: 'Chuột phải vào thư mục dự án, không chọn từng file bên trong rồi mới Compress to.',
+            },
+            {
+              problem: 'File ZIP quá 150MB',
+              fix: 'Xóa node_modules, thư mục build, video/ảnh không cần, rồi nén lại.',
             },
           ]}
         />

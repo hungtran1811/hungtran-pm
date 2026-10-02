@@ -4,12 +4,12 @@ Học sinh nộp file sản phẩm tại `/c/:classCode/submit` (hoặc `/submit
 
 ## Luồng
 
-1. HS chọn tên từ roster lớp, chọn buổi, chọn file (≤ 150MB).
-2. Trình duyệt gọi `POST /.netlify/functions/drive-create-upload-session`.
+1. HS chọn tên từ roster lớp, chọn buổi, chọn 1–3 file (mỗi file ≤ 150MB).
+2. Trình duyệt gọi `POST /.netlify/functions/drive-create-upload-session` cho từng file.
 3. Function kiểm tra lớp mở + HS active + tên khớp + loại/size file, tạo thư mục lớp (lazy), mở resumable session Drive, trả `{ uploadUrl, storedFileName, uploadToken }`.
-4. Trình duyệt `PUT` file thẳng lên Drive (thanh tiến trình %).
-5. `POST /.netlify/functions/drive-complete-submission` với `uploadToken` + `driveFileId`.
-6. Function xác minh file trên Drive rồi ghi Firestore bằng Admin SDK.
+4. Trình duyệt `PUT` từng file thẳng lên Drive (thanh tiến trình %).
+5. `POST /.netlify/functions/drive-complete-submission` với `items: [{ uploadToken, driveFileId }, ...]` (body cũ 1 cặp token/id vẫn nhận).
+6. Function xác minh file trên Drive rồi ghi Firestore bằng Admin SDK — cả bộ cùng `attempt`, tất cả `isLatest: true`.
 7. Trang nộp HS gọi `drive-list-my-submissions` để hiện buổi đã nộp + giờ + tên file (không có link Drive).
 8. Giáo viên xem bài tại `/admin/reports` (đường dẫn cũ `/admin/submissions` chuyển tới đây) và mở file trên Drive (tài khoản giáo viên). Lớp sản phẩm cuối khóa: báo cáo tiến độ + file **cùng buổi**. Lớp giai đoạn học: chỉ file nộp. HS không tải lại file.
 
@@ -20,7 +20,7 @@ HungTranPM - Submissions/
   PVĐ-CSB02/
     NguyenVanAn/
       B03/
-        PVD-CSB02_NguyenVanAn_L03_20260912.zip
+        PVD-CSB02_NguyenVanAn_L03_20260912_bai-tap.zip
 ```
 
 ## Biến môi trường (Netlify / `netlify dev`)
@@ -259,8 +259,8 @@ Mở URL `netlify dev` in ra (thường `http://localhost:8888`) → `/c/{MÃ_L�
 
 ## Kiểm tra đã xong
 
-- [ ] Drive: `HungTranPM - Submissions/{mã lớp}/{tenHS}/{Lxx}/` có file tên dạng `PVD-CSB02_NguyenVanAn_L03_20260912.zip`
-- [ ] Firebase Console → Firestore → collection `submissions` có 1 document
+- [ ] Drive: `HungTranPM - Submissions/{mã lớp}/{tenHS}/{Lxx}/` có file tên dạng `PVD-CSB02_NguyenVanAn_L03_20260912_bai-tap.zip`
+- [ ] Firebase Console → Firestore → collection `submissions` có 1–3 document cho lần nộp (cùng `attempt`)
 - [ ] Form hiện “Đã nộp bài”
 
 Nếu fail, xem bảng Troubleshooting bên dưới.
@@ -281,7 +281,7 @@ Flag: `FEATURE_DRIVE_SUBMISSION_ENABLED` trong `src/config/features.js`.
 - `submissions`: metadata bài nộp. Client **không** create/update/delete; **chỉ admin đọc**. Function ghi bằng Admin SDK.
 - `submissionUploadSessions`: token một lần, TTL 60 phút. Client deny all.
 - Admin `/admin/reports` tải báo cáo + `submissions` theo `classCode`; lọc buổi / bản mới nhất / tên trên client. `/admin/submissions` redirect về đây.
-- Nộp lại cùng (lớp, HS, buổi): bản cũ `isLatest=false`, bản mới `isLatest=true`, `attempt` tăng.
+- Nộp lại cùng (lớp, HS, buổi): bản cũ `isLatest=false`; cả bộ file lần mới (tối đa 3) cùng `attempt`, `isLatest=true`.
 
 ## Bảo mật
 
@@ -307,7 +307,7 @@ Flag: `FEATURE_DRIVE_SUBMISSION_ENABLED` trong `src/config/features.js`.
 
 ## Ngoại lệ file quá nặng
 
-Trần form là **150MB** (file lên Drive trực tiếp, không đi qua Netlify). Vẫn **một file / lần nộp**.
+Trần form là **150MB / file** (file lên Drive trực tiếp, không đi qua Netlify). Mỗi lần nộp tối đa **3 file**, cùng một `attempt`.
 
 Nếu HS vẫn không nộp được:
 

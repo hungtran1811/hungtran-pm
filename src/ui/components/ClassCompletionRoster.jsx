@@ -12,7 +12,9 @@ import { ProjectLinksReadonly } from '../../pages/student/ProjectProductLinks.js
 import { copyToClipboard, formatProgressReport } from '../../utils/exportText.js';
 import { productLinksOf } from './StudentReportDetail.jsx';
 import { StudentReviewModal } from './StudentReviewModal.jsx';
+import { Badge } from './Badge.jsx';
 import { useToast } from './Toast.jsx';
+import { STAGE_TONES, STATUS_TONES } from '../../constants/index.js';
 
 function canCopyReport(item) {
   return Boolean(item?.hasReport && item.report && !item.report.snapshotOnly);
@@ -105,6 +107,8 @@ export function ClassCompletionRoster({
           const fresh = isFreshActivity(item);
           const links = productLinksOf(item.report, item.student);
           const showCopy = showReport && canCopyReport(item);
+          const stage = item.report?.stage || item.student.currentStage;
+          const status = item.report?.status || item.student.currentStatus;
 
           return (
             <li key={item.student.id}>
@@ -139,6 +143,12 @@ export function ClassCompletionRoster({
                     <p className="line-clamp-1 text-[11px] text-slate-500 dark:text-slate-400">
                       {item.student.projectTopic}
                     </p>
+                  ) : null}
+                  {stage || status ? (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {stage ? <Badge tone={STAGE_TONES[stage] || 'slate'}>{stage}</Badge> : null}
+                      {status ? <Badge tone={STATUS_TONES[status] || 'slate'}>{status}</Badge> : null}
+                    </div>
                   ) : null}
                   <p className="mt-1 text-xs font-medium text-slate-600 dark:text-slate-300">{label}</p>
                   <div className="mt-auto flex w-full flex-col gap-2 pt-3">

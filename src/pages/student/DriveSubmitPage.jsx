@@ -3,16 +3,18 @@ import { useOutletContext } from 'react-router-dom';
 import { Button } from '../../ui/components/Button.jsx';
 import { Field, Select } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
-import { listMyDriveSubmissions, submitDriveFile } from '../../services/driveSubmission.service.js';
+import { listMyDriveSubmissions, submitDriveFiles } from '../../services/driveSubmission.service.js';
 import { upsertStudentSubmissionNote } from '../../lib/submissionStudentNotes.js';
 import { lessonKeysEqual } from '../../lib/submissionFileName.js';
-import { validateSubmissionFile } from '../../lib/submissionValidate.js';
+import { validateSubmissionFiles } from '../../lib/submissionValidate.js';
+import { MAX_FILES_PER_SUBMIT } from '../../config/submissionConfig.js';
 import { buildLessonOptions, buildStudentLessonOptions, defaultLessonKey } from '../../lib/submissionLessons.js';
 import { FileDropzone } from './submission/FileDropzone.jsx';
 import { UploadProgress } from './submission/UploadProgress.jsx';
 import { SubmissionSuccess } from './submission/SubmissionSuccess.jsx';
 import { SelectedLessonNote, StudentSubmissionNotes } from './submission/StudentSubmissionNotes.jsx';
 import { classRequiresProgressAndProduct } from '../../lib/studentWorkspace.js';
+import { GUIDE_SECTIONS } from './ProjectSubmissionGuide.jsx';
 
 const BUSY_STATES = new Set(['validating', 'creating_session', 'uploading', 'saving']);
 
@@ -21,6 +23,7 @@ export function DriveSubmitPage({
   lessonKey: lessonKeyProp,
   onLessonKeyChange,
   hideLessonSelect = false,
+  onOpenGuide,
 } = {}) {
   const { classCode, classDoc, program, student } = useOutletContext();
   const toast = useToast();
@@ -33,7 +36,7 @@ export function DriveSubmitPage({
     if (lessonKeyProp === undefined) setInternalLessonKey(value);
     onLessonKeyChange?.(value);
   };
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
   const [fileError, setFileError] = useState('');
   const [status, setStatus] = useState('idle');
   const [progress, setProgress] = useState({ percent: 0, loaded: 0, total: 0 });
@@ -74,9 +77,10 @@ export function DriveSubmitPage({
   const selectedLesson = lessonOptions.find((item) => item.value === lessonKey);
   const classLabel = classDoc?.className || classCode;
   const requiresBoth = classRequiresProgressAndProduct(classDoc, program);
+  const totalBytes = files.reduce((sum, file) => sum + Number(file.size || 0), 0);
 
   const resetForm = () => {
-    setFile(null);
+    setFiles([]);
     setFileError('');
     setStatus('idle');
     setProgress({ percent: 0, loaded: 0, total: 0 });
@@ -85,18 +89,22 @@ export function DriveSubmitPage({
     loadNotes();
   };
 
-  const handleFileChange = (next) => {
-    setFile(next);
+  const handleFilesChange = (next, meta = {}) => {
+    setFiles(next);
     setError('');
-    if (!next) {
+    if (meta.overflow) {
+      setFileError(`Mỗi lần nộp tối đa ${MAX_FILES_PER_SUBMIT} file.`);
+      return;
+    }
+    if (meta.duplicate) {
+      setFileError('Không nộp hai file trùng tên.');
+      return;
+    }
+    if (!next.length) {
       setFileError('');
       return;
     }
-    const check = validateSubmissionFile({
-      fileName: next.name,
-      fileSize: next.size,
-      mimeType: next.type,
-    });
+    const check = validateSubmissionFiles(next);
     setFileError(check.ok ? '' : check.error);
   };
 
@@ -104,11 +112,7 @@ export function DriveSubmitPage({
     event.preventDefault();
     if (busy || uploadingRef.current || !lessonOptions.length || !lessonKey) return;
 
-    const check = validateSubmissionFile({
-      fileName: file?.name,
-      fileSize: file?.size,
-      mimeType: file?.type,
-    });
+    const check = validateSubmissionFiles(files);
     if (!check.ok) {
       setFileError(check.error);
       setStatus('error');
@@ -119,16 +123,16 @@ export function DriveSubmitPage({
     setFileError('');
     setError('');
     setStatus('validating');
-    setProgress({ percent: 0, loaded: 0, total: file.size });
+    setProgress({ percent: 0, loaded: 0, total: totalBytes });
     uploadingRef.current = true;
 
     try {
-      const submitted = await submitDriveFile({
+      const submitted = await submitDriveFiles({
         classCode,
         studentId: student.id,
         studentName: student.fullName,
         lessonKey,
-        file,
+        files,
         onStatus: setStatus,
         onProgress: (percent, loaded, total) => {
           setProgress({ percent, loaded, total });
@@ -136,15 +140,19 @@ export function DriveSubmitPage({
       });
       setResult(submitted);
       setStatus('success');
+      const originalFileNames =
+        submitted.files?.map((item) => item.originalFileName).filter(Boolean) ||
+        files.map((file) => file.name);
       setNotes((prev) =>
         upsertStudentSubmissionNote(prev, {
           lessonKey,
-          originalFileName: submitted.originalFileName || file.name,
+          originalFileName: submitted.originalFileName || originalFileNames[0],
+          originalFileNames,
           submittedAt: submitted.submittedAt,
           attempt: submitted.attempt,
         }),
       );
-      toast.success('Đã nộp bài.');
+      toast.success(originalFileNames.length > 1 ? `Đã nộp ${originalFileNames.length} file.` : 'Đã nộp bài.');
     } catch (err) {
       const message = err?.message || 'Không nộp được bài. Thử lại.';
       setError(message);
@@ -156,6 +164,9 @@ export function DriveSubmitPage({
   };
 
   if (status === 'success' && result) {
+    const storedFileNames =
+      result.files?.map((item) => item.storedFileName || item.originalFileName).filter(Boolean) ||
+      (result.storedFileName ? [result.storedFileName] : []);
     return (
       <div className={embedded ? '' : 'mx-auto max-w-lg'}>
         <SubmissionSuccess
@@ -163,6 +174,7 @@ export function DriveSubmitPage({
           classCode={classLabel}
           lessonLabel={selectedLesson?.label || lessonKey}
           storedFileName={result.storedFileName}
+          storedFileNames={storedFileNames}
           submittedAt={result.submittedAt}
           requiresReport={requiresBoth && !embedded}
           samePageReport={embedded && requiresBoth}
@@ -217,12 +229,25 @@ export function DriveSubmitPage({
         )}
         <SelectedLessonNote notes={notes} lessonKey={lessonKey} />
 
-        <Field label="File sản phẩm" required error={fileError}>
-          <FileDropzone
-            file={file}
-            disabled={busy}
-            onFileChange={handleFileChange}
-          />
+        <Field
+          label="File sản phẩm"
+          required
+          error={fileError}
+          hint={
+            onOpenGuide ? (
+              <button
+                type="button"
+                className="text-brand-600 underline-offset-2 hover:underline dark:text-brand-400"
+                onClick={() => onOpenGuide(GUIDE_SECTIONS.zip)}
+              >
+                Cách nén ZIP · Tên_dự_án - Lesson_
+              </button>
+            ) : (
+              `Tối đa ${MAX_FILES_PER_SUBMIT} file. Thư mục lớn: chuột phải → Compress to → ZIP file, đặt tên Tên_dự_án - Lesson_số buổi.`
+            )
+          }
+        >
+          <FileDropzone files={files} disabled={busy} onFilesChange={handleFilesChange} />
         </Field>
 
         {status === 'uploading' ? <UploadProgress percent={progress.percent} /> : null}
@@ -239,9 +264,9 @@ export function DriveSubmitPage({
             size="lg"
             className="min-h-12 flex-1"
             loading={busy}
-            disabled={!file || !lessonOptions.length}
+            disabled={!files.length || !lessonOptions.length}
           >
-            {status === 'error' ? 'Thử lại' : 'Nộp bài'}
+            {status === 'error' ? 'Thử lại' : files.length > 1 ? `Nộp ${files.length} file` : 'Nộp bài'}
           </Button>
         </div>
       </form>

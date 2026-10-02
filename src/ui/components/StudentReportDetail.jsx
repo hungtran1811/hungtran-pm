@@ -1,6 +1,6 @@
 import { Badge } from './Badge.jsx';
 import { StudentTextBlock } from './StudentTextBlock.jsx';
-import { STATUS_TONES } from '../../constants/index.js';
+import { STAGE_TONES, STATUS_TONES } from '../../constants/index.js';
 import { formatDateTime } from '../../lib/firestore.js';
 import { formatLessonKey } from '../../lib/submissionFileName.js';
 import { ProjectLinksReadonly } from '../../pages/student/ProjectProductLinks.jsx';
@@ -32,7 +32,7 @@ export function StudentReportDetail({ report, student, showLinks = true }) {
           </span>
         ) : null}
         {report.status ? <Badge tone={STATUS_TONES[report.status] || 'slate'}>{report.status}</Badge> : null}
-        {report.stage ? <Badge tone="slate">{report.stage}</Badge> : null}
+        {report.stage ? <Badge tone={STAGE_TONES[report.stage] || 'slate'}>{report.stage}</Badge> : null}
         {report.lessonKey ? <Badge tone="slate">{formatLessonKey(report.lessonKey)}</Badge> : null}
       </div>
       {projectName ? <StudentTextBlock label="Tên dự án">{projectName}</StudentTextBlock> : null}

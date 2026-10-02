@@ -19,6 +19,7 @@ describe('student submission notes', () => {
     expect(note).toEqual({
       lessonKey: 'B03',
       originalFileName: 'game.zip',
+      originalFileNames: ['game.zip'],
       submittedAt: '2026-09-12T11:42:14.034Z',
       attempt: 2,
     });
@@ -35,6 +36,16 @@ describe('student submission notes', () => {
       'L01:a.py',
       'L03:new.zip',
     ]);
+  });
+
+  it('keeps every latest file from the same attempt', () => {
+    const notes = toStudentSubmissionNotes([
+      { lessonKey: 'L05', originalFileName: 'index.html', isLatest: true, attempt: 2 },
+      { lessonKey: 'L05', originalFileName: 'app.py', isLatest: true, attempt: 2 },
+      { lessonKey: 'L05', originalFileName: 'old.zip', isLatest: false, attempt: 1 },
+    ]);
+    expect(notes).toHaveLength(1);
+    expect(notes[0].originalFileNames).toEqual(['index.html', 'app.py']);
   });
 
   it('upserts the selected lesson and finds it', () => {

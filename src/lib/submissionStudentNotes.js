@@ -18,17 +18,35 @@ function toIso(value) {
   return '';
 }
 
+function pushUniqueName(names, value) {
+  const name = String(value || '').trim();
+  if (name && !names.includes(name)) names.push(name);
+}
+
 /** Metadata HS được xem: không gồm driveFileId / folder / token. */
 export function sanitizeStudentSubmissionNote(row = {}) {
   const lessonKey = String(row.lessonKey || '').trim();
   if (!lessonKey) return null;
-  const originalFileName = String(row.originalFileName || row.storedFileName || '').trim();
+  const names = [];
+  if (Array.isArray(row.originalFileNames)) {
+    row.originalFileNames.forEach((name) => pushUniqueName(names, name));
+  }
+  pushUniqueName(names, row.originalFileName);
+  if (!names.length) pushUniqueName(names, row.storedFileName);
   return {
     lessonKey,
-    originalFileName,
+    originalFileName: names[0] || '',
+    originalFileNames: names,
     submittedAt: toIso(row.submittedAt),
     attempt: Number(row.attempt) || 1,
   };
+}
+
+export function noteFileNames(note = {}) {
+  if (Array.isArray(note.originalFileNames) && note.originalFileNames.length) {
+    return note.originalFileNames.filter(Boolean);
+  }
+  return note.originalFileName ? [note.originalFileName] : [];
 }
 
 export function sortStudentSubmissionNotes(notes = []) {
@@ -38,18 +56,31 @@ export function sortStudentSubmissionNotes(notes = []) {
 }
 
 export function toStudentSubmissionNotes(rows = []) {
-  const latest = new Map();
+  const grouped = new Map();
   for (const row of rows) {
     if (row?.isLatest === false) continue;
     const note = sanitizeStudentSubmissionNote(row);
     if (!note) continue;
     const key = normalizeLessonKey(note.lessonKey) || note.lessonKey;
-    const previous = latest.get(key);
-    if (!previous || (Number(row.attempt) || 0) >= previous.attempt) {
-      latest.set(key, { ...note, lessonKey: key });
+    const attempt = Number(row.attempt) || note.attempt || 1;
+    const current = grouped.get(key);
+    if (!current || attempt > current.attempt) {
+      grouped.set(key, {
+        ...note,
+        lessonKey: key,
+        attempt,
+      });
+      continue;
+    }
+    if (attempt === current.attempt) {
+      noteFileNames(note).forEach((name) => pushUniqueName(current.originalFileNames, name));
+      current.originalFileName = current.originalFileNames[0] || current.originalFileName;
+      if (note.submittedAt && (!current.submittedAt || note.submittedAt > current.submittedAt)) {
+        current.submittedAt = note.submittedAt;
+      }
     }
   }
-  return sortStudentSubmissionNotes([...latest.values()]);
+  return sortStudentSubmissionNotes([...grouped.values()]);
 }
 
 export function upsertStudentSubmissionNote(notes = [], next) {

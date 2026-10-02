@@ -17,9 +17,9 @@ export const PRODUCT_WATERFALL = {
       'Tìm 1 sản phẩm tương tự (game, app hoặc website) để hình dung kết quả.',
     ],
     doneTodayPlaceholder:
-      'Ví dụ: người dùng là học sinh; 4 tính năng: màn hình chính, nhân vật, tính điểm, lưu kết quả...',
+      'Ví dụ: sản phẩm dành cho học sinh lớp 6; vấn đề là quên nộp bài; 4 tính năng: trang chủ, nộp bài, xem trạng thái, nhắc hạn. Chưa làm giao diện.',
     nextGoalPlaceholder:
-      'Ví dụ: chốt danh sách tính năng rồi bắt đầu phác thảo giao diện và nhân vật...',
+      'Ví dụ: chốt danh sách tính năng buổi này, rồi phác 1 trang chủ trên giấy hoặc Canva.',
     tip: 'Chưa vẽ giao diện hay dựng sản phẩm nếu chưa nói rõ ai dùng, vấn đề gì và tính năng nào là bắt buộc.',
   },
   [STAGES[1]]: {
@@ -33,9 +33,9 @@ export const PRODUCT_WATERFALL = {
       'Chia việc nhỏ theo từng màn hình hoặc từng tính năng, đủ làm trong 1–2 buổi.',
     ],
     doneTodayPlaceholder:
-      'Ví dụ: vẽ menu, màn chơi và màn kết quả; chọn hình nhân vật + 3 vật phẩm; ghi luồng tính điểm...',
+      'Ví dụ: phác 3 màn hình (trang chủ, form nộp, trang kết quả); ghi luồng nộp bài; file Canva tên ...',
     nextGoalPlaceholder:
-      'Ví dụ: tạo dự án trên nền tảng lớp đang học và dựng khung giao diện theo bản phác...',
+      'Ví dụ: dựng khung 1 màn hình trang chủ trên công cụ lớp đang học, đủ để mở và xem bố cục.',
     tip: 'Thiết kế xong phải chỉ được: màn hình nào, nhân vật / ảnh nào, tính năng nào làm trước.',
   },
   [STAGES[2]]: {
@@ -49,9 +49,9 @@ export const PRODUCT_WATERFALL = {
       'Lưu phiên bản thường xuyên; ghi chỗ còn lỗi hoặc tính năng chưa làm.',
     ],
     doneTodayPlaceholder:
-      'Ví dụ: đã có menu và nhân vật di chuyển; nút Bắt đầu vào màn chơi được...',
+      'Ví dụ: trang chủ đã mở được; nút Nộp bài vào form; file/trang vừa sửa: index.html. Chưa làm xem trạng thái.',
     nextGoalPlaceholder:
-      'Ví dụ: làm tính năng tính điểm và chuyển sang màn kết quả...',
+      'Ví dụ: hoàn thành tính năng xem trạng thái nộp bài — tự kiểm tra bằng cách nhập 1 bài mẫu.',
     tip: 'Ưu tiên vài tính năng chạy được hơn làm nhiều thứ nhưng chưa mở được sản phẩm.',
   },
   [STAGES[3]]: {
@@ -65,9 +65,9 @@ export const PRODUCT_WATERFALL = {
       'Nhờ bạn cùng lớp thử 1 lần rồi sửa theo phản hồi.',
     ],
     doneTodayPlaceholder:
-      'Ví dụ: thử 6 tình huống; nhân vật xuyên tường khi bấm nhanh; đã chỉnh va chạm...',
+      'Ví dụ: thử mở sản phẩm, nộp bài trống, nộp lại; lỗi nút bị che trên điện thoại — đã chỉnh CSS. Còn lỗi chữ cắt.',
     nextGoalPlaceholder:
-      'Ví dụ: sửa nốt 2 lỗi giao diện và chuẩn bị file nộp + báo cáo...',
+      'Ví dụ: sửa nốt lỗi chữ cắt trên điện thoại rồi chuẩn bị file nộp buổi sau.',
     tip: 'Đừng chỉ chạy một lần thấy ổn. Hãy cố tình làm lệch để biết sản phẩm chịu được gì.',
   },
   [STAGES[4]]: {
@@ -81,9 +81,9 @@ export const PRODUCT_WATERFALL = {
       'Nộp file sản phẩm, gửi báo cáo, và ghi 1–2 ý muốn cải tiến sau.',
     ],
     doneTodayPlaceholder:
-      'Ví dụ: xóa sprite thừa, chỉnh nút cho đều; viết cách mở file; nộp bản cuối...',
+      'Ví dụ: đổi tên file cho dễ hiểu, xóa file thừa, viết 3 bước mở sản phẩm, nộp bản trên Drive.',
     nextGoalPlaceholder:
-      'Ví dụ: nộp sản phẩm và chuẩn bị demo 1–2 phút cho giáo viên...',
+      'Ví dụ: nộp bản cuối và chuẩn bị demo 1–2 phút: mở sản phẩm, chỉ 2 tính năng chính.',
     tip: 'Sản phẩm xong là người khác mở được, hiểu tính năng và thấy giao diện rõ — không chỉ máy bạn chạy được.',
   },
 };

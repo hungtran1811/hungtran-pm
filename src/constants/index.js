@@ -58,6 +58,16 @@ export const STATUS_TONES = {
   'Hoàn thành': 'green',
 };
 
+export const STAGE_TONES = {
+  'Phân tích vấn đề': 'violet',
+  'Thiết kế giải pháp': 'brand',
+  'Xây dựng sản phẩm': 'blue',
+  'Kiểm thử sản phẩm': 'amber',
+  'Bảo trì & cải tiến': 'green',
+};
+
+export const DEFAULT_DIFFICULTIES = 'Chưa có khó khăn gì';
+
 export const UNDERSTANDING_LEVELS = [
   { value: 1, label: '1 - Chưa hiểu' },
   { value: 2, label: '2 - Hiểu ít' },

@@ -14,6 +14,7 @@ import { StudentReportDetail, productLinksOf } from './StudentReportDetail.jsx';
 import { ProjectLinksReadonly } from '../../pages/student/ProjectProductLinks.jsx';
 import { copyToClipboard, formatProgressReport } from '../../utils/exportText.js';
 import { useToast } from './Toast.jsx';
+import { STAGE_TONES, STATUS_TONES } from '../../constants/index.js';
 
 function sortByTimeDesc(rows = [], getTime) {
   return [...rows].sort((left, right) => (getTime(right) || 0) - (getTime(left) || 0));
@@ -287,6 +288,16 @@ export function StudentReviewModal({
           </Badge>
           {item.showClass ? <Badge tone="slate">{item.student.classCode}</Badge> : null}
           {lessonKey ? <Badge tone="slate">{formatLessonKey(lessonKey)}</Badge> : null}
+          {(report?.stage || item.student.currentStage) ? (
+            <Badge tone={STAGE_TONES[report?.stage || item.student.currentStage] || 'slate'}>
+              {report?.stage || item.student.currentStage}
+            </Badge>
+          ) : null}
+          {(report?.status || item.student.currentStatus) ? (
+            <Badge tone={STATUS_TONES[report?.status || item.student.currentStatus] || 'slate'}>
+              {report?.status || item.student.currentStatus}
+            </Badge>
+          ) : null}
         </div>
 
         {showReport ? (

@@ -2,6 +2,7 @@ import {
   ALLOWED_EXTENSIONS,
   BLOCKED_EXTENSIONS,
   BLOCKED_MIME_TYPES,
+  MAX_FILES_PER_SUBMIT,
   MAX_UPLOAD_SIZE,
   MAX_UPLOAD_SIZE_MB,
 } from '../config/submissionConfig.js';
@@ -52,6 +53,73 @@ export function validateSubmissionFile({ fileName, fileSize, mimeType } = {}) {
   }
 
   return { ok: true, extension };
+}
+
+function fileDisplayName(file = {}) {
+  return String(file.name || file.fileName || '').trim();
+}
+
+export function validateSubmissionFiles(files = []) {
+  const list = Array.isArray(files) ? files.filter(Boolean) : [];
+  if (!list.length) {
+    return { ok: false, error: 'Chưa chọn file.' };
+  }
+  if (list.length > MAX_FILES_PER_SUBMIT) {
+    return { ok: false, error: `Mỗi lần nộp tối đa ${MAX_FILES_PER_SUBMIT} file.` };
+  }
+
+  const names = new Set();
+  const validated = [];
+  for (const file of list) {
+    const fileName = fileDisplayName(file);
+    const check = validateSubmissionFile({
+      fileName,
+      fileSize: file.size ?? file.fileSize,
+      mimeType: file.type ?? file.mimeType,
+    });
+    if (!check.ok) return check;
+    const key = fileName.toLowerCase();
+    if (names.has(key)) {
+      return { ok: false, error: 'Không nộp hai file trùng tên.' };
+    }
+    names.add(key);
+    validated.push({ fileName, extension: check.extension });
+  }
+
+  return { ok: true, files: validated };
+}
+
+export function normalizeCompleteSubmissionItems(body = {}, maxFiles = MAX_FILES_PER_SUBMIT) {
+  const raw = Array.isArray(body.items)
+    ? body.items
+    : body.uploadToken || body.driveFileId
+      ? [{ uploadToken: body.uploadToken, driveFileId: body.driveFileId }]
+      : [];
+
+  const items = [];
+  const tokens = new Set();
+  const driveIds = new Set();
+  for (const row of raw) {
+    const uploadToken = String(row?.uploadToken || '').trim();
+    const driveFileId = String(row?.driveFileId || '').trim();
+    if (!uploadToken || !driveFileId) {
+      return { ok: false, error: 'Thiếu thông tin hoàn tất nộp bài.' };
+    }
+    if (tokens.has(uploadToken) || driveIds.has(driveFileId)) {
+      return { ok: false, error: 'Danh sách file nộp bị trùng.' };
+    }
+    tokens.add(uploadToken);
+    driveIds.add(driveFileId);
+    items.push({ uploadToken, driveFileId });
+  }
+
+  if (!items.length) {
+    return { ok: false, error: 'Thiếu thông tin hoàn tất nộp bài.' };
+  }
+  if (items.length > maxFiles) {
+    return { ok: false, error: `Mỗi lần nộp tối đa ${maxFiles} file.` };
+  }
+  return { ok: true, items };
 }
 
 export function validateStudentIdentityInput(body = {}) {

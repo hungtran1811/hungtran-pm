@@ -66,6 +66,21 @@ export function buildSubmissionDrivePath({ classCode, studentName, lessonKey } =
   };
 }
 
+export function sanitizeOriginalFileStem(originalFileName) {
+  const raw = String(originalFileName || '').trim();
+  const lastDot = raw.lastIndexOf('.');
+  const stem = lastDot > 0 ? raw.slice(0, lastDot) : '';
+  const cleaned = stem
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .replace(/[^A-Za-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+  return cleaned || 'file';
+}
+
 export function buildStoredFileName({
   classCode,
   studentName,
@@ -77,5 +92,6 @@ export function buildStoredFileName({
   const cls = sanitizeClassCodeForFile(classCode);
   const name = normalizeStudentName(studentName) || 'HocSinh';
   const lesson = normalizeLessonKey(lessonKey) || 'L00';
-  return `${cls}_${name}_${lesson}_${formatDateStamp(date)}${ext}`;
+  const stem = sanitizeOriginalFileStem(originalFileName);
+  return `${cls}_${name}_${lesson}_${formatDateStamp(date)}_${stem}${ext}`;
 }

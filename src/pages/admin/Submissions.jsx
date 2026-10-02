@@ -186,7 +186,7 @@ export function SubmissionsPage() {
               <>
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <Badge tone="brand">{studentCount} HS đã nộp</Badge>
-                  <Badge tone="slate">{latestCount} bài mới nhất</Badge>
+                  <Badge tone="slate">{latestCount} file lần nộp mới</Badge>
                   <Badge tone="slate">{rows.length} lần nộp</Badge>
                   {classFolderUrl ? (
                     <a
@@ -226,7 +226,7 @@ export function SubmissionsPage() {
                       checked={latestOnly}
                       onChange={(event) => setLatestOnly(event.target.checked)}
                     />
-                    Chỉ bản mới nhất
+                    Chỉ lần nộp mới
                   </label>
                 </div>
 

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { History } from 'lucide-react';
+import { ChevronDown, History } from 'lucide-react';
 import { Badge } from '../../ui/components/Badge.jsx';
 import { EmptyState } from '../../ui/components/EmptyState.jsx';
 import { Spinner } from '../../ui/components/Spinner.jsx';
-import { STATUS_TONES } from '../../constants/index.js';
+import { STAGE_TONES, STATUS_TONES } from '../../constants/index.js';
 import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
 import { formatLessonKey } from '../../lib/submissionFileName.js';
 import {
@@ -31,7 +31,7 @@ function ReportHistoryCard({ report }) {
             </span>
             <Badge tone={STATUS_TONES[report.status] || 'slate'}>{report.status}</Badge>
             {report.lessonKey && <Badge tone="slate">{formatLessonKey(report.lessonKey)}</Badge>}
-            {report.stage && <Badge tone="slate">{report.stage}</Badge>}
+            {report.stage && <Badge tone={STAGE_TONES[report.stage] || 'slate'}>{report.stage}</Badge>}
           </div>
           <p className="mt-1 text-xs text-slate-500">
             {report.submittedAt ? formatDateTime(report.submittedAt) : '—'}
@@ -53,6 +53,16 @@ function ReportHistoryCard({ report }) {
           />
         </div>
       )}
+    </div>
+  );
+}
+
+function ReportList({ reports }) {
+  return (
+    <div className="space-y-2">
+      {reports.map((report) => (
+        <ReportHistoryCard key={report.id} report={report} />
+      ))}
     </div>
   );
 }
@@ -126,12 +136,39 @@ export function ProgressReportHistory({ studentId, latestReportId = null, embedd
     };
   }, [studentId, latestReportId]);
 
+  if (embedded) {
+    const summaryLabel = loading
+      ? 'Đang tải lịch sử…'
+      : reports.length
+        ? `Đã gửi ${reports.length} báo cáo`
+        : 'Chưa có báo cáo đã gửi';
+
+    return (
+      <details className="group rounded-xl border border-slate-200 bg-slate-50/70 dark:border-slate-700 dark:bg-slate-800/40">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-4 py-2.5 text-sm font-medium text-slate-700 marker:content-none dark:text-slate-200 [&::-webkit-details-marker]:hidden">
+          <History className="h-4 w-4 shrink-0 text-slate-500" />
+          <span className="min-w-0 flex-1">{summaryLabel}</span>
+          <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 motion-safe:transition group-open:rotate-180" />
+        </summary>
+        <div className="space-y-2 border-t border-slate-200 px-4 py-3 dark:border-slate-700">
+          {loading ? (
+            <div className="flex justify-center py-3">
+              <Spinner />
+            </div>
+          ) : error && !reports.length ? (
+            <p className="text-sm text-amber-800 dark:text-amber-200">{error}</p>
+          ) : reports.length ? (
+            <ReportList reports={reports} />
+          ) : (
+            <p className="text-sm text-slate-500">Gửi báo cáo ở bước 1 để xem lại tại đây.</p>
+          )}
+        </div>
+      </details>
+    );
+  }
+
   if (loading) {
-    return embedded ? (
-      <div className="flex justify-center py-10">
-        <Spinner />
-      </div>
-    ) : (
+    return (
       <div className="card flex justify-center p-6">
         <Spinner />
       </div>
@@ -158,25 +195,15 @@ export function ProgressReportHistory({ studentId, latestReportId = null, embedd
     );
   }
 
-  const list = (
-    <>
+  return (
+    <div className="card space-y-3 p-5">
       <div className="flex items-center gap-2">
         <History className="h-5 w-5 text-slate-500" />
         <h3 className="font-semibold text-slate-800 dark:text-slate-100">
           Lịch sử báo cáo ({reports.length})
         </h3>
       </div>
-      <div className="space-y-2">
-        {reports.map((report) => (
-          <ReportHistoryCard key={report.id} report={report} />
-        ))}
-      </div>
-    </>
+      <ReportList reports={reports} />
+    </div>
   );
-
-  if (embedded) {
-    return <div className="space-y-3">{list}</div>;
-  }
-
-  return <div className="card space-y-3 p-5">{list}</div>;
 }

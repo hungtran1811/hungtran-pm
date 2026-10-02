@@ -3,14 +3,15 @@ import { CheckCircle2 } from 'lucide-react';
 import { Button } from '../../ui/components/Button.jsx';
 import { Badge } from '../../ui/components/Badge.jsx';
 import { Field, Textarea, Select } from '../../ui/components/Field.jsx';
+import { ToneSelect } from '../../ui/components/ToneSelect.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
-import { STAGES, STATUSES, STATUS_TONES } from '../../constants/index.js';
+import { STAGES, STAGE_TONES, STATUSES, STATUS_TONES } from '../../constants/index.js';
 import { listReportsByStudent, submitProgressReport } from '../../services/reports.service.js';
 import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
+import { reportTextError, resolveDifficulties } from '../../lib/progressReports.js';
 import { buildStudentLessonOptions, defaultLessonKey } from '../../lib/submissionLessons.js';
 import { lessonKeysEqual } from '../../lib/submissionFileName.js';
 import { isProjectNameApproved, projectNameAwaitingReview } from '../../lib/classFinalMode.js';
-import { getWaterfallStage } from '../../data/productWaterfall.js';
 import { ProgressReportHistory } from './ProgressReportHistory.jsx';
 import { ProjectLinksReadonly } from './ProjectProductLinks.jsx';
 import { ProjectExtrasPanel } from './ProjectExtrasPanel.jsx';
@@ -21,7 +22,6 @@ export function ProgressReportView({
   student,
   onUpdateStudent,
   onOpenGuide,
-  onOpenProcess,
   stagePrefill = null,
   onStagePrefillConsumed,
   embedded = false,
@@ -32,6 +32,7 @@ export function ProgressReportView({
   hideExtras = false,
   links: linksProp,
   onChangeLink,
+  onContinueAfterSubmit,
 }) {
   const toast = useToast();
   const lessonOptions = useMemo(() => buildStudentLessonOptions(classDoc, program), [classDoc, program]);
@@ -92,7 +93,6 @@ export function ProgressReportView({
     onStagePrefillConsumed?.();
   }, [stagePrefill, onStagePrefillConsumed]);
 
-  const stageGuide = getWaterfallStage(form.stage);
   useEffect(() => {
     if (!lessonKeyProp) return;
     setForm((prev) => (prev.lessonKey === lessonKeyProp ? prev : { ...prev, lessonKey: lessonKeyProp }));
@@ -116,10 +116,13 @@ export function ProgressReportView({
     if (!form.lessonKey || !lessonOptions.some((option) => option.value === form.lessonKey)) {
       return 'Hãy chọn buổi giáo viên đã mở cho lớp.';
     }
-    if (form.doneToday.trim().length < 10) return 'Phần "đã làm được" cần ít nhất 10 ký tự.';
-    if (form.nextGoal.trim().length < 10) return 'Phần "mục tiêu tiếp theo" cần ít nhất 10 ký tự.';
-    if (form.status === 'Cần hỗ trợ' && form.difficulties.trim().length < 15) {
-      return 'Khi chọn "Cần hỗ trợ", hãy mô tả khó khăn ít nhất 15 ký tự.';
+    const doneError = reportTextError('đã làm được', form.doneToday);
+    if (doneError) return doneError;
+    const goalError = reportTextError('mục tiêu buổi sau', form.nextGoal);
+    if (goalError) return goalError;
+    if (form.status === 'Cần hỗ trợ') {
+      const hardshipError = reportTextError('khó khăn', form.difficulties);
+      if (hardshipError) return hardshipError;
     }
     if (form.status === 'Hoàn thành' && Number(form.progressPercent) !== 100) {
       return 'Khi chọn "Hoàn thành", tiến độ phải là 100%.';
@@ -159,7 +162,7 @@ export function ProgressReportView({
         currentStage: form.stage,
         currentStatus: form.status,
         currentProgressPercent: Number(form.progressPercent),
-        currentDifficulties: form.difficulties.trim(),
+        currentDifficulties: resolveDifficulties(form.status, form.difficulties),
         projectGithubUrl: links.githubUrl.trim(),
         projectCanvaUrl: links.canvaUrl.trim(),
         projectSlidesUrl: (links.slidesUrl || '').trim(),
@@ -174,48 +177,72 @@ export function ProgressReportView({
     }
   };
 
-  const pct = student.currentProgressPercent || 0;
+  const pct = Number(form.progressPercent) || 0;
   const canReport = isProjectNameApproved(student);
   const formShellClass = embedded
     ? 'space-y-4'
     : 'card space-y-4 p-5';
 
+  const slimChrome = embedded && hideLessonSelect;
   const reportForm = (
     <form onSubmit={handleSubmit} className={formShellClass}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">Báo cáo tiến độ</h3>
-            {justSubmitted && (
-              <span className="inline-flex items-center gap-1 text-sm font-medium text-green-600 dark:text-green-400">
-                <CheckCircle2 className="h-4 w-4" />
-                Đã gửi
-              </span>
-            )}
-          </div>
-          <p className="mt-1 text-sm text-slate-500">
-            {selectedLesson?.label || form.lessonKey} · {student.currentStage || '—'} ·{' '}
-            {student.lastReportedAt ? formatDateTime(student.lastReportedAt) : 'Chưa báo cáo'}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-2xl font-bold tabular-nums text-brand-600 dark:text-brand-400">{pct}%</span>
-          <Badge tone={STATUS_TONES[student.currentStatus] || 'slate'}>{student.currentStatus}</Badge>
+          {slimChrome ? (
+            <div>
+              {justSubmitted ? (
+                <p className="inline-flex items-center gap-1 text-sm font-medium text-green-600 dark:text-green-400">
+                  <CheckCircle2 className="h-4 w-4 student-success-pop" />
+                  Đã gửi
+                </p>
+              ) : null}
+              <div className={`flex flex-wrap items-center gap-1.5 text-sm text-slate-500 ${justSubmitted ? 'mt-1' : ''}`}>
+                {form.stage ? (
+                  <Badge tone={STAGE_TONES[form.stage] || 'slate'}>{form.stage}</Badge>
+                ) : (
+                  <span>—</span>
+                )}
+                {form.status ? (
+                  <Badge tone={STATUS_TONES[form.status] || 'slate'}>{form.status}</Badge>
+                ) : null}
+                <span>{student.lastReportedAt ? formatDateTime(student.lastReportedAt) : 'Chưa báo cáo'}</span>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">Báo cáo tiến độ</h3>
+                {justSubmitted && (
+                  <span className="inline-flex items-center gap-1 text-sm font-medium text-green-600 dark:text-green-400">
+                    <CheckCircle2 className="h-4 w-4 student-success-pop" />
+                    Đã gửi
+                  </span>
+                )}
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-sm text-slate-500">
+                <span>{selectedLesson?.label || form.lessonKey}</span>
+                {form.stage ? (
+                  <Badge tone={STAGE_TONES[form.stage] || 'slate'}>{form.stage}</Badge>
+                ) : (
+                  <span>—</span>
+                )}
+                {form.status ? (
+                  <Badge tone={STATUS_TONES[form.status] || 'slate'}>{form.status}</Badge>
+                ) : null}
+                <span>{student.lastReportedAt ? formatDateTime(student.lastReportedAt) : 'Chưa báo cáo'}</span>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
-      <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-        <div
-          className="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-400 transition-all"
-          style={{ width: `${pct}%` }}
+      {hideExtras ? null : (
+        <ProjectLinksReadonly
+          githubUrl={student.projectGithubUrl}
+          canvaUrl={student.projectCanvaUrl}
+          slidesUrl={student.projectSlidesUrl}
         />
-      </div>
-
-      <ProjectLinksReadonly
-        githubUrl={student.projectGithubUrl}
-        canvaUrl={student.projectCanvaUrl}
-        slidesUrl={student.projectSlidesUrl}
-      />
+      )}
 
       {hideLessonSelect ? (
         lessonOptions.length ? null : (
@@ -239,24 +266,30 @@ export function ProgressReportView({
           Giáo viên chưa đặt buổi hiện tại cho lớp. Chưa gửi được báo cáo.
         </p>
       )}
+      <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-400 transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
       <div className="grid gap-3 sm:grid-cols-3">
         <Field label="Giai đoạn">
-          <Select value={form.stage} onChange={(e) => update('stage', e.target.value)}>
-            {STAGES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </Select>
+          <ToneSelect
+            label="Giai đoạn"
+            value={form.stage}
+            options={STAGES}
+            tones={STAGE_TONES}
+            onChange={(value) => update('stage', value)}
+          />
         </Field>
         <Field label="Trạng thái">
-          <Select value={form.status} onChange={(e) => update('status', e.target.value)}>
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </Select>
+          <ToneSelect
+            label="Trạng thái"
+            value={form.status}
+            options={STATUSES}
+            tones={STATUS_TONES}
+            onChange={(value) => update('status', value)}
+          />
         </Field>
         <Field label={`Tiến độ ${form.progressPercent}%`}>
           <input
@@ -266,16 +299,17 @@ export function ProgressReportView({
             value={form.progressPercent}
             onChange={(e) => update('progressPercent', Number(e.target.value))}
             className="mt-2 w-full accent-brand-600"
+            aria-label="Tiến độ sản phẩm"
           />
         </Field>
       </div>
 
-      <Field label="Đã làm được gì?" required hint="Xuống dòng hoặc gạch đầu dòng (- ) để giáo viên đọc dễ hơn.">
+      <Field label="Đã làm được gì?" required>
         <Textarea
           rows={6}
           value={form.doneToday}
           onChange={(e) => update('doneToday', e.target.value)}
-          placeholder={stageGuide.doneTodayPlaceholder}
+          placeholder="Viết mỗi ý là một gạch đầu dòng (ít nhất 3 gạch đầu dòng)"
           className="min-h-36"
         />
       </Field>
@@ -285,20 +319,20 @@ export function ProgressReportView({
           rows={5}
           value={form.nextGoal}
           onChange={(e) => update('nextGoal', e.target.value)}
-          placeholder={stageGuide.nextGoalPlaceholder}
+          placeholder="Viết mỗi ý là một gạch đầu dòng (ít nhất 3 gạch đầu dòng)"
           className="min-h-28"
         />
       </Field>
 
       <Field label="Khó khăn (tuỳ chọn)">
         <Textarea
-          rows={3}
+          rows={4}
           value={form.difficulties}
           onChange={(e) => update('difficulties', e.target.value)}
           placeholder={
             form.status === 'Cần hỗ trợ'
-              ? 'Mô tả khó khăn (ít nhất 15 ký tự)...'
-              : 'Ghi khó khăn nếu có...'
+              ? 'Viết mỗi ý là một gạch đầu dòng (ít nhất 3 gạch đầu dòng)'
+              : 'Để trống nếu chưa vướng. Nếu có, viết mỗi ý một gạch đầu dòng.'
           }
         />
       </Field>
@@ -313,6 +347,15 @@ export function ProgressReportView({
         >
           Gửi báo cáo
         </Button>
+        {justSubmitted && onContinueAfterSubmit ? (
+          <button
+            type="button"
+            onClick={onContinueAfterSubmit}
+            className="mt-2 w-full min-h-11 text-sm font-medium text-brand-600 hover:underline dark:text-brand-300"
+          >
+            Tiếp: nộp file →
+          </button>
+        ) : null}
       </div>
     </form>
   );
@@ -324,14 +367,16 @@ export function ProgressReportView({
         Tên dự án <em>{projectNameAwaitingReview(student)}</em> đang chờ giáo viên duyệt. Sau khi được duyệt, bạn
         có thể gửi báo cáo tiến độ sản phẩm.
       </p>
-      {onOpenProcess && (
+      {onOpenGuide ? (
         <button
           type="button"
-          onClick={onOpenProcess}
+          onClick={() => onOpenGuide()}
           className="mt-3 text-sm font-medium text-brand-600 hover:underline dark:text-brand-300"
         >
-          Trong lúc chờ, đọc Quy trình làm sản phẩm →
+          Trong lúc chờ, đọc Hướng dẫn nộp sản phẩm →
         </button>
+      ) : (
+        <p className="mt-3 text-sm text-slate-500">Đợi giáo viên duyệt tên rồi hãy gửi báo cáo.</p>
       )}
     </div>
   ) : (

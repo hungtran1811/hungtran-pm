@@ -3,6 +3,7 @@
 /** Trần form: đủ cho zip/project nặng (~100MB). File lớn hơn → nén hoặc nhận ngoài form. */
 export const MAX_UPLOAD_SIZE_MB = 150;
 export const MAX_UPLOAD_SIZE = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
+export const MAX_FILES_PER_SUBMIT = 3;
 
 export const ALLOWED_EXTENSIONS = ['.zip', '.yyz', '.py', '.html', '.css', '.js', '.pdf', '.txt'];
 
