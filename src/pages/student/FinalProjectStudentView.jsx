@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import { CircleHelp, ClipboardList, Upload } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { CircleHelp, ClipboardList } from 'lucide-react';
 import { ProgressReportView } from './ProgressReportView.jsx';
 import { ProgressReportHistory } from './ProgressReportHistory.jsx';
 import { GUIDE_SECTIONS, ProjectSubmissionGuide } from './ProjectSubmissionGuide.jsx';
 import { DriveSubmitPage } from './DriveSubmitPage.jsx';
-import { ProjectExtrasPanel } from './ProjectExtrasPanel.jsx';
+import { ProjectProductLinks } from './ProjectProductLinks.jsx';
 import { Badge } from '../../ui/components/Badge.jsx';
 import { Field, Select } from '../../ui/components/Field.jsx';
 import { ProjectSummaryDisclosure } from '../../ui/components/ProjectSummaryDisclosure.jsx';
@@ -19,8 +19,8 @@ const FINAL_PROJECT_TABS = [
 ];
 
 export function FinalProjectStudentView({ classDoc, program, student, onUpdateStudent }) {
+  const submitPanelRef = useRef(null);
   const [activeTab, setActiveTab] = useState('work');
-  const [workStep, setWorkStep] = useState('report');
   const [guideSection, setGuideSection] = useState(GUIDE_SECTIONS.overview);
   const lessonOptions = useMemo(() => buildStudentLessonOptions(classDoc, program), [classDoc, program]);
   const [workspaceLessonKey, setWorkspaceLessonKey] = useState(() => defaultLessonKey(classDoc, program));
@@ -28,6 +28,7 @@ export function FinalProjectStudentView({ classDoc, program, student, onUpdateSt
     githubUrl: student?.projectGithubUrl || '',
     canvaUrl: student?.projectCanvaUrl || '',
     slidesUrl: student?.projectSlidesUrl || '',
+    otherUrl: student?.projectOtherUrl || '',
   });
 
   useEffect(() => {
@@ -35,8 +36,9 @@ export function FinalProjectStudentView({ classDoc, program, student, onUpdateSt
       githubUrl: student?.projectGithubUrl || '',
       canvaUrl: student?.projectCanvaUrl || '',
       slidesUrl: student?.projectSlidesUrl || '',
+      otherUrl: student?.projectOtherUrl || '',
     });
-  }, [student?.id, student?.projectGithubUrl, student?.projectCanvaUrl, student?.projectSlidesUrl]);
+  }, [student?.id, student?.projectGithubUrl, student?.projectCanvaUrl, student?.projectSlidesUrl, student?.projectOtherUrl]);
 
   useEffect(() => {
     setWorkspaceLessonKey((prev) => {
@@ -51,11 +53,14 @@ export function FinalProjectStudentView({ classDoc, program, student, onUpdateSt
       : STAGES[0];
   const nameApproved = isProjectNameApproved(student);
   const progressPercent = Number(student?.currentProgressPercent) || 0;
-  const submitStepLabel = FEATURE_DRIVE_SUBMISSION_ENABLED ? 'Nộp file' : 'Liên kết';
 
   const openGuide = (section = GUIDE_SECTIONS.overview) => {
     setGuideSection(section);
     setActiveTab('guide');
+  };
+
+  const scrollToSubmit = () => {
+    submitPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   return (
@@ -130,77 +135,64 @@ export function FinalProjectStudentView({ classDoc, program, student, onUpdateSt
                 </p>
               )}
 
-              <div
-                className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800/80"
-                role="tablist"
-                aria-label="Việc cần làm"
-              >
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={workStep === 'report'}
-                  onClick={() => setWorkStep('report')}
-                  className={`flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-2 text-sm font-medium motion-safe:transition ${
-                    workStep === 'report'
-                      ? 'bg-white text-brand-700 shadow-sm motion-safe:-translate-y-px dark:bg-slate-900 dark:text-brand-300'
-                      : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                  }`}
-                >
-                  <ClipboardList className="h-4 w-4 shrink-0" />
-                  <span className="truncate">1. Viết báo cáo</span>
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={workStep === 'submit'}
-                  onClick={() => setWorkStep('submit')}
-                  className={`flex min-h-11 items-center justify-center gap-1.5 rounded-lg px-2 text-sm font-medium motion-safe:transition ${
-                    workStep === 'submit'
-                      ? 'bg-white text-brand-700 shadow-sm motion-safe:-translate-y-px dark:bg-slate-900 dark:text-brand-300'
-                      : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                  }`}
-                >
-                  <Upload className="h-4 w-4 shrink-0" />
-                  <span className="truncate">2. {submitStepLabel}</span>
-                </button>
-              </div>
-
-              <div className={workStep === 'report' ? 'student-panel-in' : 'hidden'}>
-                <ProgressReportView
-                  classDoc={classDoc}
-                  program={program}
-                  student={student}
-                  onUpdateStudent={onUpdateStudent}
-                  onOpenGuide={openGuide}
-                  embedded
-                  hideLessonSelect
-                  hideHistory
-                  hideExtras
-                  lessonKey={workspaceLessonKey}
-                  onLessonKeyChange={setWorkspaceLessonKey}
-                  links={links}
-                  onChangeLink={(key, value) => setLinks((prev) => ({ ...prev, [key]: value }))}
-                  onContinueAfterSubmit={() => setWorkStep('submit')}
-                />
-              </div>
-
-              <div className={workStep === 'submit' ? 'student-panel-in space-y-5' : 'hidden'}>
-                {FEATURE_DRIVE_SUBMISSION_ENABLED ? (
-                  <DriveSubmitPage
+              <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
+                <section className="min-w-0">
+                  <h3 className="mb-3 text-base font-semibold text-slate-800 dark:text-slate-100">
+                    Viết báo cáo
+                  </h3>
+                  <ProgressReportView
+                    classDoc={classDoc}
+                    program={program}
+                    student={student}
+                    onUpdateStudent={onUpdateStudent}
+                    onOpenGuide={openGuide}
                     embedded
                     hideLessonSelect
+                    hideHistory
+                    hideExtras
+                    unstickFooter
                     lessonKey={workspaceLessonKey}
                     onLessonKeyChange={setWorkspaceLessonKey}
-                    onOpenGuide={openGuide}
+                    links={links}
+                    onChangeLink={(key, value) => setLinks((prev) => ({ ...prev, [key]: value }))}
+                    onContinueAfterSubmit={scrollToSubmit}
                   />
-                ) : null}
-                <ProjectExtrasPanel
-                  classDoc={classDoc}
-                  student={student}
-                  links={links}
-                  onChangeLink={(key, value) => setLinks((prev) => ({ ...prev, [key]: value }))}
-                  onOpenGuide={openGuide}
-                />
+                </section>
+
+                <section
+                  ref={submitPanelRef}
+                  id="student-submit-panel"
+                  className="min-w-0 space-y-5"
+                >
+                  <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">
+                    {FEATURE_DRIVE_SUBMISSION_ENABLED ? 'Nộp file & liên kết' : 'Liên kết sản phẩm'}
+                  </h3>
+                  {FEATURE_DRIVE_SUBMISSION_ENABLED ? (
+                    <DriveSubmitPage
+                      embedded
+                      hideLessonSelect
+                      lessonKey={workspaceLessonKey}
+                      onLessonKeyChange={setWorkspaceLessonKey}
+                      onOpenGuide={openGuide}
+                    />
+                  ) : null}
+                  <div className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+                    <div className="border-b border-slate-200 bg-slate-50 px-4 py-2.5 dark:border-slate-700 dark:bg-slate-800/50">
+                      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                        Liên kết sản phẩm
+                      </p>
+                    </div>
+                    <div className="px-4 py-4">
+                      <ProjectProductLinks
+                        student={student}
+                        links={links}
+                        onChange={(key, value) => setLinks((prev) => ({ ...prev, [key]: value }))}
+                        onOpenGuide={openGuide}
+                        compact
+                      />
+                    </div>
+                  </div>
+                </section>
               </div>
 
               <ProgressReportHistory

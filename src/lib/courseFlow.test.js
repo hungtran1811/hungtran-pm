@@ -102,6 +102,7 @@ describe('projectLinks', () => {
       githubUrl: 'https://github.com/me/app',
       canvaUrl: 'https://canva.com/design/abc',
       slidesUrl: 'https://docs.google.com/presentation/d/xyz/edit',
+      otherUrl: '',
     });
   });
 
@@ -130,5 +131,23 @@ describe('projectLinks', () => {
       validateProjectLinks({ githubUrl: '', canvaUrl: '', slidesUrl: 'drive.google.com/file/d/1' })
         .error,
     ).toMatch(/Google Slides/);
+  });
+
+  it('accepts any https link in the extra field and stores http as https', () => {
+    expect(
+      validateProjectLinks({
+        githubUrl: '',
+        canvaUrl: '',
+        slidesUrl: '',
+        otherUrl: '',
+      }),
+    ).toMatchObject({ otherUrl: '' });
+    expect(
+      validateProjectLinks({ otherUrl: 'example.com/app' }),
+    ).toMatchObject({ otherUrl: 'https://example.com/app' });
+    expect(
+      validateProjectLinks({ otherUrl: 'http://docs.example.com/notes' }),
+    ).toMatchObject({ otherUrl: 'https://docs.example.com/notes' });
+    expect(validateProjectLinks({ otherUrl: 'không phải link' }).error).toMatch(/Link khác/);
   });
 });

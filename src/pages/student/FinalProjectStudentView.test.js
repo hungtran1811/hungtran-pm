@@ -9,8 +9,9 @@ vi.mock('./ProgressReportView.jsx', () => ({
 vi.mock('./DriveSubmitPage.jsx', () => ({
   DriveSubmitPage: () => createElement('div', { 'data-submit': 'form' }, 'Form nộp file'),
 }));
-vi.mock('./ProjectExtrasPanel.jsx', () => ({
-  ProjectExtrasPanel: () => createElement('div', { 'data-extras': 'panel' }, 'Liên kết'),
+vi.mock('./ProjectProductLinks.jsx', () => ({
+  ProjectProductLinks: () => createElement('div', { 'data-links': 'form' }, 'Liên kết'),
+  ProjectLinksReadonly: () => null,
 }));
 vi.mock('./ProgressReportHistory.jsx', () => ({
   ProgressReportHistory: () =>
@@ -64,25 +65,23 @@ async function renderView() {
 }
 
 describe('FinalProjectStudentView work tab', () => {
-  it('shows the lesson once and starts on the report step', async () => {
+  it('shows the lesson once and keeps report, submit, and links visible together', async () => {
     await renderView();
     const lessonMentions = container.textContent.match(/Buổi 13/g) || [];
     expect(lessonMentions).toHaveLength(1);
     expect(container.querySelector('[data-report="form"]')).not.toBeNull();
-    expect(container.querySelector('[data-submit="form"]')?.closest('.hidden')).not.toBeNull();
+    expect(container.querySelector('[data-submit="form"]')).not.toBeNull();
+    expect(container.querySelector('[data-submit="form"]')?.closest('.hidden')).toBeNull();
+    expect(container.querySelector('[data-links="form"]')).not.toBeNull();
+    expect(container.textContent).toContain('Viết báo cáo');
+    expect(container.textContent).toContain('Nộp file & liên kết');
   });
 
-  it('switches to the file step without remounting the report form', async () => {
+  it('does not hide submit behind a Nộp file tab', async () => {
     await renderView();
-    const submitTab = [...container.querySelectorAll('[role="tab"]')].find((el) =>
-      el.textContent.includes('Nộp file'),
-    );
-    await act(async () => {
-      submitTab.click();
-    });
-    expect(container.querySelector('[data-report="form"]')?.closest('.hidden')).not.toBeNull();
-    expect(container.querySelector('[data-submit="form"]')?.closest('.hidden')).toBeNull();
-    expect(container.textContent.match(/Buổi 13/g) || []).toHaveLength(1);
+    const tabLabels = [...container.querySelectorAll('button')].map((el) => el.textContent);
+    expect(tabLabels.some((text) => text.includes('Nộp file'))).toBe(false);
+    expect(tabLabels.some((text) => text.includes('Viết báo cáo'))).toBe(false);
   });
 
   it('does not show a separate Quy trình tab', async () => {

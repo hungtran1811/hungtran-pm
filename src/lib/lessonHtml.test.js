@@ -15,6 +15,7 @@ import {
   resolveLessonPresentationPreset,
   sanitizeManagedLessonHtml,
   sanitizeLessonDocument,
+  sanitizeLessonDocumentCached,
   sanitizeLessonHtml,
 } from './lessonHtml.js';
 
@@ -494,5 +495,13 @@ describe('lesson HTML normalization helpers', () => {
     expect(getLessonHtmlByteSize('Tiếng Việt')).toBe(new TextEncoder().encode('Tiếng Việt').length);
     expect(isLessonHtmlWithinLimit('a'.repeat(LESSON_HTML_MAX_BYTES))).toBe(true);
     expect(isLessonHtmlWithinLimit('a'.repeat(LESSON_HTML_MAX_BYTES + 1))).toBe(false);
+  });
+
+  it('reuses a sanitized document from cache', () => {
+    const source = '<!doctype html><html><body><h1>Cache</h1></body></html>';
+    const first = sanitizeLessonDocumentCached(source);
+    const second = sanitizeLessonDocumentCached(source);
+    expect(second).toBe(first);
+    expect(first).toContain('<h1>Cache</h1>');
   });
 });

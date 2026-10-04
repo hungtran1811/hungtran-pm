@@ -18,7 +18,7 @@ import {
   uniqueLessonKeys,
 } from '../../lib/submissionAdmin.js';
 import { formatUploadSize } from '../../lib/submissionValidate.js';
-import { formatLessonKey } from '../../lib/submissionFileName.js';
+import { formatLessonKey, schoolPackFolderName } from '../../lib/submissionFileName.js';
 import { listCurriculumPrograms } from '../../services/curriculum.service.js';
 import { listSubmissionsByClass } from '../../services/submissions.service.js';
 
@@ -116,6 +116,9 @@ export function SubmissionsPage() {
   const latestCount = rows.filter((row) => row.isLatest).length;
   const studentCount = new Set(rows.filter((row) => row.isLatest).map((row) => row.studentId)).size;
   const classFolderUrl = driveFolderUrl(selectedClassDoc?.driveFolderId);
+  const schoolPackUrl = driveFolderUrl(selectedClassDoc?.driveSchoolPackFolderId);
+  const schoolPackProgram = programs.find((item) => item.id === selectedClassDoc?.curriculumProgramId);
+  const schoolPackLabel = schoolPackFolderName(schoolPackProgram?.totalSessionCount);
 
   if (!FEATURE_DRIVE_SUBMISSION_ENABLED) {
     return (
@@ -197,6 +200,17 @@ export function SubmissionsPage() {
                     >
                       <FolderOpen className="h-4 w-4" />
                       Thư mục lớp trên Drive
+                    </a>
+                  ) : null}
+                  {schoolPackUrl ? (
+                    <a
+                      href={schoolPackUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex min-h-10 items-center gap-1 rounded-xl px-3 text-sm font-medium text-brand-700 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-500/10"
+                    >
+                      <FolderOpen className="h-4 w-4" />
+                      {schoolPackLabel}
                     </a>
                   ) : null}
                 </div>

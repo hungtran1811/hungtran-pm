@@ -1,9 +1,17 @@
 import { FieldValue } from 'firebase-admin/firestore';
 import { normalizeStudentName } from '../../src/lib/normalizeStudentName.js';
-import { lessonKeyAliases, normalizeLessonKey } from '../../src/lib/submissionFileName.js';
+import { lessonKeyAliases, normalizeLessonKey, schoolPackFolderName } from '../../src/lib/submissionFileName.js';
 import { normalizeCompleteSubmissionItems } from '../../src/lib/submissionValidate.js';
 import { getAdminDb } from './_lib/firebaseAdmin.js';
-import { getDriveFile } from './_lib/driveFolders.js';
+import {
+  copyDriveFile,
+  deleteDriveFile,
+  findOrCreateClassFolder,
+  findOrCreateSchoolPackStudentFolder,
+  getDriveFile,
+} from './_lib/driveFolders.js';
+import { copyLatestIntoSchoolPack } from './_lib/schoolPack.js';
+import { loadOpenClass } from './_lib/submissionValidate.js';
 import { clientIp, json, parseJsonBody, preflight } from './_lib/http.js';
 import { checkRateLimit, DRIVE_LIMITS } from './_lib/rateLimit.js';
 import { functionErrorCode, logFunctionError } from './_lib/functionLog.js';
@@ -38,6 +46,28 @@ function batchPayload(docs, extra = {}) {
 
 function findByDriveFileQuery(db, driveFileId) {
   return db.collection('submissions').where('driveFileId', '==', driveFileId).limit(1);
+}
+
+async function previousPackFileIds(db, { classCode, studentId, lessonKey }) {
+  const snaps = await Promise.all(
+    lessonKeyAliases(lessonKey).map((key) =>
+      db
+        .collection('submissions')
+        .where('classCode', '==', classCode)
+        .where('studentId', '==', studentId)
+        .where('lessonKey', '==', key)
+        .get(),
+    ),
+  );
+  const ids = [];
+  for (const snap of snaps) {
+    for (const doc of snap.docs) {
+      const data = doc.data() || {};
+      const fileId = String(data.schoolPackDriveFileId || '').trim();
+      if (data.isLatest && fileId) ids.push(fileId);
+    }
+  }
+  return ids;
 }
 
 function sessionsAligned(sessions) {
@@ -134,6 +164,38 @@ export async function handler(event) {
 
     const firstSession = sessions[0];
     const lessonKey = normalizeLessonKey(firstSession.lessonKey) || firstSession.lessonKey;
+    let packCopies = [];
+    if (firstSession.schoolPack) {
+      const classDoc = await loadOpenClass(db, firstSession.classCode);
+      if (!classDoc?.id) {
+        return json(502, { error: 'Không lưu được bài nộp. Thử lại sau.' });
+      }
+      const classFolderId = await findOrCreateClassFolder(classDoc.classCode, classDoc.driveFolderId);
+      const packed = await copyLatestIntoSchoolPack({
+        classFolderId,
+        packFolderName: firstSession.schoolPackFolderName || schoolPackFolderName(14),
+        studentFolderName: normalizeStudentName(firstSession.studentName) || 'HocSinh',
+        previousPackFileIds: await previousPackFileIds(db, {
+          classCode: firstSession.classCode,
+          studentId: firstSession.studentId,
+          lessonKey,
+        }),
+        files: items.map((item, index) => ({
+          driveFileId: item.driveFileId,
+          storedFileName: sessions[index].storedFileName,
+        })),
+        findOrCreateSchoolPackStudentFolder,
+        copyDriveFile,
+        deleteDriveFile,
+      });
+      packCopies = packed.copiedIds;
+      if (packed.packFolderId && packed.packFolderId !== classDoc.driveSchoolPackFolderId) {
+        await db.collection('classes').doc(classDoc.id).set(
+          { driveSchoolPackFolderId: packed.packFolderId, updatedAt: FieldValue.serverTimestamp() },
+          { merge: true },
+        );
+      }
+    }
     const submissionRefs = items.map(() => db.collection('submissions').doc());
     const result = await db.runTransaction(async (tx) => {
       const liveSessions = await Promise.all(sessionRefs.map((ref) => tx.get(ref)));
@@ -196,6 +258,7 @@ export async function handler(event) {
           mimeType: session.mimeType || file.mimeType || '',
           driveFileId: file.id,
           driveFolderId: session.driveFolderId,
+          schoolPackDriveFileId: packCopies[index] || '',
           attempt,
           isLatest: true,
           status: 'submitted',

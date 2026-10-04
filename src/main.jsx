@@ -9,12 +9,23 @@ import { SettingsProvider } from './state/settings.store.jsx';
 import { ToastProvider } from './ui/components/Toast.jsx';
 import { ErrorBoundary } from './ui/components/ErrorBoundary.jsx';
 import { initErrorReporting, reportUnhandledRejection } from './lib/errorReporting.js';
+import { watchForAppUpdate } from './lib/appUpdate.js';
 
 function AppBootstrap() {
   useEffect(() => {
     initErrorReporting().catch(() => {});
     window.addEventListener('unhandledrejection', reportUnhandledRejection);
-    return () => window.removeEventListener('unhandledrejection', reportUnhandledRejection);
+    const onPreloadError = (event) => {
+      event.preventDefault();
+      window.location.reload();
+    };
+    window.addEventListener('vite:preloadError', onPreloadError);
+    const stopWatching = watchForAppUpdate();
+    return () => {
+      window.removeEventListener('unhandledrejection', reportUnhandledRejection);
+      window.removeEventListener('vite:preloadError', onPreloadError);
+      stopWatching();
+    };
   }, []);
 
   return (

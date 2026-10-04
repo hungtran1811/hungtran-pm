@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Code2, ExternalLink, Link2, Palette, Presentation, Save } from 'lucide-react';
+import { Code2, ExternalLink, Globe, Link2, Palette, Presentation, Save } from 'lucide-react';
 import { Button } from '../../ui/components/Button.jsx';
 import { Field, Input } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
@@ -41,7 +41,8 @@ export function ProjectProductLinks({
   const dirty =
     (links.githubUrl || '').trim() !== (student.projectGithubUrl || '').trim() ||
     (links.canvaUrl || '').trim() !== (student.projectCanvaUrl || '').trim() ||
-    (links.slidesUrl || '').trim() !== (student.projectSlidesUrl || '').trim();
+    (links.slidesUrl || '').trim() !== (student.projectSlidesUrl || '').trim() ||
+    (links.otherUrl || '').trim() !== (student.projectOtherUrl || '').trim();
 
   return (
     <div className={compact ? 'space-y-3' : 'card space-y-4 p-5'}>
@@ -114,6 +115,25 @@ export function ProjectProductLinks({
             />
           </div>
         </Field>
+
+        <Field
+          label="Link khác"
+          hint="Sản phẩm đang chạy trên mạng, hoặc tài liệu liên quan"
+          className={compact ? 'sm:col-span-2' : undefined}
+        >
+          <div className="relative">
+            <Globe className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              type="url"
+              inputMode="url"
+              value={links.otherUrl || ''}
+              onChange={(e) => update('otherUrl', e.target.value)}
+              placeholder="https://..."
+              className="pl-9"
+              disabled={disabled || saving}
+            />
+          </div>
+        </Field>
       </div>
 
       <Button
@@ -153,8 +173,8 @@ function GithubGuideHints({ onOpenGuide }) {
   );
 }
 
-export function ProjectLinksReadonly({ githubUrl, canvaUrl, slidesUrl, className = '' }) {
-  if (!githubUrl && !canvaUrl && !slidesUrl) return null;
+export function ProjectLinksReadonly({ githubUrl, canvaUrl, slidesUrl, otherUrl, className = '' }) {
+  if (!githubUrl && !canvaUrl && !slidesUrl && !otherUrl) return null;
 
   return (
     <div className={`flex flex-wrap gap-2 ${className}`}>
@@ -194,6 +214,19 @@ export function ProjectLinksReadonly({ githubUrl, canvaUrl, slidesUrl, className
         >
           <Presentation className="h-3.5 w-3.5" />
           Slides
+          <ExternalLink className="h-3 w-3 opacity-60" />
+        </a>
+      )}
+      {otherUrl && (
+        <a
+          href={otherUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:border-brand-300 hover:text-brand-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-brand-500/50 dark:hover:text-brand-300"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Globe className="h-3.5 w-3.5" />
+          Link khác
           <ExternalLink className="h-3 w-3 opacity-60" />
         </a>
       )}

@@ -10,7 +10,7 @@ import {
   uniqueLessonKeys,
 } from '../../lib/submissionAdmin.js';
 import { formatUploadSize } from '../../lib/submissionValidate.js';
-import { formatLessonKey } from '../../lib/submissionFileName.js';
+import { formatLessonKey, schoolPackFolderName } from '../../lib/submissionFileName.js';
 
 const driveLinkClass =
   'inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 transition hover:border-brand-300 hover:text-brand-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-brand-500/50 dark:hover:text-brand-300';
@@ -18,6 +18,8 @@ const driveLinkClass =
 export function ClassDriveSubmissionsList({
   rows = [],
   classFolderId = '',
+  schoolPackFolderId = '',
+  schoolPackLabel = '',
   lessonKey,
   onLessonKeyChange,
   latestOnly,
@@ -31,6 +33,8 @@ export function ClassDriveSubmissionsList({
   const latestCount = rows.filter((row) => row.isLatest).length;
   const studentCount = new Set(rows.filter((row) => row.isLatest).map((row) => row.studentId)).size;
   const classFolderUrl = driveFolderUrl(classFolderId);
+  const schoolPackUrl = driveFolderUrl(schoolPackFolderId);
+  const schoolPackText = schoolPackLabel || schoolPackFolderName(14);
 
   return (
     <section className="space-y-3">
@@ -48,6 +52,17 @@ export function ClassDriveSubmissionsList({
             >
               <FolderOpen className="h-4 w-4" />
               Thư mục lớp
+            </a>
+          ) : null}
+          {schoolPackUrl ? (
+            <a
+              href={schoolPackUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-10 items-center gap-1 rounded-xl px-3 text-sm font-medium text-brand-700 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-500/10"
+            >
+              <FolderOpen className="h-4 w-4" />
+              {schoolPackText}
             </a>
           ) : null}
         </div>

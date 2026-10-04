@@ -86,6 +86,24 @@ function needsLessonHtmlHydration(item, retrying = false) {
   );
 }
 
+function mergeHydratedLesson(prev, loaded) {
+  if (!prev) return loaded;
+  return {
+    ...loaded,
+    content: loaded.content || prev.content || '',
+    exercise: loaded.exercise || prev.exercise || '',
+    resources: loaded.resources?.length ? loaded.resources : prev.resources,
+    htmlHydrationError: loaded.htmlHydrationError || '',
+  };
+}
+
+function lessonHasHydratedPart(item, part) {
+  if (!item) return false;
+  return part === 'exercise'
+    ? Boolean(String(item.exercise || '').trim())
+    : Boolean(String(item.content || '').trim());
+}
+
 function LessonHtmlLoadError({ message, onRetry }) {
   return (
     <div
@@ -615,7 +633,11 @@ function LessonDetail({
   const focusTriggerRef = useRef(null);
   const focusWasOpenRef = useRef(false);
   const displayLesson = fullLesson || lesson;
-  const hasExercise = Boolean(displayLesson.exercise && displayLesson.exerciseVisible);
+  const hasExercise = Boolean(
+    displayLesson.exerciseVisible || String(displayLesson.exercise || '').trim(),
+  );
+  const hydratePart = contentTab === 'exercise' ? 'exercise' : 'lecture';
+  const hydratedPartsRef = useRef({ id: '', lecture: false, exercise: false });
   const allImages = lessonImages(displayLesson);
   const galleryItems = lessonGalleryImages(displayLesson);
   const heroUrl = displayLesson.bannerImageUrl || displayLesson.coverImageUrl;
@@ -684,14 +706,42 @@ function LessonDetail({
 
   useEffect(() => {
     setFullLesson(lesson);
+    hydratedPartsRef.current = {
+      id: lesson?.id || '',
+      lecture: lessonHasHydratedPart(lesson, 'lecture'),
+      exercise: lessonHasHydratedPart(lesson, 'exercise'),
+    };
+  }, [lesson]);
+
+  useEffect(() => {
     if (!programId || !lesson?.id) return undefined;
-    if (!needsLessonHtmlHydration(lesson, contentRetryTick > 0)) return undefined;
+    const part = hydratePart;
+    const alreadyHasPart =
+      hydratedPartsRef.current.id === lesson.id && hydratedPartsRef.current[part];
+    if (contentRetryTick === 0 && alreadyHasPart) return undefined;
 
     let cancelled = false;
     setLoadingContent(true);
-    getProgramLesson(programId, lesson.id)
+    getProgramLesson(programId, lesson.id, {
+      parts: [part],
+      force: contentRetryTick > 0,
+    })
       .then((loaded) => {
-        if (!cancelled && loaded) setFullLesson(loaded);
+        if (!cancelled && loaded) {
+          const sameLesson = hydratedPartsRef.current.id === lesson.id;
+          hydratedPartsRef.current = {
+            id: lesson.id,
+            lecture:
+              part === 'lecture'
+                ? lessonHasHydratedPart(loaded, 'lecture') || (sameLesson && hydratedPartsRef.current.lecture)
+                : sameLesson && hydratedPartsRef.current.lecture,
+            exercise:
+              part === 'exercise'
+                ? lessonHasHydratedPart(loaded, 'exercise') || (sameLesson && hydratedPartsRef.current.exercise)
+                : sameLesson && hydratedPartsRef.current.exercise,
+          };
+          setFullLesson((prev) => mergeHydratedLesson(prev, loaded));
+        }
       })
       .finally(() => {
         if (!cancelled) setLoadingContent(false);
@@ -699,7 +749,7 @@ function LessonDetail({
     return () => {
       cancelled = true;
     };
-  }, [programId, lesson, contentRetryTick]);
+  }, [programId, lesson, contentRetryTick, hydratePart]);
 
   const setIndex = (i) => openLightbox(images, i);
   const handleRailCollapsedChange = useCallback((collapsed) => {
@@ -876,7 +926,7 @@ function LessonDetail({
               )}
 
               <div className="p-5 sm:p-6 lg:p-8">
-                {loadingContent && contentTab === 'lesson' && (
+                {loadingContent && (
                   <div className="mb-4 flex justify-center py-6">
                     <Spinner />
                   </div>
@@ -992,20 +1042,18 @@ function LessonDetail({
                 )}
 
                 {contentTab === 'exercise' &&
-                  (hasExercise ? (
+                  (displayLesson.htmlHydrationError && !displayLesson.exercise ? (
+                    <LessonHtmlLoadError
+                      message={displayLesson.htmlHydrationError}
+                      onRetry={() => setContentRetryTick((tick) => tick + 1)}
+                    />
+                  ) : displayLesson.exercise ? (
                     <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 dark:border-amber-500/20 dark:bg-amber-500/10 sm:px-6 sm:py-5">
                       <LessonContent
                         format={displayLesson.exerciseRenderFormat ?? displayLesson.contentFormat}
                         content={displayLesson.exercise}
                       />
                     </div>
-                  ) : displayLesson.htmlHydrationError &&
-                    displayLesson.exerciseVisible &&
-                    displayLesson.exerciseHtmlDrive ? (
-                    <LessonHtmlLoadError
-                      message={displayLesson.htmlHydrationError}
-                      onRetry={() => setContentRetryTick((tick) => tick + 1)}
-                    />
                   ) : loadingContent ? null : (
                     <p className="py-8 text-center text-sm text-slate-400">
                       Buổi này chưa có bài tập.

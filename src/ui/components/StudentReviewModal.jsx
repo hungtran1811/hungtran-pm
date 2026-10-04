@@ -332,6 +332,7 @@ export function StudentReviewModal({
                   githubUrl={links.githubUrl}
                   canvaUrl={links.canvaUrl}
                   slidesUrl={links.slidesUrl}
+                  otherUrl={links.otherUrl}
                 />
               </div>
             ) : (

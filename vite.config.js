@@ -5,6 +5,27 @@ import tailwindcss from '@tailwindcss/vite';
 import { visualizer } from 'rollup-plugin-visualizer';
 
 const FUNCTIONS_PORT = Number(process.env.FUNCTIONS_PORT || 8888);
+const APP_VERSION = process.env.COMMIT_REF || process.env.GITHUB_SHA || 'dev';
+
+function appVersionPlugin() {
+  return {
+    name: 'app-version',
+    config() {
+      return {
+        define: {
+          'import.meta.env.VITE_APP_VERSION': JSON.stringify(APP_VERSION),
+        },
+      };
+    },
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'version.json',
+        source: `${JSON.stringify({ version: APP_VERSION })}\n`,
+      });
+    },
+  };
+}
 
 /** Proxy /.netlify/functions → :8888, không bật overlay Vite khi functions tắt. */
 function proxyNetlifyFunctions() {
@@ -118,6 +139,7 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     tailwindcss(),
+    appVersionPlugin(),
     proxyNetlifyFunctions(),
     mode === 'analyze'
       && visualizer({

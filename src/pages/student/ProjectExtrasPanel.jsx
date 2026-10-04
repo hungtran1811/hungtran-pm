@@ -38,10 +38,12 @@ export function ProjectExtrasPanel({ classDoc, student, links, onChangeLink, onO
   const hasGithub = Boolean(student.projectGithubUrl?.trim());
   const hasCanva = Boolean(student.projectCanvaUrl?.trim());
   const hasSlides = Boolean(student.projectSlidesUrl?.trim());
+  const hasOther = Boolean(student.projectOtherUrl?.trim());
   const linkParts = [
     hasGithub ? 'GitHub' : null,
     hasCanva ? 'Canva' : null,
     hasSlides ? 'Slides' : null,
+    hasOther ? 'Link khác' : null,
   ].filter(Boolean);
   const linkHint = linkParts.length ? linkParts.join(' · ') : 'Chưa có liên kết';
 

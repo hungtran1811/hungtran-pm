@@ -19,9 +19,16 @@ Cấu trúc Drive (phẳng theo lớp):
 HungTranPM - Submissions/
   PVĐ-CSB02/
     NguyenVanAn/
-      B03/
+      L03/
         PVD-CSB02_NguyenVanAn_L03_20260912_bai-tap.zip
+      L14/
+        PVD-CSB02_NguyenVanAn_L14_20261004_source.zip
+    Lesson_14/
+      NguyenVanAn/
+        PVD-CSB02_NguyenVanAn_L14_20261004_source.zip
 ```
+
+Buổi cuối chương trình (mặc định buổi 14, hoặc `totalSessionCount` nếu khác) vẫn lưu ở `Lớp/TenHocSinh/Lxx`. Bản nộp mới nhất được copy thêm vào `Lớp/Lesson_{n}/TenHocSinh/` để giáo viên nén cả thư mục đó nộp trường. Nộp lại thì xóa bản copy cũ của em đó. File các buổi trước không vào `Lesson_{n}`. Học sinh không thấy link Drive.
 
 ## Biến môi trường (Netlify / `netlify dev`)
 

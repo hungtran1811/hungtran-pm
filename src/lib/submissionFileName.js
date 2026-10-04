@@ -45,6 +45,26 @@ export function lessonKeysEqual(left, right) {
   return session > 0 && session === lessonKeySessionNumber(right);
 }
 
+const DEFAULT_SCHOOL_PACK_SESSION = 14;
+
+export function schoolPackSessionNumber(totalSessionCount) {
+  const count = Number(totalSessionCount);
+  if (!Number.isFinite(count) || count <= 0) return DEFAULT_SCHOOL_PACK_SESSION;
+  return Math.floor(count);
+}
+
+export function schoolPackLessonKey(totalSessionCount) {
+  return normalizeLessonKey(schoolPackSessionNumber(totalSessionCount));
+}
+
+export function schoolPackFolderName(totalSessionCount) {
+  return `Lesson_${schoolPackSessionNumber(totalSessionCount)}`;
+}
+
+export function isSchoolPackLesson(lessonKey, totalSessionCount) {
+  return lessonKeysEqual(lessonKey, schoolPackLessonKey(totalSessionCount));
+}
+
 export function lessonKeyAliases(lessonKey) {
   const key = normalizeLessonKey(lessonKey);
   if (!key) return [];

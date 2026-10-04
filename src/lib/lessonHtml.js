@@ -1253,6 +1253,25 @@ export function sanitizeLessonDocument(source = '', windowLike = defaultWindow()
   });
 }
 
+const DOCUMENT_SANITIZE_CACHE_MAX = 16;
+const documentSanitizeCache = new Map();
+
+export function sanitizeLessonDocumentCached(source = '', windowLike = defaultWindow()) {
+  const html = asString(source);
+  if (!html) return '';
+  if (windowLike && windowLike !== defaultWindow()) {
+    return sanitizeLessonDocument(html, windowLike);
+  }
+  const cached = documentSanitizeCache.get(html);
+  if (cached !== undefined) return cached;
+  const sanitized = sanitizeLessonDocument(html, windowLike);
+  if (documentSanitizeCache.size >= DOCUMENT_SANITIZE_CACHE_MAX) {
+    documentSanitizeCache.delete(documentSanitizeCache.keys().next().value);
+  }
+  documentSanitizeCache.set(html, sanitized);
+  return sanitized;
+}
+
 function hasRenderableDomContent(root) {
   const text = (root?.textContent || '').replace(/\u00a0/g, ' ').trim();
   if (text) return true;

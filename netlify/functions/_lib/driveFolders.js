@@ -76,6 +76,37 @@ export async function findOrCreateSubmissionFolder({
   return { classFolderId, studentFolderId, lessonFolderId };
 }
 
+export async function findOrCreateSchoolPackStudentFolder(
+  classFolderId,
+  packFolderName,
+  studentFolderName,
+) {
+  const packFolderId = await findOrCreateChildFolder(classFolderId, packFolderName);
+  const studentFolderId = await findOrCreateChildFolder(packFolderId, studentFolderName);
+  return { packFolderId, studentFolderId };
+}
+
+export async function copyDriveFile({ fileId, folderId, name }) {
+  const id = String(fileId || '').trim();
+  const parentId = String(folderId || '').trim();
+  const fileName = String(name || '').trim();
+  if (!id || !parentId || !fileName) {
+    throw new Error('Missing Drive copy source, folder, or name');
+  }
+  const copied = await driveJson(
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}/copy?fields=id,name,parents`,
+    {
+      method: 'POST',
+      body: {
+        name: fileName,
+        parents: [parentId],
+      },
+    },
+  );
+  if (!copied.id) throw new Error('Drive did not return copied file id');
+  return copied;
+}
+
 export async function createResumableUpload({
   storedFileName,
   mimeType,

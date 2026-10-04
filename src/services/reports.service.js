@@ -69,6 +69,7 @@ export function reportFromStudentSnapshot(student) {
     projectGithubUrl: student.projectGithubUrl || '',
     projectCanvaUrl: student.projectCanvaUrl || '',
     projectSlidesUrl: student.projectSlidesUrl || '',
+    projectOtherUrl: student.projectOtherUrl || '',
     submittedAt: student.lastReportedAt,
     submittedDateKey: '',
     lessonKey: '',
@@ -155,6 +156,7 @@ async function writeProgressReport({ student, classDoc, form }) {
     githubUrl: form.projectGithubUrl ?? student.projectGithubUrl ?? '',
     canvaUrl: form.projectCanvaUrl ?? student.projectCanvaUrl ?? '',
     slidesUrl: form.projectSlidesUrl ?? student.projectSlidesUrl ?? '',
+    otherUrl: form.projectOtherUrl ?? student.projectOtherUrl ?? '',
   });
   if (linkValidation.error) {
     throw new Error(linkValidation.error);
@@ -175,6 +177,7 @@ async function writeProgressReport({ student, classDoc, form }) {
     projectGithubUrl: linkValidation.githubUrl,
     projectCanvaUrl: linkValidation.canvaUrl,
     projectSlidesUrl: linkValidation.slidesUrl,
+    projectOtherUrl: linkValidation.otherUrl,
     submittedAt: serverTimestamp(),
     submittedDateKey: dateKey(),
     lessonKey,
@@ -195,6 +198,7 @@ async function writeProgressReport({ student, classDoc, form }) {
     projectGithubUrl: linkValidation.githubUrl,
     projectCanvaUrl: linkValidation.canvaUrl,
     projectSlidesUrl: linkValidation.slidesUrl,
+    projectOtherUrl: linkValidation.otherUrl,
     lastReportedAt: serverTimestamp(),
     latestReportId: reportRef.id,
     progressStalledCount: stalled,

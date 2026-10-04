@@ -133,13 +133,14 @@ export function StudentHistoryModal({ student, onClose, feedbackOnly = false }) 
         )}
 
         {!feedbackOnly &&
-          (student.projectGithubUrl || student.projectCanvaUrl || student.projectSlidesUrl) && (
+          (student.projectGithubUrl || student.projectCanvaUrl || student.projectSlidesUrl || student.projectOtherUrl) && (
           <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-800/50">
             <p className="mb-2 text-xs font-medium text-slate-500">Liên kết sản phẩm</p>
             <ProjectLinksReadonly
               githubUrl={student.projectGithubUrl}
               canvaUrl={student.projectCanvaUrl}
               slidesUrl={student.projectSlidesUrl}
+              otherUrl={student.projectOtherUrl}
             />
           </div>
         )}

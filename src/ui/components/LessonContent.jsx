@@ -13,7 +13,7 @@ import {
   normalizeWheelDelta,
 } from '../../lib/lessonFrameScroll.js';
 import { attachLessonCopyGuard, protectLessonIframeDocument } from '../../lib/lessonCopyGuard.js';
-import { LESSON_PRESENTATION_PRESET_LEGACY, sanitizeLessonDocument } from '../../lib/lessonHtml.js';
+import { LESSON_PRESENTATION_PRESET_LEGACY, sanitizeLessonDocumentCached } from '../../lib/lessonHtml.js';
 import { ImageLightbox, useImageLightbox } from './ImageLightbox.jsx';
 import { Markdown } from './Markdown.jsx';
 
@@ -22,7 +22,7 @@ function HtmlDocumentContent({ content = '', className = '', protectCopy = false
   const [loadVersion, setLoadVersion] = useState(0);
   const [frameHeight, setFrameHeight] = useState(null);
   const { open, images, index, openLightbox, closeLightbox } = useImageLightbox();
-  const documentHtml = useMemo(() => sanitizeLessonDocument(content), [content]);
+  const documentHtml = useMemo(() => sanitizeLessonDocumentCached(content), [content]);
 
   useEffect(() => {
     setFrameHeight(null);

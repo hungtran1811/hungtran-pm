@@ -10,6 +10,7 @@ export function productLinksOf(report, student) {
     githubUrl: String(report?.projectGithubUrl || student?.projectGithubUrl || '').trim(),
     canvaUrl: String(report?.projectCanvaUrl || student?.projectCanvaUrl || '').trim(),
     slidesUrl: String(report?.projectSlidesUrl || student?.projectSlidesUrl || '').trim(),
+    otherUrl: String(report?.projectOtherUrl || student?.projectOtherUrl || '').trim(),
   };
 }
 
@@ -44,6 +45,7 @@ export function StudentReportDetail({ report, student, showLinks = true }) {
           githubUrl={links.githubUrl}
           canvaUrl={links.canvaUrl}
           slidesUrl={links.slidesUrl}
+          otherUrl={links.otherUrl}
         />
       ) : null}
       {report.submittedAt ? (

@@ -433,6 +433,7 @@ describe('student-facing Firestore rules', () => {
       projectGithubUrl: 'https://github.com/example/final-learning-app',
       projectCanvaUrl: '',
       projectSlidesUrl: '',
+      projectOtherUrl: 'https://example.com/app',
       submittedAt: serverTimestamp(),
       submittedDateKey: '2026-06-29',
       lessonKey: 'B02',
@@ -450,6 +451,7 @@ describe('student-facing Firestore rules', () => {
       projectGithubUrl: 'https://github.com/example/final-learning-app',
       projectCanvaUrl: '',
       projectSlidesUrl: '',
+      projectOtherUrl: 'https://example.com/app',
       updatedAt: serverTimestamp(),
     });
 
@@ -476,6 +478,7 @@ describe('student-facing Firestore rules', () => {
       projectGithubUrl: 'https://github.com/example/final-learning-app',
       projectCanvaUrl: '',
       projectSlidesUrl: '',
+      projectOtherUrl: 'https://example.com/app',
       submittedAt: serverTimestamp(),
       submittedDateKey: '2026-06-29',
       source: 'student-form',
@@ -492,6 +495,7 @@ describe('student-facing Firestore rules', () => {
       projectGithubUrl: 'https://github.com/example/final-learning-app',
       projectCanvaUrl: '',
       projectSlidesUrl: '',
+      projectOtherUrl: 'https://example.com/app',
       updatedAt: serverTimestamp(),
     });
 
@@ -513,6 +517,31 @@ describe('student-facing Firestore rules', () => {
         projectGithubUrl: 'https://github.com/example/final-learning-app',
         projectCanvaUrl: '',
         projectSlidesUrl: '',
+        projectOtherUrl: '',
+        updatedAt: serverTimestamp(),
+      }),
+    );
+  });
+
+  it('allows saving an extra product link and rejects a non-https value', async () => {
+    const db = publicDb();
+
+    await assertSucceeds(
+      db.doc(`students/${FINAL_STUDENT_ID}`).update({
+        projectGithubUrl: 'https://github.com/example/final-learning-app',
+        projectCanvaUrl: '',
+        projectSlidesUrl: '',
+        projectOtherUrl: 'https://example.com/demo',
+        updatedAt: serverTimestamp(),
+      }),
+    );
+
+    await assertFails(
+      db.doc(`students/${FINAL_STUDENT_ID}`).update({
+        projectGithubUrl: 'https://github.com/example/final-learning-app',
+        projectCanvaUrl: '',
+        projectSlidesUrl: '',
+        projectOtherUrl: 'not a url',
         updatedAt: serverTimestamp(),
       }),
     );

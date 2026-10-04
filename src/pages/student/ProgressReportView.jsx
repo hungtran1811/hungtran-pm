@@ -30,6 +30,7 @@ export function ProgressReportView({
   hideLessonSelect = false,
   hideHistory = false,
   hideExtras = false,
+  unstickFooter = false,
   links: linksProp,
   onChangeLink,
   onContinueAfterSubmit,
@@ -50,6 +51,7 @@ export function ProgressReportView({
     githubUrl: student.projectGithubUrl || '',
     canvaUrl: student.projectCanvaUrl || '',
     slidesUrl: student.projectSlidesUrl || '',
+    otherUrl: student.projectOtherUrl || '',
   });
   const links = linksProp ?? internalLinks;
   const [submitting, setSubmitting] = useState(false);
@@ -62,8 +64,9 @@ export function ProgressReportView({
       githubUrl: student.projectGithubUrl || '',
       canvaUrl: student.projectCanvaUrl || '',
       slidesUrl: student.projectSlidesUrl || '',
+      otherUrl: student.projectOtherUrl || '',
     });
-  }, [linksProp, student.id, student.projectGithubUrl, student.projectCanvaUrl, student.projectSlidesUrl]);
+  }, [linksProp, student.id, student.projectGithubUrl, student.projectCanvaUrl, student.projectSlidesUrl, student.projectOtherUrl]);
 
   useEffect(() => {
     if (!student.id) return undefined;
@@ -149,6 +152,7 @@ export function ProgressReportView({
           projectGithubUrl: links.githubUrl,
           projectCanvaUrl: links.canvaUrl,
           projectSlidesUrl: links.slidesUrl,
+          projectOtherUrl: links.otherUrl,
         },
       });
       toast.success('Đã gửi báo cáo.');
@@ -166,6 +170,7 @@ export function ProgressReportView({
         projectGithubUrl: links.githubUrl.trim(),
         projectCanvaUrl: links.canvaUrl.trim(),
         projectSlidesUrl: (links.slidesUrl || '').trim(),
+        projectOtherUrl: (links.otherUrl || '').trim(),
         lastReportedAt: new Date(),
       });
       setForm((prev) => ({ ...prev, doneToday: '', nextGoal: '', difficulties: '' }));
@@ -241,6 +246,7 @@ export function ProgressReportView({
           githubUrl={student.projectGithubUrl}
           canvaUrl={student.projectCanvaUrl}
           slidesUrl={student.projectSlidesUrl}
+          otherUrl={student.projectOtherUrl}
         />
       )}
 
@@ -337,7 +343,13 @@ export function ProgressReportView({
         />
       </Field>
 
-      <div className="student-sticky-footer dark:border-slate-800 lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
+      <div
+        className={
+          unstickFooter
+            ? ''
+            : 'student-sticky-footer dark:border-slate-800 lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none'
+        }
+      >
         <Button
           type="submit"
           size="lg"

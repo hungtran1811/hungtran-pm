@@ -16,6 +16,7 @@ import {
   validateCreateSessionInput,
 } from './_lib/submissionValidate.js';
 import { isLessonKeyOpenForClass } from '../../src/lib/sessionScope.js';
+import { isSchoolPackLesson, schoolPackFolderName } from '../../src/lib/submissionFileName.js';
 import { functionErrorCode, logFunctionError } from './_lib/functionLog.js';
 
 export async function handler(event) {
@@ -63,6 +64,8 @@ export async function handler(event) {
       return json(403, { error: 'Buổi này chưa mở nộp bài cho lớp.' });
     }
 
+    const totalSessionCount = await loadTotalSessionCount(db, classDoc);
+    const schoolPack = isSchoolPackLesson(input.lessonKey, totalSessionCount);
     const storedFileName = buildStoredFileName({
       classCode: classDoc.classCode,
       studentName: student.fullName,
@@ -109,6 +112,8 @@ export async function handler(event) {
       fileSize: input.fileSize,
       mimeType: input.mimeType || '',
       driveFolderId: lessonFolderId,
+      schoolPack,
+      schoolPackFolderName: schoolPack ? schoolPackFolderName(totalSessionCount) : '',
       createdAt: FieldValue.serverTimestamp(),
       expiresAt: Timestamp.fromMillis(now + UPLOAD_SESSION_TTL_MS),
     });
@@ -122,4 +127,12 @@ export async function handler(event) {
     }
     return json(502, { error: 'Không tạo được phiên tải lên. Thử lại sau.' });
   }
+}
+
+async function loadTotalSessionCount(db, classDoc) {
+  const programId = String(classDoc?.curriculumProgramId || '').trim();
+  if (!programId) return 0;
+  const snap = await db.collection('curriculumPrograms').doc(programId).get();
+  if (!snap.exists) return 0;
+  return Number(snap.data()?.totalSessionCount) || 0;
 }

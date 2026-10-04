@@ -7,6 +7,7 @@ import {
   isLessonHtmlDrivePart,
   normalizeLessonHtmlDrivePointer,
 } from '../lib/lessonHtmlDrive.js';
+import { lessonHtmlClientCache, lessonHtmlPartCacheKey } from '../lib/memoryCache.js';
 
 function functionsUrl(name) {
   const base = (import.meta.env.VITE_NETLIFY_FUNCTIONS_BASE || FUNCTIONS_BASE).replace(/\/$/, '');
@@ -119,22 +120,54 @@ export async function deleteLessonHtmlFile(driveFileId) {
   await postJson('drive-delete-lesson-html', { driveFileId: id }, { admin: true }).catch(() => {});
 }
 
-export async function fetchLessonHtml({ programId, lessonId, part }) {
+export async function fetchLessonHtml({
+  programId,
+  lessonId,
+  part,
+  pointer = null,
+  force = false,
+} = {}) {
+  const normalized = normalizeLessonHtmlDrivePointer(pointer);
+  const cacheKey = lessonHtmlPartCacheKey({
+    programId,
+    lessonId,
+    part,
+    driveFileId: normalized?.driveFileId,
+    updatedAt: normalized?.updatedAt,
+  });
+  if (!force) {
+    const cached = lessonHtmlClientCache.get(cacheKey);
+    if (typeof cached === 'string') return cached;
+  }
   const payload = await postJson(
     'drive-get-lesson-html',
     { programId, lessonId, part },
     { admin: Boolean(auth.currentUser) },
   );
-  return String(payload.html || '');
+  const html = String(payload.html || '');
+  lessonHtmlClientCache.set(cacheKey, html);
+  return html;
 }
 
-export async function hydrateLessonHtml(lesson, { programId } = {}) {
+function wantedLessonHtmlParts(parts) {
+  if (!Array.isArray(parts) || parts.length === 0) return new Set(['lecture', 'exercise']);
+  return new Set(parts.filter((part) => isLessonHtmlDrivePart(part)));
+}
+
+export async function hydrateLessonHtml(lesson, { programId, parts, force = false } = {}) {
   if (!FEATURE_DRIVE_LESSON_HTML_ENABLED || !lesson) return lesson;
+  const wanted = wantedLessonHtmlParts(parts);
   const next = { ...lesson, htmlHydrationError: '' };
   const tasks = [];
-  if (lesson.lectureHtmlDrive && !String(lesson.content || '').trim()) {
+  if (wanted.has('lecture') && lesson.lectureHtmlDrive && (force || !String(lesson.content || '').trim())) {
     tasks.push(
-      fetchLessonHtml({ programId, lessonId: lesson.id, part: 'lecture' })
+      fetchLessonHtml({
+        programId,
+        lessonId: lesson.id,
+        part: 'lecture',
+        pointer: lesson.lectureHtmlDrive,
+        force,
+      })
         .then((html) => {
           next.content = html;
         })
@@ -143,9 +176,15 @@ export async function hydrateLessonHtml(lesson, { programId } = {}) {
         }),
     );
   }
-  if (lesson.exerciseHtmlDrive && !String(lesson.exercise || '').trim()) {
+  if (wanted.has('exercise') && lesson.exerciseHtmlDrive && (force || !String(lesson.exercise || '').trim())) {
     tasks.push(
-      fetchLessonHtml({ programId, lessonId: lesson.id, part: 'exercise' })
+      fetchLessonHtml({
+        programId,
+        lessonId: lesson.id,
+        part: 'exercise',
+        pointer: lesson.exerciseHtmlDrive,
+        force,
+      })
         .then((html) => {
           next.exercise = html;
         })

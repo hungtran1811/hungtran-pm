@@ -426,7 +426,7 @@ export async function saveLessonResources(programId, lessonId, resources) {
   return next;
 }
 
-export async function getProgramLesson(programId, lessonId) {
+export async function getProgramLesson(programId, lessonId, { parts, force = false } = {}) {
   if (!programId || !lessonId) return null;
   const snapshot = await readProgramSnapshot(programId);
   if (!snapshot) return null;
@@ -450,7 +450,7 @@ export async function getProgramLesson(programId, lessonId) {
     }
   }
   if (!loaded) return null;
-  return hydrateLessonHtml(loaded, { programId: snapshot.id });
+  return hydrateLessonHtml(loaded, { programId: snapshot.id, parts, force });
 }
 
 export function subscribeCurriculumProgram(programId, onData, onError) {

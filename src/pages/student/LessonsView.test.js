@@ -55,6 +55,8 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.append(container);
   root = createRoot(container);
+  getProgramLesson.mockReset();
+  getProgramLesson.mockResolvedValue(null);
 });
 
 afterEach(async () => {
@@ -242,6 +244,68 @@ describe('LessonsView reading workspace', () => {
 
     expect(container.querySelector('[aria-label="Tài nguyên buổi 1"]')).not.toBeNull();
     expect(container.querySelector('a[href*="id=slim"]')?.textContent).toContain('Starter Python');
+  });
+
+  it('loads lecture first and exercise only after opening that tab', async () => {
+    getProgramLesson
+      .mockResolvedValueOnce({
+        id: 'lesson-1',
+        sessionNumber: 1,
+        title: 'HTML cơ bản',
+        content: '<section class="lesson-section"><h2>Bài giảng</h2></section>',
+        exercise: '',
+        exerciseVisible: true,
+        contentFormat: 'html',
+        presentationPreset: 'hungtran-v1',
+      })
+      .mockResolvedValueOnce({
+        id: 'lesson-1',
+        sessionNumber: 1,
+        title: 'HTML cơ bản',
+        content: '',
+        exercise: '<section class="lesson-section"><h2>Bài tập</h2></section>',
+        exerciseVisible: true,
+        contentFormat: 'html',
+        presentationPreset: 'hungtran-v1',
+      });
+
+    await renderLessonsView({
+      program: {
+        id: 'web-basic',
+        lessons: [
+          {
+            id: 'lesson-1',
+            sessionNumber: 1,
+            title: 'HTML cơ bản',
+            exerciseVisible: true,
+            _slim: true,
+          },
+        ],
+      },
+    });
+    await act(async () => findButton('HTML cơ bản').click());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(getProgramLesson).toHaveBeenCalledWith(
+      'web-basic',
+      'lesson-1',
+      expect.objectContaining({ parts: ['lecture'] }),
+    );
+    expect(container.textContent).toContain('Bài giảng');
+
+    await act(async () => findButton('Bài tập').click());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(getProgramLesson).toHaveBeenCalledWith(
+      'web-basic',
+      'lesson-1',
+      expect.objectContaining({ parts: ['exercise'] }),
+    );
+    expect(container.textContent).toContain('Bài tập');
   });
 
   it('shows a retry when Drive HTML hydration fails', async () => {

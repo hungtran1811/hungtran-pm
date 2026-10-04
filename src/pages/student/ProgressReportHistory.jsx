@@ -50,6 +50,7 @@ function ReportHistoryCard({ report }) {
             githubUrl={report.projectGithubUrl}
             canvaUrl={report.projectCanvaUrl}
             slidesUrl={report.projectSlidesUrl}
+            otherUrl={report.projectOtherUrl}
           />
         </div>
       )}

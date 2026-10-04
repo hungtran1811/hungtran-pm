@@ -17,7 +17,7 @@ vi.mock('./driveFolders.js', () => ({
 }));
 
 vi.mock('./rateLimit.js', () => ({
-  checkRateLimit: () => true,
+  checkRateLimit: vi.fn(() => true),
   DRIVE_LIMITS: { lessonHtml: { ip: 80, student: 40, admin: 20 } },
 }));
 
@@ -32,6 +32,8 @@ vi.mock('./functionLog.js', () => ({
 import { requireAdmin } from './adminAuth.js';
 import { findOrCreateLessonHtmlFolder, getDriveFileMedia } from './driveFolders.js';
 import { getAdminDb } from './firebaseAdmin.js';
+import { checkRateLimit } from './rateLimit.js';
+import { lessonHtmlFunctionCache } from '../../../src/lib/memoryCache.js';
 import { handler as createLessonHtmlSession } from '../drive-create-lesson-html-session.js';
 import { handler as getLessonHtml } from '../drive-get-lesson-html.js';
 
@@ -88,6 +90,7 @@ function mockDb({ program, lesson } = {}) {
 describe('drive lesson HTML functions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    lessonHtmlFunctionCache.clear();
     requireAdmin.mockResolvedValue({ ok: true, email: 'gv@example.com' });
   });
 
@@ -178,5 +181,71 @@ describe('drive lesson HTML functions', () => {
     );
     expect(result.status).toBe(503);
     expect(result.body).not.toHaveProperty('driveFileId');
+  });
+
+  it('serves the second request for the same Drive file from memory', async () => {
+    requireAdmin.mockResolvedValue({ ok: false, status: 401, error: 'Cần đăng nhập quản trị.' });
+    getAdminDb.mockReturnValue(
+      mockDb({
+        program: { active: true },
+        lesson: {
+          lectureHtmlDrive: {
+            driveFileId: 'file-1',
+            fileName: 'L01-lecture.html',
+            byteSize: 40,
+            updatedAt: '2026-10-04T10:00:00.000Z',
+          },
+        },
+      }),
+    );
+    getDriveFileMedia.mockResolvedValue('<h1>Bài giảng</h1>');
+
+    const first = parse(
+      await getLessonHtml(
+        postEvent({ programId: 'web-basic', lessonId: 'lesson-1', part: 'lecture' }),
+      ),
+    );
+    const second = parse(
+      await getLessonHtml(
+        postEvent({ programId: 'web-basic', lessonId: 'lesson-1', part: 'lecture' }),
+      ),
+    );
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(second.body.html).toBe('<h1>Bài giảng</h1>');
+    expect(getDriveFileMedia).toHaveBeenCalledTimes(1);
+    expect(checkRateLimit).toHaveBeenCalledTimes(1);
+  });
+
+  it('refetches Drive HTML when updatedAt changes', async () => {
+    requireAdmin.mockResolvedValue({ ok: false, status: 401, error: 'Cần đăng nhập quản trị.' });
+    const lesson = {
+      lectureHtmlDrive: {
+        driveFileId: 'file-1',
+        fileName: 'L01-lecture.html',
+        byteSize: 40,
+        updatedAt: '2026-10-04T10:00:00.000Z',
+      },
+    };
+    getAdminDb.mockReturnValue(mockDb({ program: { active: true }, lesson }));
+    getDriveFileMedia.mockResolvedValueOnce('<h1>Cũ</h1>').mockResolvedValueOnce('<h1>Mới</h1>');
+
+    const first = parse(
+      await getLessonHtml(
+        postEvent({ programId: 'web-basic', lessonId: 'lesson-1', part: 'lecture' }),
+      ),
+    );
+    expect(first.body.html).toBe('<h1>Cũ</h1>');
+
+    lesson.lectureHtmlDrive.updatedAt = '2026-10-04T11:00:00.000Z';
+    const second = parse(
+      await getLessonHtml(
+        postEvent({ programId: 'web-basic', lessonId: 'lesson-1', part: 'lecture' }),
+      ),
+    );
+
+    expect(second.body.html).toBe('<h1>Mới</h1>');
+    expect(getDriveFileMedia).toHaveBeenCalledTimes(2);
   });
 });

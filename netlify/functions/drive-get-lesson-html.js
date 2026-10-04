@@ -1,5 +1,6 @@
 import { LESSON_HTML_DRIVE_MAX_BYTES } from '../../src/config/lessonHtmlDrive.js';
 import { isLessonHtmlDrivePart, normalizeLessonHtmlDrivePointer } from '../../src/lib/lessonHtmlDrive.js';
+import { lessonHtmlDriveCacheKey, lessonHtmlFunctionCache } from '../../src/lib/memoryCache.js';
 import { requireAdmin } from './_lib/adminAuth.js';
 import { getDriveFileMedia } from './_lib/driveFolders.js';
 import { getAdminDb } from './_lib/firebaseAdmin.js';
@@ -10,10 +11,6 @@ import { functionErrorCode, logFunctionError } from './_lib/functionLog.js';
 export async function handler(event) {
   const early = preflight(event);
   if (early) return early;
-
-  if (!checkRateLimit(`lesson-html-get:ip:${clientIp(event)}`, { max: DRIVE_LIMITS.lessonHtml.ip })) {
-    return json(429, { error: 'Bạn thao tác quá nhanh. Thử lại sau vài phút.' });
-  }
 
   let body;
   try {
@@ -55,11 +52,23 @@ export async function handler(event) {
       return json(404, { error: 'Bài này không lưu HTML trên Drive.' });
     }
 
+    const cacheKey = lessonHtmlDriveCacheKey(pointer.driveFileId, pointer.updatedAt);
+    const cached = lessonHtmlFunctionCache.get(cacheKey);
+    if (typeof cached === 'string') {
+      return json(200, { html: cached });
+    }
+
+    if (!checkRateLimit(`lesson-html-get:ip:${clientIp(event)}`, { max: DRIVE_LIMITS.lessonHtml.ip })) {
+      return json(429, { error: 'Bạn thao tác quá nhanh. Thử lại sau vài phút.' });
+    }
+
     const html = await getDriveFileMedia(pointer.driveFileId);
     if (htmlUtf8TooLarge(html)) {
       return json(413, { error: 'HTML trên Drive vượt giới hạn hiển thị.' });
     }
-    return json(200, { html: String(html || '') });
+    const text = String(html || '');
+    lessonHtmlFunctionCache.set(cacheKey, text);
+    return json(200, { html: text });
   } catch (error) {
     const code = functionErrorCode(error);
     logFunctionError('drive-get-lesson-html', code, error);

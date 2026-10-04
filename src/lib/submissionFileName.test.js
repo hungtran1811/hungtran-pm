@@ -5,9 +5,12 @@ import {
   formatDateStamp,
   formatLessonKey,
   getFileExtension,
+  isSchoolPackLesson,
   isValidLessonKey,
   lessonKeysEqual,
   normalizeLessonKey,
+  schoolPackFolderName,
+  schoolPackLessonKey,
   sanitizeClassCodeForFile,
   sanitizeOriginalFileStem,
 } from './submissionFileName.js';
@@ -25,6 +28,19 @@ describe('submission file names', () => {
     expect(isValidLessonKey('lesson')).toBe(false);
     expect(lessonKeysEqual('B09', 'L09')).toBe(true);
     expect(lessonKeysEqual('L01', 'L02')).toBe(false);
+  });
+
+  it('marks only the last program session for the school pack folder', () => {
+    expect(schoolPackLessonKey(14)).toBe('L14');
+    expect(schoolPackLessonKey(8)).toBe('L08');
+    expect(schoolPackLessonKey(0)).toBe('L14');
+    expect(schoolPackFolderName(14)).toBe('Lesson_14');
+    expect(schoolPackFolderName(8)).toBe('Lesson_8');
+    expect(isSchoolPackLesson('L14', 14)).toBe(true);
+    expect(isSchoolPackLesson('B14', 14)).toBe(true);
+    expect(isSchoolPackLesson('L08', 8)).toBe(true);
+    expect(isSchoolPackLesson('L03', 14)).toBe(false);
+    expect(isSchoolPackLesson('L14', 8)).toBe(false);
   });
 
   it('reads the last extension in lowercase', () => {

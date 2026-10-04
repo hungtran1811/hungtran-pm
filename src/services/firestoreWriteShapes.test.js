@@ -182,6 +182,7 @@ describe('student Firestore write shapes', () => {
         projectGithubUrl: '',
         projectCanvaUrl: '',
         projectSlidesUrl: '',
+        projectOtherUrl: 'http://example.com/app',
       },
     });
 
@@ -196,6 +197,7 @@ describe('student Firestore write shapes', () => {
       progressPercent: 45,
       lessonKey: 'L02',
       source: 'student-form',
+      projectOtherUrl: 'https://example.com/app',
     });
     expect(studentOp).toMatchObject({ type: 'update' });
     expect(studentOp.ref.path).toBe('students/student-1');
@@ -203,6 +205,7 @@ describe('student Firestore write shapes', () => {
       currentProgressPercent: 45,
       latestReportId: 'generated-1',
       progressStalledCount: 0,
+      projectOtherUrl: 'https://example.com/app',
     });
   });
 });

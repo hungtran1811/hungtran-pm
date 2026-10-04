@@ -51,7 +51,7 @@ import {
   findProgramForClass,
 } from '../../lib/studentWorkspace.js';
 import { sortByRecentActivity } from '../../lib/reportSignals.js';
-import { formatLessonKey } from '../../lib/submissionFileName.js';
+import { formatLessonKey, schoolPackFolderName } from '../../lib/submissionFileName.js';
 
 function matchesCompletionFilter(item, filter) {
   if (filter === 'done') return item.isComplete;
@@ -422,6 +422,8 @@ export function ReportsPanel({
     ? defaultLessonKey(selectedClassDoc, selectedProgram)
     : '';
   const classFolderHref = driveFolderUrl(selectedClassDoc?.driveFolderId);
+  const schoolPackHref = driveFolderUrl(selectedClassDoc?.driveSchoolPackFolderId);
+  const schoolPackLabel = schoolPackFolderName(selectedProgram?.totalSessionCount);
   const doneLabel = requiresBoth || isAllClasses ? 'đủ' : 'đã nộp';
 
   const openHistory = (student, report) => {
@@ -434,6 +436,7 @@ export function ReportsPanel({
       projectGithubUrl: student.projectGithubUrl,
       projectCanvaUrl: student.projectCanvaUrl,
       projectSlidesUrl: student.projectSlidesUrl,
+      projectOtherUrl: student.projectOtherUrl,
     });
   };
 
@@ -648,6 +651,17 @@ export function ReportsPanel({
                   >
                     <FolderOpen className="h-4 w-4" />
                     Thư mục Drive
+                  </a>
+                ) : null}
+                {schoolPackHref ? (
+                  <a
+                    href={schoolPackHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex min-h-10 items-center gap-1.5 rounded-xl px-3 text-sm font-medium text-brand-700 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-500/10"
+                  >
+                    <FolderOpen className="h-4 w-4" />
+                    {schoolPackLabel}
                   </a>
                 ) : null}
                 {showReports ? (

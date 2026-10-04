@@ -43,7 +43,11 @@ export function normalizeProjectLink(
   }
 }
 
-export function validateProjectLinks({ githubUrl, canvaUrl, slidesUrl } = {}) {
+function asHttps(value) {
+  return String(value || '').replace(/^http:\/\//i, 'https://');
+}
+
+export function validateProjectLinks({ githubUrl, canvaUrl, slidesUrl, otherUrl } = {}) {
   const gh = normalizeProjectLink(githubUrl, { hostIncludes: 'github.com' });
   if (gh.error) return { error: `GitHub: ${gh.error}` };
 
@@ -56,5 +60,13 @@ export function validateProjectLinks({ githubUrl, canvaUrl, slidesUrl } = {}) {
   });
   if (sl.error) return { error: `Google Slides: ${sl.error}` };
 
-  return { githubUrl: gh.value, canvaUrl: cv.value, slidesUrl: sl.value };
+  const other = normalizeProjectLink(otherUrl);
+  if (other.error) return { error: `Link khác: ${other.error}` };
+
+  return {
+    githubUrl: gh.value,
+    canvaUrl: cv.value,
+    slidesUrl: sl.value,
+    otherUrl: asHttps(other.value),
+  };
 }
