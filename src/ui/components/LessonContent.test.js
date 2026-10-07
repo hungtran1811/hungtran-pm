@@ -39,7 +39,9 @@ describe('LessonContent HTML rendering', () => {
     const iframe = container.querySelector('iframe');
     expect(iframe).not.toBeNull();
     expect(container.querySelector('.lesson-content')).not.toBeNull();
-    expect(iframe.getAttribute('sandbox')).toBe('allow-same-origin');
+    expect(iframe.getAttribute('sandbox')).toBe(
+      'allow-same-origin allow-popups allow-popups-to-escape-sandbox',
+    );
     expect(iframe.getAttribute('sandbox')).not.toContain('allow-scripts');
     expect(iframe.getAttribute('referrerpolicy')).toBe('no-referrer');
     expect(iframe.classList).toContain('lesson-document-frame', 'preview-frame');

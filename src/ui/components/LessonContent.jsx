@@ -147,7 +147,7 @@ function HtmlDocumentContent({ content = '', className = '', protectCopy = false
           ref={frameRef}
           className={`lesson-document-frame ${className}`}
           title="Nội dung bài giảng HTML"
-          sandbox="allow-same-origin"
+          sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
           scrolling="no"
           referrerPolicy="no-referrer"
           srcDoc={documentHtml}
