@@ -20,7 +20,7 @@ import { Button } from '../../ui/components/Button.jsx';
 import { Badge } from '../../ui/components/Badge.jsx';
 import { Field, Input, Select } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
-import { ClassOpsBoard, OpsAttentionList } from '../../ui/components/ClassOpsBoard.jsx';
+import { ClassOpsBoard } from '../../ui/components/ClassOpsBoard.jsx';
 import { CURRICULUM_PHASES, CURRICULUM_PHASE_LABELS } from '../../constants/index.js';
 import { setClassCurriculumQuick } from '../../services/classes.service.js';
 import {
@@ -30,7 +30,6 @@ import {
 } from '../../lib/adminPanelData.js';
 import {
   buildClassOpsRows,
-  buildOpsAttentionItems,
   computeDashboardStats,
   classSessionLabel,
   computeOpsKpis,
@@ -287,7 +286,6 @@ export function DashboardPage() {
     [classes, students, submissionsByClass],
   );
 
-  const attentionItems = useMemo(() => buildOpsAttentionItems(opsRows), [opsRows]);
   const opsKpis = useMemo(() => computeOpsKpis(opsRows), [opsRows]);
 
   const handleRefresh = () => {
@@ -394,19 +392,8 @@ export function DashboardPage() {
               <ClassOpsBoard rows={opsRows} driveEnabled={FEATURE_DRIVE_SUBMISSION_ENABLED} />
             </section>
 
-            <div className="contents lg:col-start-2 lg:flex lg:flex-col lg:gap-4 lg:sticky lg:top-20">
-              <section className="order-1 lg:order-none">
-                <h2 className="mb-3 text-lg font-semibold text-slate-800 dark:text-slate-100">
-                  Cần xử lý
-                  {attentionItems.length > 0 ? (
-                    <span className="ml-2 text-sm font-normal text-slate-400">{attentionItems.length} mục</span>
-                  ) : null}
-                </h2>
-                <OpsAttentionList items={attentionItems} hasOpenClasses={opsRows.length > 0} />
-              </section>
-              <div className="order-3 lg:order-none">
-                <SessionQuickSet classes={classes} onUpdated={handleSessionUpdated} />
-              </div>
+            <div className="order-3 lg:sticky lg:top-20 lg:col-start-2">
+              <SessionQuickSet classes={classes} onUpdated={handleSessionUpdated} />
             </div>
           </div>
         </div>
