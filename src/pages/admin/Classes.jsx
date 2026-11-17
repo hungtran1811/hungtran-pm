@@ -28,7 +28,6 @@ import {
   subscribeClasses,
   updateClass,
 } from '../../services/classes.service.js';
-import { markAllStudentsCompletedForClass } from '../../services/students.service.js';
 import { invalidateAdminSnapshots, loadFeedbackByClassCodes } from '../../lib/adminPanelData.js';
 import { listCurriculumPrograms } from '../../services/curriculum.service.js';
 import { averageUnderstanding } from '../../lib/classAnalytics.js';
@@ -133,16 +132,7 @@ export function ClassesPage() {
     try {
       await setClassStatus(cls.classCode, status, cls.status);
       invalidateAdminSnapshots();
-      if (status === 'completed') {
-        const count = await markAllStudentsCompletedForClass(cls.classCode);
-        toast.success(
-          count > 0
-            ? `Đã hoàn thành lớp. ${count} học sinh chuyển trạng thái Hoàn thành.`
-            : 'Đã hoàn thành lớp.',
-        );
-      } else {
-        toast.success('Đã khôi phục lớp.');
-      }
+      toast.success(status === 'completed' ? 'Đã hoàn thành lớp. Tiến độ dự án được giữ nguyên.' : 'Đã khôi phục lớp.');
     } catch (error) {
       toast.error(getErrorMessage(error));
     }

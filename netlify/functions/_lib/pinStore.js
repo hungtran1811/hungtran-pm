@@ -1,7 +1,7 @@
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { getAdminDb } from './firebaseAdmin.js';
-import { decryptPin, encryptPin, hashPin, verifyPinHash } from './pinCrypto.js';
+import { hashPin, verifyPinHash } from './pinCrypto.js';
 import {
   PIN_GENERIC_MESSAGE,
   PIN_LOCKED_MESSAGE,
@@ -20,7 +20,7 @@ import {
   loadOpenClass,
   studentBelongsToClass,
 } from './submissionValidate.js';
-import { assertWritableEnrollment } from './enrollmentAccess.js';
+import { assertReadableEnrollment } from './enrollmentAccess.js';
 
 function millis(value) {
   if (!value) return 0;
@@ -47,7 +47,7 @@ async function loadMembership(db, classCode, studentId) {
     return { ok: false, status: 403, error: 'Lớp này không dùng mã PIN.' };
   }
   if (!student?.active) return { ok: false, status: 403, error: 'Học sinh không thuộc lớp này.' };
-  const enrollment = await assertWritableEnrollment(db, classDoc.classCode || classDoc.id, studentId);
+  const enrollment = await assertReadableEnrollment(db, classDoc.classCode || classDoc.id, studentId);
   if (!enrollment.ok) return enrollment;
   if (enrollment.mode === 'legacy' && !studentBelongsToClass(student, classDoc.classCode, classDoc.id)) {
     return { ok: false, status: 403, error: 'Học sinh không thuộc lớp này.' };
@@ -103,7 +103,6 @@ export async function claimStudentPin(db, { classCode, studentId, pin, confirmPi
     hashPin(pin),
   ]);
   if (!membership.ok) return membership;
-  const pinCipher = encryptPin(pin);
   const ref = db.collection('studentCredentials').doc(studentId);
   try {
     await db.runTransaction(async (tx) => {
@@ -117,7 +116,6 @@ export async function claimStudentPin(db, { classCode, studentId, pin, confirmPi
         salt: hashed.salt,
         hash: hashed.hash,
         scryptN: hashed.scryptN,
-        pinCipher,
         credentialVersion: 1,
         failedCount: 0,
         locked: false,
@@ -223,7 +221,6 @@ export async function setResetPin(db, { classCode, studentId, pin, confirmPin })
   if (!canSetResetPin(request, Date.now())) {
     return { ok: false, status: 403, error: PIN_RESET_BLOCKED_MESSAGE };
   }
-  const pinCipher = encryptPin(pin);
   const credRef = db.collection('studentCredentials').doc(studentId);
   let version = 1;
   await db.runTransaction(async (tx) => {
@@ -233,7 +230,6 @@ export async function setResetPin(db, { classCode, studentId, pin, confirmPin })
       salt: hashed.salt,
       hash: hashed.hash,
       scryptN: hashed.scryptN,
-      pinCipher,
       credentialVersion: version,
       failedCount: 0,
       locked: false,
@@ -282,7 +278,6 @@ export async function readPinStatus(db, { studentId }) {
       status: derived.status,
       lastResetAt: derived.lastResetAt,
       requestId: request?.status === 'pending' ? request.id : '',
-      pin: revealStoredPin(credSnap.data()),
       hasCredential: credSnap.exists,
     },
   };
@@ -308,15 +303,6 @@ async function studentName(db, studentId, cache) {
   return name;
 }
 
-function revealStoredPin(data) {
-  if (!data?.pinCipher) return '';
-  try {
-    return decryptPin(data.pinCipher);
-  } catch {
-    return '';
-  }
-}
-
 function boardRow(student, classCode, credential, request) {
   const derived = derivePinStatus({ credential, request });
   return {
@@ -326,7 +312,6 @@ function boardRow(student, classCode, credential, request) {
     status: derived.status,
     lastResetAt: derived.lastResetAt,
     requestId: request?.status === 'pending' ? request.id : '',
-    pin: revealStoredPin(credential),
     hasCredential: Boolean(credential),
   };
 }
@@ -354,9 +339,7 @@ export async function listPinBoard(db, { classCode = '' } = {}) {
       );
       const credById = new Map(credSnaps.map((snap) => [snap.id, snap.data()]));
       for (const item of pending) {
-        const data = credById.get(item.studentId);
-        item.pin = revealStoredPin(data);
-        item.hasCredential = Boolean(data);
+        item.hasCredential = Boolean(credById.get(item.studentId));
       }
     }
     return { ok: true, body: { enabled: true, scope: 'pending', rows: [], pending } };
@@ -367,10 +350,25 @@ export async function listPinBoard(db, { classCode = '' } = {}) {
     return { ok: true, body: { enabled: false, scope: 'class', rows: [], pending: [] } };
   }
 
-  const studentsSnap = await db.collection('students').where('classId', '==', code).get();
-  const students = studentsSnap.docs
-    .map((doc) => ({ id: doc.id, fullName: String(doc.data()?.fullName || '').trim() }))
-    .sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi'));
+  const enrollmentSnap = await db.collection('classEnrollments').where('classCode', '==', code).get();
+  let students = [];
+  if (!enrollmentSnap.empty) {
+    const rows = enrollmentSnap.docs
+      .map((doc) => doc.data())
+      .filter((row) => row.status === 'active' || row.status === 'completed');
+    const nameSnaps = rows.length
+      ? await db.getAll(...rows.map((row) => db.collection('students').doc(row.studentId)))
+      : [];
+    const nameById = new Map(nameSnaps.map((snap) => [snap.id, String(snap.data()?.fullName || '').trim()]));
+    students = rows.map((row) => ({ id: row.studentId, fullName: nameById.get(row.studentId) || 'Học sinh' }));
+  } else {
+    const studentsSnap = await db.collection('students').where('classId', '==', code).get();
+    students = studentsSnap.docs.map((doc) => ({
+      id: doc.id,
+      fullName: String(doc.data()?.fullName || '').trim(),
+    }));
+  }
+  students.sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi'));
   if (!students.length) {
     return { ok: true, body: { enabled: true, scope: 'class', rows: [], pending: [] } };
   }
@@ -409,7 +407,6 @@ export async function listPinBoard(db, { classCode = '' } = {}) {
       classCode: code,
       fullName: row.fullName,
       createdAt: requestsByStudent.get(row.studentId)?.createdAt || 0,
-      pin: row.pin,
       hasCredential: row.hasCredential,
     }));
 

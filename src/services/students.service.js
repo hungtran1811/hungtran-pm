@@ -20,6 +20,7 @@ import { toStudentModel } from '../models/index.js';
 import { normalizeKey } from '../lib/firestore.js';
 import { validateProjectLinks } from '../lib/projectLinks.js';
 import { isLegacyUnapprovedProject, meaningfulProjectName } from '../lib/classFinalMode.js';
+import { overlayHistoricalState } from '../lib/upLevel.js';
 import { DEFAULT_STAGE, DEFAULT_STATUS } from '../constants/index.js';
 
 function studentsRef() {
@@ -50,13 +51,18 @@ export async function listRosterForClass(classCode, { includeHistory = false } =
   }
   if (enrollments.empty) return listActiveStudentsByClass(classCode);
   const rows = enrollments.docs
-    .map((item) => item.data())
+    .map((item) => ({ id: item.id, ...item.data() }))
     .filter((row) => row.status === 'active' || (includeHistory && row.status === 'completed'));
   const students = await Promise.all(
     rows.map(async (row) => {
       const snapshot = await getDoc(doc(appDb(), 'students', row.studentId));
       if (!snapshot.exists()) return null;
-      return { ...toStudentModel(snapshot), enrollmentStatus: row.status };
+      const stateSnap = await getDoc(doc(appDb(), 'classStudentStates', row.id));
+      const model = overlayHistoricalState(
+        toStudentModel(snapshot),
+        stateSnap.exists() ? stateSnap.data() : null,
+      );
+      return { ...model, enrollmentStatus: row.status, classCode, classId: classCode };
     }),
   );
   return students
@@ -122,6 +128,36 @@ export function subscribeActiveStudentsByClass(classCode, onData, onError) {
   return onSnapshot(
     q,
     (snapshot) => onData(sortStudents(snapshot.docs)),
+    onError,
+  );
+}
+
+export function subscribeRosterForClass(classCode, onData, onError, { includeHistory = true } = {}) {
+  if (!classCode) return () => {};
+  const q = query(collection(appDb(), 'classEnrollments'), where('classCode', '==', classCode));
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      if (snapshot.empty) {
+        listActiveStudentsByClass(classCode).then(onData).catch(onError);
+        return;
+      }
+      const rows = snapshot.docs
+        .map((item) => ({ id: item.id, ...item.data() }))
+        .filter((row) => row.status === 'active' || (includeHistory && row.status === 'completed'));
+      Promise.all(rows.map(async (row) => {
+        const snapshot = await getDoc(doc(appDb(), 'students', row.studentId));
+        if (!snapshot.exists()) return null;
+        const stateSnap = await getDoc(doc(appDb(), 'classStudentStates', row.id));
+        const model = overlayHistoricalState(
+          toStudentModel(snapshot),
+          stateSnap.exists() ? stateSnap.data() : null,
+        );
+        return { ...model, enrollmentStatus: row.status, classCode, classId: classCode };
+      }))
+        .then((list) => onData(list.filter((student) => student?.active).sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi'))))
+        .catch(onError);
+    },
     onError,
   );
 }

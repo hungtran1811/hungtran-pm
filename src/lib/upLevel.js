@@ -16,6 +16,31 @@ export function upLevelGate(currentSession, totalSessions) {
   return { ready: false, early: true };
 }
 
+export const HISTORICAL_STATE_FIELDS = [
+  'currentStatus',
+  'currentStage',
+  'currentProgressPercent',
+  'currentDifficulties',
+  'projectName',
+  'projectNameSubmission',
+  'projectNameStatus',
+  'projectNameReviewNote',
+  'projectTopic',
+  'projectProblemSolution',
+  'projectPlannedFeatures',
+  'projectGithubUrl',
+  'projectCanvaUrl',
+  'projectSlidesUrl',
+  'projectOtherUrl',
+  'latestReportId',
+  'lastReportedAt',
+  'openedLessonIds',
+  'lastOpenedLessonId',
+  'lastOpenedSessionNumber',
+  'lastOpenedAt',
+  'progressStalledCount',
+];
+
 export function sourceStateSnapshot(student, classCode) {
   return {
     studentId: student.id,
@@ -25,7 +50,12 @@ export function sourceStateSnapshot(student, classCode) {
     currentProgressPercent: Number(student.currentProgressPercent) || 0,
     currentDifficulties: student.currentDifficulties || '',
     projectName: student.projectName || '',
+    projectNameSubmission: student.projectNameSubmission || '',
     projectNameStatus: student.projectNameStatus || '',
+    projectNameReviewNote: student.projectNameReviewNote || '',
+    projectTopic: student.projectTopic || '',
+    projectProblemSolution: student.projectProblemSolution || '',
+    projectPlannedFeatures: student.projectPlannedFeatures || '',
     projectGithubUrl: student.projectGithubUrl || '',
     projectCanvaUrl: student.projectCanvaUrl || '',
     projectSlidesUrl: student.projectSlidesUrl || '',
@@ -35,34 +65,23 @@ export function sourceStateSnapshot(student, classCode) {
     openedLessonIds: Array.isArray(student.openedLessonIds) ? [...student.openedLessonIds] : [],
     lastOpenedLessonId: student.lastOpenedLessonId || '',
     lastOpenedSessionNumber: Number(student.lastOpenedSessionNumber) || 0,
+    lastOpenedAt: student.lastOpenedAt ?? null,
+    progressStalledCount: Number(student.progressStalledCount) || 0,
   };
+}
+
+export function overlayHistoricalState(student, state) {
+  if (!state) return student;
+  const next = { ...student };
+  for (const field of HISTORICAL_STATE_FIELDS) {
+    if (state[field] !== undefined) next[field] = state[field];
+  }
+  return next;
 }
 
 export function freshTargetState(studentId, classCode) {
   return {
     studentId,
-    classCode,
-    currentStatus: DEFAULT_STATUS,
-    currentStage: DEFAULT_STAGE,
-    currentProgressPercent: 0,
-    currentDifficulties: '',
-    projectName: '',
-    projectNameStatus: '',
-    projectGithubUrl: '',
-    projectCanvaUrl: '',
-    projectSlidesUrl: '',
-    projectOtherUrl: '',
-    latestReportId: '',
-    lastReportedAt: null,
-    openedLessonIds: [],
-    lastOpenedLessonId: '',
-    lastOpenedSessionNumber: 0,
-  };
-}
-
-export function freshStudentMirror(classCode) {
-  return {
-    classId: classCode,
     classCode,
     currentStatus: DEFAULT_STATUS,
     currentStage: DEFAULT_STAGE,
@@ -84,6 +103,37 @@ export function freshStudentMirror(classCode) {
     openedLessonIds: [],
     lastOpenedLessonId: '',
     lastOpenedSessionNumber: 0,
+    lastOpenedAt: null,
+    progressStalledCount: 0,
+  };
+}
+
+export function freshStudentMirror(classCode) {
+  return {
+    classId: classCode,
+    classCode,
+    currentClassCode: classCode,
+    currentStatus: DEFAULT_STATUS,
+    currentStage: DEFAULT_STAGE,
+    currentProgressPercent: 0,
+    currentDifficulties: '',
+    projectName: '',
+    projectNameSubmission: '',
+    projectNameStatus: '',
+    projectNameReviewNote: '',
+    projectTopic: '',
+    projectProblemSolution: '',
+    projectPlannedFeatures: '',
+    projectGithubUrl: '',
+    projectCanvaUrl: '',
+    projectSlidesUrl: '',
+    projectOtherUrl: '',
+    latestReportId: '',
+    lastReportedAt: null,
+    openedLessonIds: [],
+    lastOpenedLessonId: '',
+    lastOpenedSessionNumber: 0,
+    lastOpenedAt: null,
     progressStalledCount: 0,
   };
 }
@@ -92,10 +142,46 @@ function homeClass(student) {
   return student.classId || student.classCode || '';
 }
 
-function progressionBody({ operationId, source, target, program, selected, excluded, state, early, actor }) {
+export function upLevelRequestHash({
+  sourceClassCode,
+  targetClassCode,
+  programId,
+  className,
+  studentAccessCode,
+  selectedIds = [],
+  override = false,
+  overrideReason = '',
+} = {}) {
+  const ids = [...selectedIds].map(String).filter(Boolean).sort();
+  return [
+    normalizeClassLookupInput(sourceClassCode),
+    normalizeClassLookupInput(targetClassCode),
+    String(programId || '').trim(),
+    String(className || '').trim(),
+    normalizeClassLookupInput(studentAccessCode),
+    ids.join(','),
+    override === true ? '1' : '0',
+    String(overrideReason || '').trim(),
+  ].join('|');
+}
+
+function progressionBody({
+  operationId,
+  source,
+  target,
+  program,
+  selected,
+  excluded,
+  state,
+  early,
+  actor,
+  requestHash,
+  overrideReason,
+}) {
   return {
     operationId,
     idempotencyKey: operationId,
+    requestHash: requestHash || '',
     sourceClassCode: source.classCode,
     targetClassCode: target,
     sourceProgramId: source.curriculumProgramId || '',
@@ -104,6 +190,7 @@ function progressionBody({ operationId, source, target, program, selected, exclu
     excludedStudentIds: excluded.map((student) => student.id),
     state,
     earlyOverride: early,
+    overrideReason: early ? String(overrideReason || '').trim() : '',
     requestedBy: actor || '',
   };
 }
@@ -119,23 +206,16 @@ export function planUpLevel({
   selectedIds = [],
   confirmCode = '',
   override = false,
+  overrideReason = '',
   actor = '',
   existingProgression = null,
   targetClass = null,
   targetHasReports = false,
   gameOpen = false,
   uploadOpen = false,
+  credentialStudentIds = null,
 } = {}) {
   if (!source?.classCode) return { ok: false, error: 'Không tìm thấy lớp nguồn.' };
-  if (existingProgression?.state === 'committed' && existingProgression.targetClassCode) {
-    return {
-      ok: true,
-      already: true,
-      targetClassCode: existingProgression.targetClassCode,
-      writes: [],
-      studentCount: existingProgression.studentIds?.length || 0,
-    };
-  }
 
   const sourceCode = normalizeClassLookupInput(source.classCode);
   const target = normalizeClassLookupInput(targetClassCode);
@@ -143,6 +223,39 @@ export function planUpLevel({
   const access = normalizeClassLookupInput(studentAccessCode);
   const name = String(className || '').trim();
   const ids = Array.isArray(selectedIds) ? selectedIds.filter(Boolean) : [];
+  const requestHash = upLevelRequestHash({
+    sourceClassCode: sourceCode,
+    targetClassCode: target,
+    programId: program?.id,
+    className: name,
+    studentAccessCode: access,
+    selectedIds: ids,
+    override,
+    overrideReason,
+  });
+
+  if (existingProgression?.state === 'committed' && existingProgression.targetClassCode) {
+    const committedTarget = normalizeClassLookupInput(existingProgression.targetClassCode);
+    const sameRequest = !existingProgression.requestHash || existingProgression.requestHash === requestHash;
+    if (committedTarget === target && sameRequest) {
+      return {
+        ok: true,
+        already: true,
+        targetClassCode: committedTarget,
+        requestHash,
+        writes: [],
+        studentCount: existingProgression.studentIds?.length || 0,
+      };
+    }
+    return { ok: false, status: 409, error: 'Lớp nguồn đã có một chuyển cấp khác.' };
+  }
+  if (
+    existingProgression?.requestHash
+    && existingProgression.requestHash !== requestHash
+    && existingProgression.state !== 'rolled_back'
+  ) {
+    return { ok: false, status: 409, error: 'Đang có một Up Level khác cho lớp này.' };
+  }
 
   if (!target || target === sourceCode) {
     return { ok: false, error: 'Mã lớp đích phải khác mã lớp nguồn.' };
@@ -155,11 +268,14 @@ export function planUpLevel({
   if (!gate.ready && override !== true) {
     return { ok: false, error: 'Lớp chưa tới buổi cuối.' };
   }
+  if (!gate.ready && !String(overrideReason || '').trim()) {
+    return { ok: false, error: 'Hãy ghi lý do mở sớm.' };
+  }
   if (gameOpen || uploadOpen) {
     return { ok: false, error: 'Hãy đóng phiên Spy, Showdown hoặc bài nộp đang mở trước khi chuyển lớp.' };
   }
-  if (existingProgression?.targetClassCode && existingProgression.targetClassCode !== target) {
-    return { ok: false, error: `Lớp này đã được chuyển sang ${existingProgression.targetClassCode}.` };
+  if (existingProgression?.targetClassCode && normalizeClassLookupInput(existingProgression.targetClassCode) !== target) {
+    return { ok: false, status: 409, error: 'Đang có một Up Level khác cho lớp này.' };
   }
 
   const sameOperation = Boolean(
@@ -207,6 +323,8 @@ export function planUpLevel({
         state: 'preparing',
         early,
         actor,
+        requestHash,
+        overrideReason,
       }),
     },
     {
@@ -217,7 +335,7 @@ export function planUpLevel({
       data: {
         classCode: target,
         className: name,
-        status: 'active',
+        status: 'preparing',
         hidden: true,
         pinRequired: true,
         curriculumProgramId: program.id,
@@ -345,15 +463,30 @@ export function planUpLevel({
         state: 'committed',
         early,
         actor,
+        requestHash,
+        overrideReason,
       }),
     },
   );
 
+  const knownCredentials = Array.isArray(credentialStudentIds) ? new Set(credentialStudentIds) : null;
+  const missingPinIds = knownCredentials
+    ? selected.filter((student) => !knownCredentials.has(student.id)).map((student) => student.id)
+    : [];
+  const warnings = missingPinIds.map((id) => `Học sinh ${id} chưa có PIN để giữ. Em sẽ tự tạo PIN 4 số, không có mã kích hoạt.`);
+
   return {
     ok: true,
     already: false,
+    operationId,
+    requestHash,
     targetClassCode: target,
     studentCount: selected.length,
+    skippedCount: excluded.length,
+    warnings,
+    pinStatusCounts: knownCredentials
+      ? { present: selected.length - missingPinIds.length, missing: missingPinIds.length }
+      : null,
     writes,
   };
 }

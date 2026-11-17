@@ -68,13 +68,26 @@ describe('planUpLevel', () => {
     expect(archived.error).toBe('Mã lớp đã tồn tại.');
   });
 
-  it('returns the same target when the source was already committed', () => {
+  it('returns the same target when the same committed request is repeated', () => {
     const again = plan({
-      targetClassCode: 'PVĐ-OTHER',
-      confirmCode: 'PVĐ-OTHER',
-      existingProgression: { state: 'committed', targetClassCode: 'PVĐ-JSB06', studentIds: ['a'] },
+      existingProgression: {
+        state: 'committed',
+        targetClassCode: 'PVĐ-JSB06',
+        studentIds: ['a'],
+        requestHash: '',
+      },
     });
     expect(again).toMatchObject({ ok: true, already: true, targetClassCode: 'PVĐ-JSB06', writes: [] });
+  });
+
+  it('rejects a second target after the source was committed', () => {
+    const other = plan({
+      targetClassCode: 'PVĐ-OTHER',
+      confirmCode: 'PVĐ-OTHER',
+      studentAccessCode: 'OTHER',
+      existingProgression: { state: 'committed', targetClassCode: 'PVĐ-JSB06', studentIds: ['a'] },
+    });
+    expect(other).toMatchObject({ ok: false, status: 409 });
   });
 
   it('keeps the source progress snapshot and starts the target at zero', () => {
@@ -110,14 +123,62 @@ describe('planUpLevel', () => {
   it('requires an override before the last session and records it', () => {
     const blocked = plan({ source: { ...source, curriculumCurrentSession: 7 } });
     expect(blocked.ok).toBe(false);
-    const allowed = plan({ source: { ...source, curriculumCurrentSession: 7 }, override: true });
+    const allowed = plan({
+      source: { ...source, curriculumCurrentSession: 7 },
+      override: true,
+      overrideReason: 'Lớp cần chuyển trước vì lịch khai giảng.',
+    });
     expect(allowed.ok).toBe(true);
     expect(allowed.writes.find((write) => write.collection === 'classProgressions').data.earlyOverride).toBe(true);
+    expect(allowed.writes.find((write) => write.collection === 'classProgressions').data.overrideReason).toContain('khai giảng');
   });
 
   it('blocks the commit while a game or upload session is open', () => {
     expect(plan({ gameOpen: true }).ok).toBe(false);
     expect(plan({ uploadOpen: true }).ok).toBe(false);
+  });
+
+  it('keeps the project history fields that a fresh mirror would clear', () => {
+    const rich = student('a', 70);
+    rich.projectTopic = 'Chủ đề cũ';
+    rich.projectProblemSolution = 'Cách giải';
+    rich.projectPlannedFeatures = 'Tính năng';
+    rich.projectNameSubmission = 'Tên đã nộp';
+    rich.projectNameReviewNote = 'Ổn';
+    rich.progressStalledCount = 2;
+    const result = plan({ students: [rich, student('b', 40)] });
+    const snapshot = result.writes.find((write) => write.id === 'PVĐ-JSB05__a' && write.collection === 'classStudentStates');
+    expect(snapshot.data).toMatchObject({
+      projectTopic: 'Chủ đề cũ',
+      projectProblemSolution: 'Cách giải',
+      projectPlannedFeatures: 'Tính năng',
+      projectNameSubmission: 'Tên đã nộp',
+      projectNameReviewNote: 'Ổn',
+      progressStalledCount: 2,
+    });
+    const targetClass = result.writes.find((write) => write.collection === 'classes' && write.id === 'PVĐ-JSB06' && write.step === 'prepare');
+    expect(targetClass.data).toMatchObject({ hidden: true, status: 'preparing', curriculumCurrentSession: 0 });
+  });
+
+  it('warns when a selected student has no PIN credential and does not invent one', () => {
+    const result = plan({ credentialStudentIds: [] });
+    expect(result.warnings.join(' ')).toContain('chưa có PIN');
+    expect(result.writes.some((write) => write.collection === 'studentCredentials')).toBe(false);
+    expect(result.writes.some((write) => write.collection === 'pinResetRequests')).toBe(false);
+  });
+
+  it('blocks a different in-flight payload for the same source', () => {
+    const conflict = plan({
+      targetClassCode: 'PVĐ-JSB07',
+      confirmCode: 'PVĐ-JSB07',
+      studentAccessCode: 'JSB07',
+      existingProgression: {
+        state: 'preparing',
+        targetClassCode: 'PVĐ-JSB06',
+        requestHash: 'other-hash',
+      },
+    });
+    expect(conflict).toMatchObject({ ok: false, status: 409 });
   });
 
   it('does not open lesson 1 when the target session is 0', () => {

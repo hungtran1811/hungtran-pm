@@ -26,6 +26,9 @@ export function UpLevelWizard({ cls, program, programs = [], classes = [], requi
   const [selected, setSelected] = useState({});
   const [confirmCode, setConfirmCode] = useState('');
   const [override, setOverride] = useState(false);
+  const [overrideReason, setOverrideReason] = useState('');
+  const [preview, setPreview] = useState(null);
+  const [result, setResult] = useState(null);
   const [saving, setSaving] = useState(false);
   const gate = upLevelGate(cls.curriculumCurrentSession, program?.totalSessionCount);
   const nextProgram = useMemo(() => nextMindxProgram(program, programs), [program, programs]);
@@ -59,34 +62,41 @@ export function UpLevelWizard({ cls, program, programs = [], classes = [], requi
 
   const toggle = (id) => setSelected((prev) => ({ ...prev, [id]: !prev[id] }));
 
-  const submit = async () => {
-    const selectedIds = students.filter((student) => selected[student.id]).map((student) => student.id);
-    if (requireOverride && !override) {
-      toast.error('Hãy xác nhận mở sớm trước buổi cuối.');
-      return;
-    }
+  const payload = () => ({
+    sourceClassCode: cls.classCode,
+    targetClassCode: targetCode,
+    className,
+    programId,
+    studentAccessCode: accessCode,
+    selectedIds: students.filter((student) => selected[student.id]).map((student) => student.id),
+    confirmCode,
+    override: !gate.ready && override,
+    overrideReason,
+  });
+
+  const review = async () => {
     if (normalizeClassLookupInput(confirmCode) !== normalizeClassLookupInput(targetCode)) {
       toast.error('Hãy gõ lại đúng mã lớp đích.');
       return;
     }
     setSaving(true);
     try {
-      const result = await commitUpLevel({
-        sourceClassCode: cls.classCode,
-        targetClassCode: targetCode,
-        className,
-        programId,
-        studentAccessCode: accessCode,
-        selectedIds,
-        confirmCode,
-        override: requireOverride,
-      });
-      toast.success(
-        result.already
-          ? `Lớp này đã chuyển sang ${result.targetClassCode}.`
-          : `Đã tạo lớp ${result.targetClassCode}.`,
-      );
-      onClose();
+      const next = await commitUpLevel({ ...payload(), dryRun: true });
+      setPreview(next);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const submit = async () => {
+    if (!preview) return;
+    setSaving(true);
+    try {
+      const next = await commitUpLevel(payload());
+      setResult(next);
+      setPreview(null);
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -102,8 +112,13 @@ export function UpLevelWizard({ cls, program, programs = [], classes = [], requi
       size="lg"
       footer={
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>Hủy</Button>
-          <Button loading={saving} onClick={submit}>Tạo lớp mới</Button>
+          <Button variant="ghost" onClick={onClose}>Đóng</Button>
+          {result ? null : (
+            <Button variant="secondary" loading={saving && !preview} onClick={review}>Kiểm tra trước khi chuyển</Button>
+          )}
+          {preview ? (
+            <Button loading={saving} onClick={submit}>Xác nhận Up Level</Button>
+          ) : null}
         </div>
       }
     >
@@ -184,14 +199,33 @@ export function UpLevelWizard({ cls, program, programs = [], classes = [], requi
           </div>
         </fieldset>
         {requireOverride || !gate.ready ? (
-          <label className="flex items-start gap-2 text-sm">
-            <input type="checkbox" checked={override} onChange={(event) => setOverride(event.target.checked)} />
-            <span>Mở sớm trước buổi cuối. Lần này được ghi vào nhật ký.</span>
-          </label>
+          <div className="space-y-2">
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" checked={override} onChange={(event) => setOverride(event.target.checked)} />
+              <span>Mở sớm trước buổi cuối. Lần này được ghi vào nhật ký.</span>
+            </label>
+            <Field label="Lý do mở sớm" required>
+              <Input value={overrideReason} onChange={(event) => setOverrideReason(event.target.value)} />
+            </Field>
+          </div>
         ) : null}
         <Field label="Gõ lại mã lớp đích" required>
           <Input value={confirmCode} onChange={(event) => setConfirmCode(event.target.value)} autoComplete="off" />
         </Field>
+        {preview ? (
+          <div className="rounded-xl border border-slate-200 p-3 text-sm dark:border-slate-700">
+            <p>Nguồn {cls.classCode} sẽ chỉ đọc. Đích {preview.targetClassCode} bắt đầu buổi 0.</p>
+            <p>Chuyển {preview.movedCount || 0} học sinh, giữ lại {preview.skippedCount || 0} học sinh.</p>
+            {preview.aliasStatus === 'ambiguous' ? <p>Mã ngắn bị trùng. Học sinh phải nhập mã lớp đầy đủ.</p> : null}
+            {(preview.warnings || []).map((warning) => <p key={warning}>{warning}</p>)}
+          </div>
+        ) : null}
+        {result ? (
+          <div className="rounded-xl border border-slate-200 p-3 text-sm dark:border-slate-700">
+            <p>{result.already ? 'Lớp này đã được chuyển.' : 'Đã tạo lớp mới.'} Mã {result.targetClassCode}.</p>
+            <p>Học sinh giữ nguyên mã PIN. Lớp cũ còn báo cáo và bài nộp ở chế độ xem.</p>
+          </div>
+        ) : null}
       </div>
     </Modal>
   );

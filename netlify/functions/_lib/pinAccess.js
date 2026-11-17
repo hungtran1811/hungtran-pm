@@ -28,7 +28,7 @@ export async function requireStudent(event) {
 export async function assertPinClassStudent(event, db, classDoc, studentId) {
   const classCode = classDoc?.classCode || classDoc?.id;
   if (classCode && studentId) {
-    const enrollment = await assertWritableEnrollment(db, classCode, studentId);
+    const enrollment = await assertWritableEnrollment(db, classCode, studentId, classDoc?.status);
     if (!enrollment.ok) return enrollment;
   }
   if (classDoc?.pinRequired !== true) return { ok: true };

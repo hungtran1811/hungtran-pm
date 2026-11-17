@@ -115,4 +115,13 @@ describe('class access codes', () => {
     ], 'PVĐ-JSB06');
     expect(conflicts.map((item) => item.classCode)).toEqual(['HN-JSB06-HB']);
   });
+
+  it('does not let a completed class compete with the one active alias', () => {
+    const classes = [
+      open('PVĐ-C4K-GB25-HB', 'GB25', { status: 'completed' }),
+      open('HN-C4K-GB25', 'GB25'),
+    ];
+    expect(resolveClassLookup('GB25', classes).canonicalClassCode).toBe('HN-C4K-GB25');
+    expect(findActiveAliasConflicts('GB25', classes, 'HN-C4K-GB25')).toEqual([]);
+  });
 });

@@ -15,7 +15,6 @@ import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
 import { formatLessonKey } from '../../lib/submissionFileName.js';
 import { approvePinReset, fetchPinStatus, lockStudentPin } from '../../services/studentGate.service.js';
 import { Button } from './Button.jsx';
-import { MaskedPin } from './ClassPinBoard.jsx';
 import {
   FEATURE_CODE_UPLOAD_ENABLED,
   FEATURE_KNOWLEDGE_FEEDBACK_ENABLED,
@@ -132,7 +131,11 @@ export function StudentHistoryModal({ student, onClose, onPinChanged, feedbackOn
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Hồ sơ</p>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{student.fullName}</h3>
-              {pinStatus ? <MaskedPin pin={pinStatus.pin} hasCredential={pinStatus.hasCredential} /> : null}
+              {pinStatus ? (
+                <span className="text-sm text-slate-500">
+                  {pinStatus.status || (pinStatus.hasCredential ? 'Đang dùng' : 'Chưa tạo')}
+                </span>
+              ) : null}
             </div>
             <p className="text-sm text-slate-500">{classCode}</p>
             <p className="mt-3 text-sm font-medium text-slate-800 dark:text-slate-100">

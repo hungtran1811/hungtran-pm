@@ -33,16 +33,13 @@ afterEach(async () => {
 });
 
 describe('MaskedPin', () => {
-  it('stays hidden until the teacher clicks', async () => {
+  it('shows PIN status and never the digits', async () => {
     await act(async () => {
-      root.render(createElement(MaskedPin, { pin: '1234', hasCredential: true }));
+      root.render(createElement(MaskedPin, { status: 'Đang dùng', hasCredential: true }));
     });
-    expect(container.textContent).toContain('••••');
+    expect(container.textContent).toContain('Đang dùng');
     expect(container.textContent).not.toContain('1234');
-    await act(async () => {
-      container.querySelector('button[aria-label="Hiện PIN"]').click();
-    });
-    expect(container.textContent).toContain('1234');
+    expect(container.querySelector('button')).toBeNull();
   });
 });
 

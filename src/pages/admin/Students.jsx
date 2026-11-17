@@ -12,7 +12,6 @@ import { ClassFilterBar } from '../../ui/components/ClassFilterBar.jsx';
 import { Field, Input, Select } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { StudentHistoryModal } from '../../ui/components/StudentHistoryModal.jsx';
-import { MaskedPin } from '../../ui/components/ClassPinBoard.jsx';
 import { StudentTextBlock } from '../../ui/components/StudentTextBlock.jsx';
 import { STAGES, STAGE_TONES, STATUSES, STATUS_TONES } from '../../constants/index.js';
 import { subscribeClasses } from '../../services/classes.service.js';
@@ -21,6 +20,7 @@ import {
   createStudent,
   deleteStudent,
   reviewProjectName,
+  subscribeRosterForClass,
   subscribeStudentsByClass,
   updateStudent,
 } from '../../services/students.service.js';
@@ -57,12 +57,6 @@ function readClassFromParams(params) {
   return value;
 }
 
-const PIN_ROW_TONES = {
-  'Chờ reset': 'amber',
-  'Đã reset': 'blue',
-  'Tạm khóa': 'red',
-};
-
 function pinMapsEqual(left, right) {
   const leftKeys = Object.keys(left);
   const rightKeys = Object.keys(right);
@@ -70,10 +64,9 @@ function pinMapsEqual(left, right) {
   return leftKeys.every((key) => {
     const a = left[key];
     const b = right[key];
-    return a?.pin === b?.pin
-      && a?.status === b?.status
-      && a?.requestId === b?.requestId
-      && a?.hasCredential === b?.hasCredential;
+    return a?.status === b?.status
+      && a?.hasCredential === b?.hasCredential
+      && a?.requestId === b?.requestId;
   });
 }
 
@@ -89,7 +82,6 @@ function pinMapFromBoard(board) {
   const map = {};
   for (const row of board.rows || []) {
     map[row.studentId] = {
-      pin: row.pin || '',
       hasCredential: Boolean(row.hasCredential),
       status: row.status || '',
       requestId: row.requestId || '',
@@ -97,14 +89,12 @@ function pinMapFromBoard(board) {
   }
   for (const item of board.pending || []) {
     const current = map[item.studentId] || {
-      pin: '',
       hasCredential: false,
       status: 'Chờ reset',
       requestId: '',
     };
     map[item.studentId] = {
       ...current,
-      pin: item.pin || current.pin || '',
       hasCredential: Boolean(item.hasCredential || current.hasCredential),
       status: 'Chờ reset',
       requestId: item.requestId || current.requestId,
@@ -272,12 +262,9 @@ export function StudentsPage() {
       toast.error(getErrorMessage(error));
       setLoadingStudents(false);
     };
-    const unsubscribe = subscribeManyByClass(
-      classCodes,
-      subscribeStudentsByClass,
-      onData,
-      onError,
-    );
+    const unsubscribe = classCodes.length === 1
+      ? subscribeRosterForClass(classCodes[0], onData, onError)
+      : subscribeManyByClass(classCodes, subscribeStudentsByClass, onData, onError);
     return unsubscribe;
   }, [classCodes.join('|'), toast]);
 
@@ -630,11 +617,10 @@ function StudentRow({ student, showClass, showPin = false, studentClassDoc, onEd
         <div className={`${COLUMN_SPAN[columns.pin]} flex justify-center`}>
           <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">PIN</p>
           {pinInfo ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <MaskedPin pin={pinInfo.pin} hasCredential={pinInfo.hasCredential} />
-              {PIN_ROW_TONES[pinInfo.status] ? (
-                <Badge tone={PIN_ROW_TONES[pinInfo.status]}>{pinInfo.status}</Badge>
-              ) : null}
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                {pinInfo.status || (pinInfo.hasCredential ? 'Đang dùng' : 'Chưa tạo')}
+              </span>
             </div>
           ) : (
             <span className="text-sm text-slate-400">—</span>

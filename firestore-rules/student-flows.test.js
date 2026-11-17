@@ -859,6 +859,10 @@ describe('up level enrollment history', () => {
     await assertFails(other.doc('reports/lvl-source-a').get());
     await assertFails(publicDb().doc('reports/lvl-source-a').get());
     await assertFails(owner.doc('classProgressions/uplevel_LVL-SRC').get());
+    await assertSucceeds(owner.doc('classEnrollments/LVL-SRC__lvl-a').get());
+    await assertFails(other.doc('classEnrollments/LVL-SRC__lvl-a').get());
+    await assertFails(owner.collection('classEnrollments').where('classCode', '==', 'LVL-SRC').get());
+    await assertFails(owner.doc('reports/lvl-source-write').set(reportBody('LVL-SRC', 'lvl-a', 'Level A')));
 
     const allowed = owner.batch();
     allowed.set(owner.doc('reports/lvl-target-a'), reportBody('LVL-DST', 'lvl-a', 'Level A'));
@@ -869,5 +873,44 @@ describe('up level enrollment history', () => {
     denied.set(excluded.doc('reports/lvl-target-c'), reportBody('LVL-DST', 'lvl-c', 'Level C'));
     denied.update(excluded.doc('students/lvl-c'), snapshotUpdate('lvl-target-c'));
     await assertFails(denied.commit());
+  });
+
+  it('lets an old member read an archived class report and blocks a new submission', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await db.doc('classes/LVL-OLD').set({
+        classCode: 'LVL-OLD',
+        status: 'archived',
+        hidden: false,
+        pinRequired: true,
+      });
+      await db.doc('students/lvl-old').set({
+        fullName: 'Level Old',
+        classId: 'LVL-NEXT',
+        classCode: 'LVL-NEXT',
+        active: true,
+        projectName: 'Next app',
+      });
+      await db.doc('classEnrollments/LVL-OLD__lvl-old').set({
+        classCode: 'LVL-OLD',
+        studentId: 'lvl-old',
+        status: 'completed',
+      });
+      await db.doc('studentSessions/lvl-old').set({ credentialVersion: 1 });
+      await db.doc('reports/lvl-old-report').set({
+        studentId: 'lvl-old',
+        classCode: 'LVL-OLD',
+        classId: 'LVL-OLD',
+        studentName: 'Level Old',
+      });
+    });
+
+    const owner = testEnv.authenticatedContext('stu_lvl-old', {
+      studentId: 'lvl-old',
+      credentialVersion: 1,
+    }).firestore();
+    await assertSucceeds(owner.doc('classes/LVL-OLD').get());
+    await assertSucceeds(owner.doc('reports/lvl-old-report').get());
+    await assertFails(owner.doc('reports/lvl-old-new').set(reportBody('LVL-OLD', 'lvl-old', 'Level Old')));
   });
 });

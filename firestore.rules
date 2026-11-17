@@ -138,17 +138,23 @@ service cloud.firestore {
     }
 
     function memberCanWrite(studentId, classCode) {
-      return pinAllows(studentId, classCode) && (
-        enrolledForWrite(studentId, classCode)
-        || (!hasClassEnrollment(classCode, studentId) && isActiveStudentInClass(studentId, classCode))
-      );
+      return pinAllows(studentId, classCode)
+        && isOpenClass(classCode)
+        && (
+          enrolledForWrite(studentId, classCode)
+          || (!hasClassEnrollment(classCode, studentId) && isActiveStudentInClass(studentId, classCode))
+        );
     }
 
     function isHistoryVisibleClass(classId) {
       return classId is string
         && exists(/databases/$(database)/documents/classes/$(classId))
         && classDoc(classId).data.hidden != true
-        && (classDoc(classId).data.status == 'active' || classDoc(classId).data.status == 'completed');
+        && (
+          classDoc(classId).data.status == 'active'
+          || classDoc(classId).data.status == 'completed'
+          || classDoc(classId).data.status == 'archived'
+        );
     }
 
     function isActiveProgram(programId) {
@@ -869,7 +875,15 @@ service cloud.firestore {
     }
 
     match /classes/{classId} {
-      allow read: if isAdmin() || isClassReadableByPortal(resource.data);
+      allow read: if isAdmin()
+        || isClassReadableByPortal(resource.data)
+        || (
+          resource.data.status == 'archived'
+          && resource.data.hidden != true
+          && isSignedIn()
+          && request.auth.token.studentId is string
+          && enrolledForRead(request.auth.token.studentId, classId)
+        );
       allow write: if isAdmin();
     }
 
@@ -1459,8 +1473,12 @@ service cloud.firestore {
     }
 
     match /classEnrollments/{enrollmentId} {
-      allow get: if isAdmin() || resource.data.studentId is string;
-      allow list: if isAdmin() || resource.data.classCode is string;
+      allow get: if isAdmin() || (
+        isSignedIn()
+        && request.auth.token.studentId is string
+        && request.auth.token.studentId == resource.data.studentId
+      );
+      allow list: if isAdmin();
       allow write: if false;
     }
 
