@@ -3,14 +3,9 @@ import { Link } from 'react-router-dom';
 import {
   School,
   AlertTriangle,
-  BarChart3,
   ClipboardList,
   CalendarDays,
-  Gamepad2,
   RefreshCw,
-  BookOpen,
-  UserRound,
-  Upload,
   FileWarning,
   ExternalLink,
 } from 'lucide-react';
@@ -35,10 +30,8 @@ import {
   computeOpsKpis,
 } from '../../lib/dashboardStats.js';
 import { getErrorMessage } from '../../lib/firestore.js';
-import {
-  FEATURE_DRIVE_SUBMISSION_ENABLED,
-  FEATURE_PROGRESS_REPORTS_ENABLED,
-} from '../../config/features.js';
+import { FEATURE_DRIVE_SUBMISSION_ENABLED } from '../../config/features.js';
+import { countPendingPinResets } from '../../services/studentGate.service.js';
 
 function formatLoadedAt(date) {
   if (!date) return '';
@@ -62,44 +55,6 @@ function CompactKpi({ label, value, hint, tone = 'slate', icon }) {
       <p className={`mt-1 text-2xl font-semibold tabular-nums ${tones[tone] || tones.slate}`}>{value}</p>
       {hint ? <p className="mt-0.5 truncate text-[11px] text-slate-400">{hint}</p> : null}
     </div>
-  );
-}
-
-function CompactShortcut({ to, icon, title }) {
-  return (
-    <Link
-      to={to}
-      className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition hover:border-brand-300 hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-brand-500/50 dark:hover:text-brand-300"
-    >
-      {icon}
-      {title}
-    </Link>
-  );
-}
-
-function ShortcutBar() {
-  return (
-    <nav aria-label="Thao tác nhanh" className="flex flex-wrap gap-2">
-      {FEATURE_PROGRESS_REPORTS_ENABLED && (
-        <CompactShortcut
-          to="/admin/reports"
-          icon={<ClipboardList className="h-4 w-4" />}
-          title={FEATURE_DRIVE_SUBMISSION_ENABLED ? 'Báo cáo' : 'Báo cáo học sinh'}
-        />
-      )}
-      {FEATURE_DRIVE_SUBMISSION_ENABLED && !FEATURE_PROGRESS_REPORTS_ENABLED && (
-        <CompactShortcut
-          to="/admin/submissions"
-          icon={<Upload className="h-4 w-4" />}
-          title="Bài nộp Drive"
-        />
-      )}
-      <CompactShortcut to="/admin/games" icon={<Gamepad2 className="h-4 w-4" />} title="Mini game" />
-      <CompactShortcut to="/admin/students" icon={<UserRound className="h-4 w-4" />} title="Học sinh" />
-      <CompactShortcut to="/admin/classes" icon={<School className="h-4 w-4" />} title="Lớp học" />
-      <CompactShortcut to="/admin/lessons" icon={<BookOpen className="h-4 w-4" />} title="Bài giảng" />
-      <CompactShortcut to="/admin/analytics" icon={<BarChart3 className="h-4 w-4" />} title="Thống kê" />
-    </nav>
   );
 }
 
@@ -242,6 +197,7 @@ export function DashboardPage() {
   const [students, setStudents] = useState([]);
   const [submissionsByClass, setSubmissionsByClass] = useState({});
   const [loading, setLoading] = useState(true);
+  const [pendingPinResets, setPendingPinResets] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [loadedAt, setLoadedAt] = useState(null);
   const [fromCache, setFromCache] = useState(false);
@@ -272,6 +228,20 @@ export function DashboardPage() {
   useEffect(() => {
     loadDashboard();
   }, [loadDashboard]);
+
+  useEffect(() => {
+    let cancelled = false;
+    countPendingPinResets()
+      .then((result) => {
+        if (!cancelled) setPendingPinResets(Number(result?.pending || 0));
+      })
+      .catch(() => {
+        if (!cancelled) setPendingPinResets(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadedAt]);
 
   const stats = useMemo(
     () => computeDashboardStats(classes, students),
@@ -347,6 +317,13 @@ export function DashboardPage() {
               Bấm Làm mới để lấy bản mới.
             </p>
           ) : null}
+          {pendingPinResets > 0 ? (
+            <p className="text-sm text-slate-600 dark:text-slate-300">
+              <Link to="/admin/students?pin=1" className="font-medium text-brand-700 dark:text-brand-300">
+                {pendingPinResets} yêu cầu đặt lại PIN đang chờ duyệt.
+              </Link>
+            </p>
+          ) : null}
           <div className="space-y-3">
             <div className={kpiGridClass}>
               <CompactKpi
@@ -380,7 +357,6 @@ export function DashboardPage() {
                 />
               )}
             </div>
-            <ShortcutBar />
           </div>
 
           <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,1fr)_19rem] lg:items-start">

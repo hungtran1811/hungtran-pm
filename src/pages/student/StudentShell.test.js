@@ -21,12 +21,12 @@ afterEach(async () => {
   delete globalThis.IS_REACT_ACT_ENVIRONMENT;
 });
 
-function renderShell(props = {}) {
+function renderShell(props = {}, initialEntries = ['/']) {
   return act(async () => {
     root.render(
       createElement(
         MemoryRouter,
-        null,
+        { initialEntries },
         createElement(
           StudentShell,
           {
@@ -46,6 +46,7 @@ describe('StudentShell lesson reading layout', () => {
 
     expect(container.querySelector('main')?.classList).toContain('max-w-[90rem]');
     expect(container.querySelector('header > div')?.classList).toContain('max-w-[90rem]');
+    expect(container.querySelector('header img')?.getAttribute('src')).toBe('/logo-wordmark.svg');
     expect(container.querySelector('.student-bottom-nav')).not.toBeNull();
   });
 
@@ -77,6 +78,60 @@ describe('StudentShell lesson reading layout', () => {
 
     expect(container.querySelector('.student-game-join-notice')?.textContent).toContain('Tham gia');
     expect(container.querySelector('main')?.textContent).not.toContain('Tham gia');
+  });
+
+  it('shows the student groups from the shell items', async () => {
+    await renderShell({
+      bottomNavItems: [
+        { id: 'home', label: 'Trang chủ', to: '/c/WEB1' },
+        { id: 'lessons', label: 'Bài học', to: '/c/WEB1/lessons' },
+        { id: 'project', label: 'Dự án', to: '/c/WEB1/project' },
+      ],
+    });
+
+    const primary = container.querySelector('nav[aria-label="Điều hướng chính"]');
+    expect([...primary.querySelectorAll('a')].map((link) => link.textContent)).toEqual([
+      'Trang chủ',
+      'Bài học',
+      'Dự án',
+    ]);
+    expect(container.querySelectorAll('.student-bottom-nav a')).toHaveLength(3);
+  });
+
+  it('highlights only the opened tab', async () => {
+    const items = [
+      { id: 'home', label: 'Trang chủ', to: '/c/WEB1' },
+      { id: 'lessons', label: 'Bài học', to: '/c/WEB1/lessons' },
+      { id: 'project', label: 'Dự án', to: '/c/WEB1/project' },
+      { id: 'games', label: 'Trò chơi', to: '/c/WEB1#tro-choi' },
+    ];
+    await renderShell({ bottomNavItems: items }, ['/c/WEB1/lessons']);
+
+    const primary = container.querySelector('nav[aria-label="Điều hướng chính"]');
+    const selected = [...primary.querySelectorAll('a')]
+      .filter((link) => link.getAttribute('aria-current') === 'page')
+      .map((link) => link.textContent);
+    expect(selected).toEqual(['Bài học']);
+    expect(primary.querySelector('a')?.className).not.toContain('hover:');
+  });
+
+  it('highlights only the games tab when the games anchor is open', async () => {
+    await renderShell(
+      {
+        bottomNavItems: [
+          { id: 'home', label: 'Trang chủ', to: '/c/WEB1' },
+          { id: 'lessons', label: 'Bài học', to: '/c/WEB1/lessons' },
+          { id: 'project', label: 'Dự án', to: '/c/WEB1/project' },
+          { id: 'games', label: 'Trò chơi', to: '/c/WEB1#tro-choi' },
+        ],
+      },
+      ['/c/WEB1#tro-choi'],
+    );
+
+    const selected = [...container.querySelectorAll('nav[aria-label="Điều hướng chính"] a')]
+      .filter((link) => link.getAttribute('aria-current') === 'page')
+      .map((link) => link.textContent);
+    expect(selected).toEqual(['Trò chơi']);
   });
 
   it('tightens top padding on the compact project workspace', async () => {

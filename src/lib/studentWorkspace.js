@@ -4,6 +4,28 @@ export function studentClassBasePath(classCode) {
   return `/c/${encodeURIComponent(classCode || '')}`;
 }
 
+function decodePath(value) {
+  try {
+    return decodeURIComponent(value || '');
+  } catch {
+    return value || '';
+  }
+}
+
+/** Chỉ tab đúng trang hiện tại được tính là đang chọn. Đường dẫn gốc của lớp không kéo theo các trang con. */
+export function studentNavIsActive(to, location) {
+  const raw = String(to || '');
+  const hashIndex = raw.indexOf('#');
+  const targetHash = hashIndex >= 0 ? raw.slice(hashIndex) : '';
+  const targetPath = decodePath(hashIndex >= 0 ? raw.slice(0, hashIndex) : raw);
+  const currentPath = decodePath(location?.pathname);
+  const currentHash = location?.hash || '';
+  if (targetHash) return currentPath === targetPath && currentHash === targetHash;
+  const isClassRoot = /^\/c\/[^/]+$/.test(targetPath);
+  if (isClassRoot) return currentPath === targetPath && currentHash !== '#tro-choi';
+  return currentPath === targetPath || currentPath.startsWith(`${targetPath}/`);
+}
+
 export function studentUsesProjectWorkspace(classDoc, program) {
   return classDoc?.curriculumPhase === 'final' && resolveFinalMode(classDoc, program) === 'project';
 }

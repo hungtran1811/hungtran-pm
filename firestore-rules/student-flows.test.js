@@ -666,3 +666,208 @@ describe('student-facing Firestore rules', () => {
     await assertFails(materialSessionRef.get());
   });
 });
+
+describe('pin required class privacy', () => {
+  it('lets the owner read a report and blocks edits, deletes, and the other student', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await db.doc('classes/PIN101').set({
+        classCode: 'PIN101',
+        status: 'active',
+        hidden: false,
+        pinRequired: true,
+        curriculumPhase: 'learning',
+        curriculumCurrentSession: 1,
+      });
+      await db.doc('students/pin-a').set({
+        fullName: 'Pin A',
+        classId: 'PIN101',
+        classCode: 'PIN101',
+        active: true,
+      });
+      await db.doc('students/pin-b').set({
+        fullName: 'Pin B',
+        classId: 'PIN101',
+        classCode: 'PIN101',
+        active: true,
+      });
+      await db.doc('studentSessions/pin-a').set({ credentialVersion: 1 });
+      await db.doc('reports/pin-report-a').set({
+        studentId: 'pin-a',
+        classCode: 'PIN101',
+        classId: 'PIN101',
+        studentName: 'Pin A',
+      });
+      await db.doc('reports/pin-report-b').set({
+        studentId: 'pin-b',
+        classCode: 'PIN101',
+        classId: 'PIN101',
+        studentName: 'Pin B',
+      });
+      await db.doc('submissions/pin-file-a').set({
+        classCode: 'PIN101',
+        studentId: 'pin-a',
+        lessonKey: 'L01',
+      });
+    });
+
+    const owner = testEnv.authenticatedContext('stu_pin-a', {
+      studentId: 'pin-a',
+      credentialVersion: 1,
+    }).firestore();
+
+    await assertSucceeds(owner.doc('reports/pin-report-a').get());
+    await assertFails(owner.doc('reports/pin-report-b').get());
+    await assertFails(publicDb().doc('reports/pin-report-a').get());
+    await assertFails(owner.doc('reports/pin-report-a').update({ studentName: 'Changed' }));
+    await assertFails(owner.doc('reports/pin-report-a').delete());
+    await assertFails(owner.doc('submissions/pin-file-a').delete());
+    await assertFails(owner.doc('studentCredentials/pin-a').get());
+  });
+});
+
+describe('up level enrollment history', () => {
+  const reportBody = (classCode, studentId, studentName) => ({
+    classId: classCode,
+    classCode,
+    studentId,
+    studentName,
+    projectName: 'Next app',
+    progressPercent: 10,
+    stage: 'Phân tích vấn đề',
+    status: 'Đang làm',
+    doneToday: 'Started the new class project',
+    nextGoal: 'Finish the first lesson task',
+    difficulties: '',
+    projectGithubUrl: '',
+    projectCanvaUrl: '',
+    projectSlidesUrl: '',
+    projectOtherUrl: '',
+    submittedAt: serverTimestamp(),
+    submittedDateKey: '2026-11-17',
+    lessonKey: 'B01',
+    source: 'student-form',
+    createdAt: serverTimestamp(),
+  });
+
+  const snapshotUpdate = (reportId) => ({
+    currentProgressPercent: 10,
+    currentStage: 'Phân tích vấn đề',
+    currentStatus: 'Đang làm',
+    currentDifficulties: '',
+    lastReportedAt: serverTimestamp(),
+    latestReportId: reportId,
+    progressStalledCount: 0,
+    projectGithubUrl: '',
+    projectCanvaUrl: '',
+    projectSlidesUrl: '',
+    projectOtherUrl: '',
+    updatedAt: serverTimestamp(),
+  });
+
+  it('lets the owner read source history and requires an active enrollment for a new target report', async () => {
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore();
+      await db.doc('classes/LVL-SRC').set({
+        classCode: 'LVL-SRC',
+        status: 'completed',
+        hidden: false,
+        pinRequired: true,
+        curriculumPhase: 'learning',
+        curriculumCurrentSession: 8,
+      });
+      await db.doc('classes/LVL-DST').set({
+        classCode: 'LVL-DST',
+        status: 'active',
+        hidden: false,
+        pinRequired: true,
+        curriculumPhase: 'learning',
+        curriculumCurrentSession: 0,
+      });
+      await db.doc('students/lvl-a').set({
+        fullName: 'Level A',
+        classId: 'LVL-DST',
+        classCode: 'LVL-DST',
+        active: true,
+        projectName: 'Next app',
+      });
+      await db.doc('students/lvl-b').set({
+        fullName: 'Level B',
+        classId: 'LVL-DST',
+        classCode: 'LVL-DST',
+        active: true,
+        projectName: 'Next app',
+      });
+      await db.doc('students/lvl-c').set({
+        fullName: 'Level C',
+        classId: 'LVL-DST',
+        classCode: 'LVL-DST',
+        active: true,
+        projectName: 'Next app',
+      });
+      await db.doc('classEnrollments/LVL-SRC__lvl-a').set({
+        classCode: 'LVL-SRC',
+        studentId: 'lvl-a',
+        status: 'completed',
+      });
+      await db.doc('classEnrollments/LVL-DST__lvl-a').set({
+        classCode: 'LVL-DST',
+        studentId: 'lvl-a',
+        status: 'active',
+      });
+      await db.doc('classEnrollments/LVL-DST__lvl-c').set({
+        classCode: 'LVL-DST',
+        studentId: 'lvl-c',
+        status: 'completed',
+      });
+      await db.doc('studentSessions/lvl-a').set({ credentialVersion: 1 });
+      await db.doc('studentSessions/lvl-b').set({ credentialVersion: 1 });
+      await db.doc('studentSessions/lvl-c').set({ credentialVersion: 1 });
+      await db.doc('reports/lvl-source-a').set({
+        studentId: 'lvl-a',
+        classCode: 'LVL-SRC',
+        classId: 'LVL-SRC',
+        studentName: 'Level A',
+      });
+      await db.doc('classStudentStates/LVL-SRC__lvl-a').set({
+        studentId: 'lvl-a',
+        classCode: 'LVL-SRC',
+        currentProgressPercent: 70,
+      });
+      await db.doc('classProgressions/uplevel_LVL-SRC').set({
+        sourceClassCode: 'LVL-SRC',
+        targetClassCode: 'LVL-DST',
+        state: 'committed',
+      });
+    });
+
+    const owner = testEnv.authenticatedContext('stu_lvl-a', {
+      studentId: 'lvl-a',
+      credentialVersion: 1,
+    }).firestore();
+    const other = testEnv.authenticatedContext('stu_lvl-b', {
+      studentId: 'lvl-b',
+      credentialVersion: 1,
+    }).firestore();
+    const excluded = testEnv.authenticatedContext('stu_lvl-c', {
+      studentId: 'lvl-c',
+      credentialVersion: 1,
+    }).firestore();
+
+    await assertSucceeds(owner.doc('reports/lvl-source-a').get());
+    await assertSucceeds(owner.doc('classStudentStates/LVL-SRC__lvl-a').get());
+    await assertFails(other.doc('reports/lvl-source-a').get());
+    await assertFails(publicDb().doc('reports/lvl-source-a').get());
+    await assertFails(owner.doc('classProgressions/uplevel_LVL-SRC').get());
+
+    const allowed = owner.batch();
+    allowed.set(owner.doc('reports/lvl-target-a'), reportBody('LVL-DST', 'lvl-a', 'Level A'));
+    allowed.update(owner.doc('students/lvl-a'), snapshotUpdate('lvl-target-a'));
+    await assertSucceeds(allowed.commit());
+
+    const denied = excluded.batch();
+    denied.set(excluded.doc('reports/lvl-target-c'), reportBody('LVL-DST', 'lvl-c', 'Level C'));
+    denied.update(excluded.doc('students/lvl-c'), snapshotUpdate('lvl-target-c'));
+    await assertFails(denied.commit());
+  });
+});

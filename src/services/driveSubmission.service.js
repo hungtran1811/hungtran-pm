@@ -1,4 +1,5 @@
 import { FUNCTIONS_BASE } from '../config/submissionConfig.js';
+import { getStudentAuth } from '../config/studentFirebase.js';
 import { reportDriveFunctionError } from '../lib/driveFunctionErrors.js';
 import { validateCreateSessionInput, validateSubmissionFiles } from '../lib/submissionValidate.js';
 
@@ -15,6 +16,17 @@ function isRetryableStatus(status) {
   return status === 429 || status === 502 || status === 503;
 }
 
+async function studentAuthorization() {
+  try {
+    const user = getStudentAuth().currentUser;
+    if (!user) return {};
+    const token = await user.getIdToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
 async function postJson(name, body, { retries = 2 } = {}) {
   let lastError;
   for (let attempt = 0; attempt <= retries; attempt += 1) {
@@ -22,7 +34,7 @@ async function postJson(name, body, { retries = 2 } = {}) {
     try {
       response = await fetch(functionsUrl(name), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(await studentAuthorization()) },
         body: JSON.stringify(body),
       });
     } catch {

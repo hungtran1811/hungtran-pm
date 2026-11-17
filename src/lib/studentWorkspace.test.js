@@ -4,6 +4,7 @@ import {
   findProgramForClass,
   studentLearnPath,
   studentLessonsPath,
+  studentNavIsActive,
   studentProjectPath,
   studentSessionContextLabel,
   studentSubmitPath,
@@ -33,6 +34,25 @@ describe('student workspace paths', () => {
     expect(studentUsesProjectWorkspace(classDoc)).toBe(false);
     expect(studentLearnPath('EX1')).toBe('/c/EX1/learn');
     expect(studentSubmitPath('EX1')).toBe('/c/EX1/submit');
+  });
+});
+
+describe('studentNavIsActive', () => {
+  const items = {
+    home: '/c/WEB1',
+    lessons: '/c/WEB1/lessons',
+    project: '/c/WEB1/project',
+    games: '/c/WEB1#tro-choi',
+  };
+
+  it('highlights only the page that was opened', () => {
+    expect(studentNavIsActive(items.lessons, { pathname: '/c/WEB1/lessons', hash: '' })).toBe(true);
+    expect(studentNavIsActive(items.home, { pathname: '/c/WEB1/lessons', hash: '' })).toBe(false);
+    expect(studentNavIsActive(items.games, { pathname: '/c/WEB1/lessons', hash: '' })).toBe(false);
+    expect(studentNavIsActive(items.project, { pathname: '/c/WEB1/project', hash: '' })).toBe(true);
+    expect(studentNavIsActive(items.games, { pathname: '/c/WEB1', hash: '#tro-choi' })).toBe(true);
+    expect(studentNavIsActive(items.home, { pathname: '/c/WEB1', hash: '#tro-choi' })).toBe(false);
+    expect(studentNavIsActive(items.home, { pathname: '/c/WEB1', hash: '' })).toBe(true);
   });
 });
 

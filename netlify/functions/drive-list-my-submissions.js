@@ -10,6 +10,7 @@ import {
 } from './_lib/submissionValidate.js';
 import { toStudentSubmissionNotes } from '../../src/lib/submissionStudentNotes.js';
 import { functionErrorCode, logFunctionError } from './_lib/functionLog.js';
+import { assertPinClassStudent } from './_lib/pinAccess.js';
 
 export async function handler(event) {
   const early = preflight(event);
@@ -52,6 +53,8 @@ export async function handler(event) {
     if (!namesMatch(input.studentName, student.fullName)) {
       return json(403, { error: 'Tên học sinh không khớp danh sách lớp.' });
     }
+    const pinAccess = await assertPinClassStudent(event, db, classDoc, student.id);
+    if (!pinAccess.ok) return json(pinAccess.status, { error: pinAccess.error });
 
     const snap = await db
       .collection('submissions')

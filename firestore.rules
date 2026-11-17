@@ -60,6 +60,11 @@ service cloud.firestore {
       return data.status == 'active' && data.hidden != true;
     }
 
+    function isClassReadableByPortal(data) {
+      return data.hidden != true
+        && (data.status == 'active' || data.status == 'completed');
+    }
+
     function isOpenClass(classId) {
       return classId is string
         && exists(/databases/$(database)/documents/classes/$(classId))
@@ -74,6 +79,76 @@ service cloud.firestore {
           studentDoc(studentId).data.classId == classCode
           || studentDoc(studentId).data.classCode == classCode
         );
+    }
+
+    function classRequiresPin(classId) {
+      return classId is string
+        && exists(/databases/$(database)/documents/classes/$(classId))
+        && classDoc(classId).data.get('pinRequired', false) == true;
+    }
+
+    function isPinnedStudent(studentId) {
+      return isSignedIn()
+        && studentId is string
+        && request.auth.token.studentId == studentId
+        && request.auth.token.credentialVersion is int
+        && exists(/databases/$(database)/documents/studentSessions/$(studentId))
+        && get(/databases/$(database)/documents/studentSessions/$(studentId)).data.credentialVersion
+          == request.auth.token.credentialVersion;
+    }
+
+    function pinAllows(studentId, classCode) {
+      return !classRequiresPin(classCode) || isPinnedStudent(studentId);
+    }
+
+    function enrollmentPath(classCode, studentId) {
+      return /databases/$(database)/documents/classEnrollments/$(classCode + '__' + studentId);
+    }
+
+    function hasClassEnrollment(classCode, studentId) {
+      return classCode is string
+        && studentId is string
+        && exists(enrollmentPath(classCode, studentId));
+    }
+
+    function enrollmentStatus(classCode, studentId) {
+      return get(enrollmentPath(classCode, studentId)).data.status;
+    }
+
+    function enrolledForRead(studentId, classCode) {
+      return hasClassEnrollment(classCode, studentId)
+        && exists(/databases/$(database)/documents/students/$(studentId))
+        && studentDoc(studentId).data.active == true
+        && (enrollmentStatus(classCode, studentId) == 'active'
+          || enrollmentStatus(classCode, studentId) == 'completed');
+    }
+
+    function enrolledForWrite(studentId, classCode) {
+      return hasClassEnrollment(classCode, studentId)
+        && exists(/databases/$(database)/documents/students/$(studentId))
+        && studentDoc(studentId).data.active == true
+        && enrollmentStatus(classCode, studentId) == 'active';
+    }
+
+    function memberCanRead(studentId, classCode) {
+      return pinAllows(studentId, classCode) && (
+        enrolledForRead(studentId, classCode)
+        || (!hasClassEnrollment(classCode, studentId) && isActiveStudentInClass(studentId, classCode))
+      );
+    }
+
+    function memberCanWrite(studentId, classCode) {
+      return pinAllows(studentId, classCode) && (
+        enrolledForWrite(studentId, classCode)
+        || (!hasClassEnrollment(classCode, studentId) && isActiveStudentInClass(studentId, classCode))
+      );
+    }
+
+    function isHistoryVisibleClass(classId) {
+      return classId is string
+        && exists(/databases/$(database)/documents/classes/$(classId))
+        && classDoc(classId).data.hidden != true
+        && (classDoc(classId).data.status == 'active' || classDoc(classId).data.status == 'completed');
     }
 
     function isActiveProgram(programId) {
@@ -97,7 +172,7 @@ service cloud.firestore {
         ])
         && request.resource.data.classId == request.resource.data.classCode
         && isOpenClass(request.resource.data.classCode)
-        && isActiveStudentInClass(request.resource.data.studentId, request.resource.data.classCode)
+        && memberCanWrite(request.resource.data.studentId, request.resource.data.classCode)
         && studentDoc(request.resource.data.studentId).data.fullName == request.resource.data.studentName
         && studentDoc(request.resource.data.studentId).data.projectName == request.resource.data.projectName
         && request.resource.data.lessonKey is string
@@ -166,6 +241,7 @@ service cloud.firestore {
       return isKnowledgeFeedbackId(reportId, request.resource.data)
         && isOpenClass(request.resource.data.classCode)
         && isActiveStudentInClass(request.resource.data.studentId, request.resource.data.classCode)
+        && pinAllows(request.resource.data.studentId, request.resource.data.classCode)
         && studentDoc(request.resource.data.studentId).data.fullName == request.resource.data.studentName
         && isOpenKnowledgeFeedbackTarget(request.resource.data)
         && request.resource.data.understoodTopics is string
@@ -183,7 +259,8 @@ service cloud.firestore {
       return data != null
         && isKnowledgeFeedbackId(receiptId, data)
         && isOpenClass(data.classCode)
-        && isActiveStudentInClass(data.studentId, data.classCode);
+        && isActiveStudentInClass(data.studentId, data.classCode)
+        && pinAllows(data.studentId, data.classCode);
     }
 
     function isKnowledgeReceiptIdShape(receiptId) {
@@ -196,6 +273,7 @@ service cloud.firestore {
       return isKnowledgeFeedbackId(receiptId, request.resource.data)
         && isOpenClass(request.resource.data.classCode)
         && isActiveStudentInClass(request.resource.data.studentId, request.resource.data.classCode)
+        && pinAllows(request.resource.data.studentId, request.resource.data.classCode)
         && isOpenKnowledgeFeedbackTarget(request.resource.data)
         && request.resource.data.submittedAt == request.time
         && request.resource.data.createdAt == request.time
@@ -595,7 +673,8 @@ service cloud.firestore {
         && request.resource.data.projectPlannedFeatures.size() <= 800
         && request.resource.data.projectNameReviewNote == ''
         && request.resource.data.projectNameSubmittedAt == request.time
-        && request.resource.data.updatedAt == request.time;
+        && request.resource.data.updatedAt == request.time
+        && pinAllows(studentId, resource.data.classId);
     }
 
     function isValidPublicLessonProgressUpdate(studentId) {
@@ -613,7 +692,8 @@ service cloud.firestore {
         && request.resource.data.lastOpenedAt == request.time
         && request.resource.data.updatedAt == request.time
         && request.resource.data.openedLessonIds is list
-        && request.resource.data.openedLessonIds.size() <= 200;
+        && request.resource.data.openedLessonIds.size() <= 200
+        && pinAllows(studentId, resource.data.classId);
     }
 
     function reportClassCode(data) {
@@ -624,8 +704,8 @@ service cloud.firestore {
       return data != null
         && data.studentId is string
         && reportClassCode(data) is string
-        && isOpenClass(reportClassCode(data))
-        && isActiveStudentInClass(data.studentId, reportClassCode(data));
+        && isHistoryVisibleClass(reportClassCode(data))
+        && memberCanRead(data.studentId, reportClassCode(data));
     }
 
     function isKnowledgeSummaryId(summaryId, data) {
@@ -641,13 +721,15 @@ service cloud.firestore {
       return data != null
         && isKnowledgeSummaryId(summaryId, data)
         && isOpenClass(data.classCode)
-        && isActiveStudentInClass(data.studentId, data.classCode);
+        && isActiveStudentInClass(data.studentId, data.classCode)
+        && pinAllows(data.studentId, data.classCode);
     }
 
     function isValidPublicKnowledgeSummaryCreate(summaryId) {
       return isKnowledgeSummaryId(summaryId, request.resource.data)
         && isOpenClass(request.resource.data.classCode)
         && isActiveStudentInClass(request.resource.data.studentId, request.resource.data.classCode)
+        && pinAllows(request.resource.data.studentId, request.resource.data.classCode)
         && isOpenKnowledgeFeedbackTarget(request.resource.data)
         && request.resource.data.understoodTopics is string
         && request.resource.data.understoodTopics.size() >= 5
@@ -670,7 +752,8 @@ service cloud.firestore {
         && isValidOptionalProjectLink(request.resource.data.projectCanvaUrl)
         && isValidOptionalProjectLink(request.resource.data.projectSlidesUrl)
         && isValidOptionalProjectLink(request.resource.data.projectOtherUrl)
-        && request.resource.data.updatedAt == request.time;
+        && request.resource.data.updatedAt == request.time
+        && pinAllows(studentId, resource.data.classId);
     }
 
     function isFinalProjectClass(classCode) {
@@ -692,7 +775,8 @@ service cloud.firestore {
       return data != null
         && isCodeSubmissionDocId(docId, data)
         && isOpenClass(data.classCode)
-        && isActiveStudentInClass(data.studentId, data.classCode);
+        && isActiveStudentInClass(data.studentId, data.classCode)
+        && pinAllows(data.studentId, data.classCode);
     }
 
     function isValidCodeSubmissionFileMeta(entry) {
@@ -713,6 +797,7 @@ service cloud.firestore {
       return isCodeSubmissionDocId(docId, request.resource.data)
         && isOpenClass(request.resource.data.classCode)
         && isActiveStudentInClass(request.resource.data.studentId, request.resource.data.classCode)
+        && pinAllows(request.resource.data.studentId, request.resource.data.classCode)
         && isFinalProjectClass(request.resource.data.classCode)
         && studentDoc(request.resource.data.studentId).data.fullName == request.resource.data.studentName
         && studentDoc(request.resource.data.studentId).data.projectNameStatus == 'approved'
@@ -772,7 +857,8 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.classCode == resource.data.classId
         && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.status == request.resource.data.currentStatus
         && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.stage == request.resource.data.currentStage
-        && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.progressPercent == request.resource.data.currentProgressPercent;
+        && getAfter(/databases/$(database)/documents/reports/$(request.resource.data.latestReportId)).data.progressPercent == request.resource.data.currentProgressPercent
+        && pinAllows(studentId, resource.data.classId);
     }
 
     // --- Collections ---
@@ -783,7 +869,7 @@ service cloud.firestore {
     }
 
     match /classes/{classId} {
-      allow read: if isAdmin() || isClassVisibleToPublic(resource.data);
+      allow read: if isAdmin() || isClassReadableByPortal(resource.data);
       allow write: if isAdmin();
     }
 
@@ -870,7 +956,10 @@ service cloud.firestore {
       allow get: if isAdmin() || isReadableCodeSubmission(docId, resource.data);
       allow list: if isAdmin() || isReadableCodeSubmission(docId, resource.data);
       allow create, update: if isAdmin() || isValidCodeSubmissionWrite(docId);
-      allow delete: if isAdmin() || isReadableCodeSubmission(docId, resource.data);
+      allow delete: if isAdmin() || (
+        isReadableCodeSubmission(docId, resource.data)
+        && !classRequiresPin(resource.data.classCode)
+      );
 
       match /files/{fileId} {
         allow get: if isAdmin() || isReadableCodeSubmission(
@@ -878,7 +967,12 @@ service cloud.firestore {
             get(/databases/$(database)/documents/projectCodeSubmissions/$(docId)).data
           );
         allow create: if isAdmin() || isValidCodeSubmissionContentWrite(docId, fileId);
-        allow delete: if isAdmin() || isValidCodeSubmissionContentDelete(docId, fileId);
+        allow delete: if isAdmin() || (
+          isValidCodeSubmissionContentDelete(docId, fileId)
+          && !classRequiresPin(
+            get(/databases/$(database)/documents/projectCodeSubmissions/$(docId)).data.classCode
+          )
+        );
         allow update: if false;
       }
     }
@@ -1362,6 +1456,44 @@ service cloud.firestore {
         allow create, update: if isAdmin() || isValidSpyTaskProgressWrite(sessionId, studentId);
         allow delete: if isAdmin();
       }
+    }
+
+    match /classEnrollments/{enrollmentId} {
+      allow get: if isAdmin() || resource.data.studentId is string;
+      allow list: if isAdmin() || resource.data.classCode is string;
+      allow write: if false;
+    }
+
+    match /classStudentStates/{stateId} {
+      allow get: if isAdmin() || (
+        resource.data.studentId is string
+        && resource.data.classCode is string
+        && isHistoryVisibleClass(resource.data.classCode)
+        && memberCanRead(resource.data.studentId, resource.data.classCode)
+      );
+      allow list: if isAdmin();
+      allow write: if false;
+    }
+
+    match /classProgressions/{operationId} {
+      allow read, write: if false;
+    }
+
+    match /studentCredentials/{studentId} {
+      allow read, write: if false;
+    }
+
+    match /studentSessions/{studentId} {
+      allow get: if isAdmin() || (isSignedIn() && request.auth.token.studentId == studentId);
+      allow list, write: if false;
+    }
+
+    match /pinResetRequests/{requestId} {
+      allow read, write: if false;
+    }
+
+    match /pinAudit/{auditId} {
+      allow read, write: if false;
     }
   }
 }

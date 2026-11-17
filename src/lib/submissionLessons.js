@@ -47,6 +47,34 @@ export function buildStudentLessonOptions(classDoc, program) {
   });
 }
 
+export function classRoadmapSessions(classDoc, program) {
+  const total = Number(program?.totalSessionCount || 0);
+  const current = Number(classDoc?.curriculumCurrentSession || 0);
+  if (total <= 0) return [];
+  return Array.from({ length: total }, (_, index) => {
+    const sessionNumber = index + 1;
+    let state = 'locked';
+    if (current > 0 && sessionNumber < current) state = 'opened';
+    else if (sessionNumber === current) state = 'current';
+    return {
+      sessionNumber,
+      lessonKey: normalizeLessonKey(sessionNumber),
+      state,
+    };
+  });
+}
+
+export function lockedSessionNumbers(classDoc, program) {
+  const cap = Number(classDoc?.curriculumCurrentSession || 0);
+  const fromTotal = Number(program?.totalSessionCount || 0);
+  const lessonSessions = (program?.lessons || [])
+    .filter((lesson) => !lesson?.archived)
+    .map((lesson) => Number(lesson.sessionNumber) || 0);
+  const end = Math.max(fromTotal, ...lessonSessions, 0);
+  if (end <= cap) return [];
+  return Array.from({ length: end - cap }, (_, index) => cap + index + 1);
+}
+
 export function defaultLessonKey(classDoc, program) {
   const current = Number(classDoc?.curriculumCurrentSession || 0);
   if (current > 0) return normalizeLessonKey(current);

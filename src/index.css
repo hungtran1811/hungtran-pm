@@ -4,21 +4,25 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --color-brand-50: #eef5ff;
-  --color-brand-100: #d9e8ff;
-  --color-brand-200: #bcd6ff;
-  --color-brand-300: #8ebcff;
-  --color-brand-400: #5996ff;
-  --color-brand-500: #316ffd;
-  --color-brand-600: #1b50f2;
-  --color-brand-700: #163ddf;
-  --color-brand-800: #1833b4;
-  --color-brand-900: #1a318e;
-  --color-brand-950: #151f56;
+  --color-canvas: #f5f6fb;
+  --color-ink: #181c34;
+  --color-muted: #777e98;
+  --color-line: #e5e7f1;
+  --color-navy: #1b2143;
+  --color-brand-50: #f1efff;
+  --color-brand-100: #e4e0ff;
+  --color-brand-200: #cdc6ff;
+  --color-brand-300: #b5aeff;
+  --color-brand-400: #8c72ff;
+  --color-brand-500: #7366ee;
+  --color-brand-600: #6157e8;
+  --color-brand-700: #4f46d6;
+  --color-brand-800: #3d36a8;
+  --color-brand-900: #2a266f;
+  --color-brand-950: #1b2143;
 
   --font-sans:
-    'Exo 2', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-    sans-serif;
+    'Segoe UI Variable', 'Segoe UI', Inter, system-ui, -apple-system, sans-serif;
 
   /* Nhẹ hơn mặc định Tailwind — tránh chữ đậm quá */
   --font-weight-semibold: 550;
@@ -32,7 +36,7 @@
   }
 
   body {
-    @apply bg-slate-50 text-slate-800 font-normal subpixel-antialiased;
+    @apply bg-canvas text-ink font-normal subpixel-antialiased;
     font-family: var(--font-sans);
     font-synthesis: none;
     text-rendering: optimizeLegibility;
@@ -80,6 +84,11 @@
   label:has(> input[type='checkbox']),
   label:has(> input[type='radio']) {
     cursor: pointer;
+  }
+
+  :where(a, button, input, select, textarea, summary, [role='button'], [role='tab']):focus-visible {
+    outline: 3px solid #b5aeff;
+    outline-offset: 2px;
   }
 
   :where(button, a[href], [role='button'], [role='tab'], [role='option'], summary, select) {
@@ -187,9 +196,191 @@
   animation: student-success-pop 280ms ease-out;
 }
 
+.student-hero-field {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.student-hero-wash {
+  position: absolute;
+  inset: -10%;
+  background:
+    radial-gradient(circle at 12% 55%, rgb(255 255 255 / 0.16), transparent 26%),
+    radial-gradient(circle at 50% 45%, rgb(255 255 255 / 0.12), transparent 34%),
+    radial-gradient(circle at 86% 50%, rgb(140 114 255 / 0.42), transparent 32%);
+}
+
+.student-hero-spark {
+  position: absolute;
+  width: 0.35rem;
+  height: 0.35rem;
+  border-radius: 999px;
+  background: white;
+  opacity: 0.65;
+  left: var(--x);
+  top: var(--y);
+}
+
+.student-hero-orbit {
+  position: absolute;
+  top: 50%;
+  left: var(--at);
+  width: 20rem;
+  height: 20rem;
+  --radius: 7.4rem;
+  transform: translate(-50%, -50%);
+}
+
+.student-hero-orbit-center {
+  width: 30rem;
+  height: 30rem;
+  --radius: 11rem;
+}
+
+.student-hero-glow,
+.student-hero-ring,
+.student-hero-core,
+.student-hero-nodes {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+}
+
+.student-hero-glow {
+  inset: 18%;
+  background: radial-gradient(circle, rgb(255 255 255 / 0.28), transparent 68%);
+}
+
+.student-hero-ring {
+  border: 1px solid transparent;
+  border-top-color: rgb(255 255 255 / 0.78);
+  border-right-color: rgb(255 255 255 / 0.2);
+}
+
+.student-hero-ring-b {
+  inset: 14%;
+}
+
+.student-hero-ring-c {
+  inset: 28%;
+}
+
+.student-hero-core {
+  inset: 41%;
+  background: rgb(255 255 255 / 0.92);
+  box-shadow: 0 0 24px rgb(255 255 255 / 0.45);
+}
+
+.student-hero-arm {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  transform: rotate(calc(var(--i) * 360deg / var(--n))) translateY(calc(var(--radius) * -1));
+}
+
+.student-hero-node {
+  position: absolute;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin: -0.22rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.72);
+}
+
+.student-hero-node-opened {
+  background: white;
+}
+
+.student-hero-node-current {
+  width: 0.8rem;
+  height: 0.8rem;
+  margin: -0.4rem;
+  background: #f6c56a;
+  box-shadow: 0 0 16px #f6c56a;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .student-hero-ring-a {
+    animation: student-hero-spin 32s linear infinite;
+  }
+
+  .student-hero-ring-b {
+    animation: student-hero-spin 22s linear infinite reverse;
+  }
+
+  .student-hero-nodes {
+    animation: student-hero-spin 46s linear infinite;
+  }
+
+  .student-hero-core {
+    animation: student-hero-breathe 3.2s ease-in-out infinite;
+  }
+
+  .student-hero-node-current {
+    animation: student-hero-pulse 2.2s ease-in-out infinite;
+  }
+
+  .student-hero-orbit-left .student-hero-nodes,
+  .student-hero-orbit-left .student-hero-ring-a {
+    animation-direction: reverse;
+  }
+
+  .student-hero-orbit-right .student-hero-nodes {
+    animation-duration: 58s;
+  }
+
+  .student-hero-spark {
+    animation: student-hero-float 6.5s ease-in-out infinite;
+    animation-delay: var(--d);
+  }
+}
+
+@keyframes student-hero-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes student-hero-breathe {
+  50% {
+    transform: scale(1.12);
+    opacity: 0.82;
+  }
+}
+
+@keyframes student-hero-pulse {
+  50% {
+    transform: scale(1.35);
+  }
+}
+
+@keyframes student-hero-float {
+  50% {
+    transform: translateY(-12px) scale(1.4);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 640px) {
+  .student-hero-orbit {
+    width: 16rem;
+    height: 16rem;
+    --radius: 6rem;
+  }
+
+  .student-hero-orbit-center {
+    width: 22rem;
+    height: 22rem;
+    --radius: 8.2rem;
+  }
+}
+
 @layer components {
   .card {
-    @apply max-w-full rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900;
+    @apply max-w-full rounded-[17px] border border-line bg-white shadow-[0_12px_32px_rgba(28,32,78,0.045)] dark:border-slate-800 dark:bg-slate-900 dark:shadow-none;
   }
 
   .card-prose {
@@ -234,6 +425,16 @@
     padding-bottom: calc(
       var(--student-bottom-nav-height) + env(safe-area-inset-bottom, 0px) + 1rem
     );
+  }
+
+  @media (min-width: 701px) {
+    .student-main-with-nav {
+      padding-bottom: 1.5rem;
+    }
+
+    .student-bottom-nav {
+      display: none;
+    }
   }
 
   .student-portal:has(.student-game-join-notice) .student-main {

@@ -31,6 +31,34 @@ export function verifyJwtRs256(signingInput, signature, pem) {
   }
 }
 
+export function readStudentTokenClaims(payload, projectId) {
+  const project = String(projectId || '').trim();
+  const audience = String(payload?.aud || '').trim();
+  const issuer = String(payload?.iss || '').trim();
+  const uid = String(payload?.user_id || payload?.sub || '').trim();
+  const studentId = String(payload?.studentId || '').trim();
+  const credentialVersion = Number(payload?.credentialVersion);
+  const exp = Number(payload?.exp);
+
+  if (!project || !uid || !studentId) return null;
+  if (audience !== project) return null;
+  if (issuer !== `https://securetoken.google.com/${project}`) return null;
+  if (uid !== `stu_${studentId}`) return null;
+  if (!Number.isInteger(credentialVersion) || credentialVersion < 1) return null;
+  if (Number.isFinite(exp) && exp <= Math.floor(Date.now() / 1000)) return null;
+
+  return { uid, studentId, credentialVersion };
+}
+
+export async function verifyStudentIdToken(token, projectId, fetchImpl = fetch) {
+  const decoded = decodeFirebaseIdToken(token);
+  if (!decoded || decoded.header?.alg !== 'RS256' || !decoded.header?.kid) return null;
+  const certs = await getSecureTokenCerts(fetchImpl);
+  const pem = certs[decoded.header.kid];
+  if (!pem || !verifyJwtRs256(decoded.signingInput, decoded.signature, pem)) return null;
+  return readStudentTokenClaims(decoded.payload, projectId);
+}
+
 export function readFirebaseIdTokenClaims(payload, projectId) {
   const project = String(projectId || '').trim();
   const audience = String(payload?.aud || '').trim();

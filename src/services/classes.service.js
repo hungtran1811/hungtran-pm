@@ -17,6 +17,7 @@ import {
 import { db } from '../config/firebase.js';
 import { isArchivedClassStatus, isOperationalClassStatus } from '../lib/classStatus.js';
 import { toClassModel } from '../models/index.js';
+import { normalizeClassLookupInput } from '../lib/classAccessCode.js';
 
 export { isArchivedClassStatus, isOperationalClassStatus };
 
@@ -96,6 +97,8 @@ export async function createClass(classCode, payload) {
     curriculumCurrentSession: Number(payload.curriculumCurrentSession ?? 0),
     curriculumExerciseVisibleSessions: payload.curriculumExerciseVisibleSessions ?? [],
     finalMode: payload.finalMode === 'exam' ? 'exam' : 'project',
+    pinRequired: payload.pinRequired !== false,
+    studentAccessCode: normalizeClassLookupInput(payload.studentAccessCode || ''),
     studentCount: 0,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -131,6 +134,8 @@ export async function updateClass(classCode, payload) {
     curriculumCurrentSession: Number(payload.curriculumCurrentSession ?? 0),
     curriculumExerciseVisibleSessions: payload.curriculumExerciseVisibleSessions ?? [],
     finalMode: payload.finalMode === 'exam' ? 'exam' : 'project',
+    pinRequired: Boolean(payload.pinRequired),
+    studentAccessCode: normalizeClassLookupInput(payload.studentAccessCode || ''),
     updatedAt: serverTimestamp(),
   };
   applyClassArchiveTimestamps(patch, previousStatus, nextStatus);

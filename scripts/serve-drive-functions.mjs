@@ -9,6 +9,17 @@ import { handler as createLessonHtmlSession } from '../netlify/functions/drive-c
 import { handler as completeLessonHtml } from '../netlify/functions/drive-complete-lesson-html.js';
 import { handler as getLessonHtml } from '../netlify/functions/drive-get-lesson-html.js';
 import { handler as deleteLessonHtml } from '../netlify/functions/drive-delete-lesson-html.js';
+import { handler as classResolve } from '../netlify/functions/class-resolve.js';
+import { handler as pinGate } from '../netlify/functions/pin-gate.js';
+import { handler as pinClaim } from '../netlify/functions/pin-claim.js';
+import { handler as pinVerify } from '../netlify/functions/pin-verify.js';
+import { handler as pinResetRequest } from '../netlify/functions/pin-reset-request.js';
+import { handler as pinResetApprove } from '../netlify/functions/pin-reset-approve.js';
+import { handler as pinResetSet } from '../netlify/functions/pin-reset-set.js';
+import { handler as pinLock } from '../netlify/functions/pin-lock.js';
+import { handler as pinStatus } from '../netlify/functions/pin-status.js';
+import { handler as classAccessAudit } from '../netlify/functions/class-access-audit.js';
+import { handler as upLevel } from '../netlify/functions/up-level.js';
 
 const handlers = new Map([
   ['/drive-create-upload-session', createUploadSession],
@@ -31,6 +42,28 @@ const handlers = new Map([
   ['/.netlify/functions/drive-complete-lesson-html', completeLessonHtml],
   ['/.netlify/functions/drive-get-lesson-html', getLessonHtml],
   ['/.netlify/functions/drive-delete-lesson-html', deleteLessonHtml],
+  ['/class-resolve', classResolve],
+  ['/pin-gate', pinGate],
+  ['/pin-claim', pinClaim],
+  ['/pin-verify', pinVerify],
+  ['/pin-reset-request', pinResetRequest],
+  ['/pin-reset-approve', pinResetApprove],
+  ['/pin-reset-set', pinResetSet],
+  ['/pin-lock', pinLock],
+  ['/pin-status', pinStatus],
+  ['/class-access-audit', classAccessAudit],
+  ['/up-level', upLevel],
+  ['/.netlify/functions/class-resolve', classResolve],
+  ['/.netlify/functions/pin-gate', pinGate],
+  ['/.netlify/functions/pin-claim', pinClaim],
+  ['/.netlify/functions/pin-verify', pinVerify],
+  ['/.netlify/functions/pin-reset-request', pinResetRequest],
+  ['/.netlify/functions/pin-reset-approve', pinResetApprove],
+  ['/.netlify/functions/pin-reset-set', pinResetSet],
+  ['/.netlify/functions/pin-lock', pinLock],
+  ['/.netlify/functions/pin-status', pinStatus],
+  ['/.netlify/functions/class-access-audit', classAccessAudit],
+  ['/.netlify/functions/up-level', upLevel],
 ]);
 
 const port = Number(process.env.FUNCTIONS_PORT || 8888);

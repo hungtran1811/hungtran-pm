@@ -87,6 +87,20 @@ function renderLessonsView(props = {}) {
 }
 
 describe('LessonsView reading workspace', () => {
+  it('keeps sessions after the current one locked', async () => {
+    await renderLessonsView({
+      classDoc: { classCode: 'WEB-TEST', curriculumCurrentSession: 2 },
+      program: { ...program, totalSessionCount: 4 },
+    });
+    await act(async () => findButton('HTML cơ bản').click());
+
+    const locked = container.querySelector('button[aria-label="Buổi 3 chưa mở"]');
+    expect(locked).not.toBeNull();
+    expect(locked.disabled).toBe(true);
+    expect(container.querySelector('button[aria-label="Buổi 4 chưa mở"]')?.disabled).toBe(true);
+    expect(findButton('Buổi 3')).toBeUndefined();
+  });
+
   it('keeps lesson content mounted while focus mode opens and restores focus on exit', async () => {
     const onActiveSessionChange = vi.fn();
     await renderLessonsView({ onActiveSessionChange });
@@ -293,7 +307,7 @@ describe('LessonsView reading workspace', () => {
       'lesson-1',
       expect.objectContaining({ parts: ['lecture'] }),
     );
-    expect(container.textContent).toContain('Bài giảng');
+    expect(container.textContent).toContain('Nội dung');
 
     await act(async () => findButton('Bài tập').click());
     await act(async () => {

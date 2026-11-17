@@ -1,12 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Search } from 'lucide-react';
-import {
-  firstProgramForSubject,
-  groupProgramsBySubjectAndLevel,
-  resolveProgramSubjectMeta,
-  subjectsWithPrograms,
-} from '../../lib/subjectGroups.js';
+import { groupProgramsBySubjectAndLevel, resolveProgramSubjectMeta } from '../../lib/subjectGroups.js';
 import { Input } from './Field.jsx';
 
 export function GroupedProgramSelect({
@@ -18,41 +13,30 @@ export function GroupedProgramSelect({
   className = '',
   id,
 }) {
-  const [subjectId, setSubjectId] = useState('all');
   const [search, setSearch] = useState('');
+  const [openGroupId, setOpenGroupId] = useState('');
   const [open, setOpen] = useState(false);
   const [menuPos, setMenuPos] = useState(null);
   const rootRef = useRef(null);
   const triggerRef = useRef(null);
   const menuRef = useRef(null);
 
-  const subjectOptions = useMemo(() => subjectsWithPrograms(programs), [programs]);
-
-  const subjectFiltered = useMemo(() => {
-    if (!subjectId || subjectId === 'all') return programs;
-    return programs.filter(
-      (program) => resolveProgramSubjectMeta(program.id, program).id === subjectId,
-    );
-  }, [programs, subjectId]);
-
   const searchedPrograms = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return subjectFiltered;
-    return subjectFiltered.filter(
-      (program) =>
+    if (!q) return programs;
+    return programs.filter((program) => {
+      const group = resolveProgramSubjectMeta(program.id, program).label.toLowerCase();
+      return (
         String(program.name || '').toLowerCase().includes(q) ||
-        String(program.id || '').toLowerCase().includes(q),
-    );
-  }, [subjectFiltered, search]);
+        String(program.id || '').toLowerCase().includes(q) ||
+        group.includes(q)
+      );
+    });
+  }, [programs, search]);
 
   const listGroups = useMemo(
     () => groupProgramsBySubjectAndLevel(searchedPrograms),
     [searchedPrograms],
-  );
-
-  const resultCount = listGroups.reduce(
-    (sum, group) => sum + group.levels.reduce((inner, level) => inner + level.programs.length, 0),
-    0,
   );
 
   const selected = useMemo(
@@ -67,10 +51,10 @@ export function GroupedProgramSelect({
   }, [includeEmpty, value, emptyLabel, selected]);
 
   useEffect(() => {
-    if (subjectId !== 'all' && !subjectOptions.some((group) => group.id === subjectId)) {
-      setSubjectId('all');
-    }
-  }, [subjectId, subjectOptions]);
+    if (!open) return;
+    const current = programs.find((program) => program.id === value);
+    setOpenGroupId(current ? resolveProgramSubjectMeta(current.id, current).id : '');
+  }, [open, programs, value]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -121,35 +105,10 @@ export function GroupedProgramSelect({
     setSearch('');
   };
 
-  const pickSubject = (nextSubjectId) => {
-    setSubjectId(nextSubjectId);
-    setSearch('');
-    if (nextSubjectId === 'all') return;
-    const first = firstProgramForSubject(programs, nextSubjectId);
-    if (first && first.id !== value) onChange(first.id);
-  };
+  const searching = Boolean(search.trim());
 
   return (
-    <div className={`space-y-2 ${className}`}>
-      {subjectOptions.length > 2 && (
-        <div className="flex flex-wrap gap-1.5">
-          {subjectOptions.map((group) => (
-            <button
-              key={group.id}
-              type="button"
-              onClick={() => pickSubject(group.id)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                subjectId === group.id
-                  ? 'bg-brand-600 text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
-              }`}
-            >
-              {group.label}
-            </button>
-          ))}
-        </div>
-      )}
-
+    <div className={className}>
       <div ref={rootRef} className="relative min-w-0">
         <button
           ref={triggerRef}
@@ -191,10 +150,6 @@ export function GroupedProgramSelect({
                     autoFocus
                   />
                 </div>
-                <p className="mt-1.5 px-1 text-xs text-slate-400">
-                  {resultCount} chương trình
-                  {search.trim() ? ' khớp' : ''}
-                </p>
               </div>
 
               <ul
@@ -220,54 +175,53 @@ export function GroupedProgramSelect({
                   </li>
                 )}
 
-                {resultCount === 0 ? (
+                {listGroups.length === 0 ? (
                   <li className="px-3 py-6 text-center text-sm text-slate-400">
                     Không tìm thấy chương trình
                   </li>
                 ) : (
-                  listGroups.map((group) => (
-                    <li key={group.id}>
-                      <p className="sticky top-0 z-10 bg-slate-50 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:bg-slate-800/95">
-                        {group.label}
-                      </p>
-                      {group.levels.map((level) => (
-                        <div key={level.id}>
-                          <p className="px-3 py-1 text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                            {level.label}
-                          </p>
-                          <ul>
-                            {level.programs.map((program) => {
-                              const active = value === program.id;
-                              return (
-                                <li key={program.id}>
+                  listGroups.map((group) => {
+                    const expanded = searching || listGroups.length === 1 || openGroupId === group.id;
+                    const count = group.levels.reduce((sum, level) => sum + level.programs.length, 0);
+                    return (
+                      <li key={group.id}>
+                        <button
+                          type="button"
+                          className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+                          aria-expanded={expanded}
+                          onClick={() => setOpenGroupId((current) => (current === group.id ? '' : group.id))}
+                        >
+                          <span className="truncate">{group.label}</span>
+                          <span className="text-xs font-normal text-slate-400">{count}</span>
+                        </button>
+                        {expanded
+                          ? group.levels.flatMap((level) =>
+                              level.programs.map((program) => {
+                                const active = value === program.id;
+                                return (
                                   <button
+                                    key={program.id}
                                     type="button"
                                     role="option"
                                     aria-selected={active}
                                     title={program.id}
                                     onClick={() => pick(program.id)}
-                                    className={`w-full px-3 py-2 text-left text-sm transition hover:bg-slate-50 dark:hover:bg-slate-800 ${
+                                    className={`block w-full truncate px-3 py-1.5 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-800 ${
                                       active
                                         ? 'bg-brand-50 font-medium text-brand-700 dark:bg-brand-500/10 dark:text-brand-200'
-                                        : 'text-slate-700 dark:text-slate-200'
+                                        : 'text-slate-600 dark:text-slate-300'
                                     }`}
                                   >
-                                    <span className="block truncate">
-                                      {program.name}
-                                      {program.active === false ? ' · ẩn' : ''}
-                                    </span>
-                                    <span className="mt-0.5 block truncate text-xs text-slate-400">
-                                      {program.id}
-                                    </span>
+                                    {level.id === 'other' ? program.name : `${level.label} · ${program.name}`}
+                                    {program.active === false ? ' · ẩn' : ''}
                                   </button>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </div>
-                      ))}
-                    </li>
-                  ))
+                                );
+                              }),
+                            )
+                          : null}
+                      </li>
+                    );
+                  })
                 )}
               </ul>
             </div>,

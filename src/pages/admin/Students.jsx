@@ -12,6 +12,7 @@ import { ClassFilterBar } from '../../ui/components/ClassFilterBar.jsx';
 import { Field, Input, Select } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { StudentHistoryModal } from '../../ui/components/StudentHistoryModal.jsx';
+import { MaskedPin } from '../../ui/components/ClassPinBoard.jsx';
 import { StudentTextBlock } from '../../ui/components/StudentTextBlock.jsx';
 import { STAGES, STAGE_TONES, STATUSES, STATUS_TONES } from '../../constants/index.js';
 import { subscribeClasses } from '../../services/classes.service.js';
@@ -27,6 +28,7 @@ import { ALL_CLASSES_VALUE, buildClassesByCode, resolveScopedClasses } from '../
 import { invalidateAdminSnapshots } from '../../lib/adminPanelData.js';
 import { subscribeManyByClass } from '../../lib/multiClassSubscribe.js';
 import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
+import { approvePinReset, fetchPinBoard, lockStudentPin } from '../../services/studentGate.service.js';
 import {
   canReviewStudentProjectName,
   classUsesProjectNames,
@@ -53,6 +55,62 @@ function readClassFromParams(params) {
   const value = params.get('class') || '';
   if (value === ALL_CLASSES_VALUE) return ALL_CLASSES_VALUE;
   return value;
+}
+
+const PIN_ROW_TONES = {
+  'Chờ reset': 'amber',
+  'Đã reset': 'blue',
+  'Tạm khóa': 'red',
+};
+
+function pinMapsEqual(left, right) {
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) return false;
+  return leftKeys.every((key) => {
+    const a = left[key];
+    const b = right[key];
+    return a?.pin === b?.pin
+      && a?.status === b?.status
+      && a?.requestId === b?.requestId
+      && a?.hasCredential === b?.hasCredential;
+  });
+}
+
+function studentColumns({ showClass, showPin }) {
+  if (showPin && showClass) return { name: 3, pin: 2, project: 1, status: 2, progress: 2, actions: 2 };
+  if (showPin) return { name: 2, pin: 2, project: 2, status: 2, progress: 2, actions: 2 };
+  if (showClass) return { name: 4, project: 2, status: 2, progress: 2, actions: 2 };
+  return { name: 3, project: 3, status: 2, progress: 2, actions: 2 };
+}
+
+function pinMapFromBoard(board) {
+  if (!board || board.enabled === false) return {};
+  const map = {};
+  for (const row of board.rows || []) {
+    map[row.studentId] = {
+      pin: row.pin || '',
+      hasCredential: Boolean(row.hasCredential),
+      status: row.status || '',
+      requestId: row.requestId || '',
+    };
+  }
+  for (const item of board.pending || []) {
+    const current = map[item.studentId] || {
+      pin: '',
+      hasCredential: false,
+      status: 'Chờ reset',
+      requestId: '',
+    };
+    map[item.studentId] = {
+      ...current,
+      pin: item.pin || current.pin || '',
+      hasCredential: Boolean(item.hasCredential || current.hasCredential),
+      status: 'Chờ reset',
+      requestId: item.requestId || current.requestId,
+    };
+  }
+  return map;
 }
 
 function FilterChip({ active, onClick, children }) {
@@ -86,6 +144,9 @@ export function StudentsPage() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [historyTarget, setHistoryTarget] = useState(null);
+  const [pinByStudent, setPinByStudent] = useState({});
+  const [pinEnabled, setPinEnabled] = useState(false);
+  const [pinReload, setPinReload] = useState(0);
   const [showArchived, setShowArchived] = useState(false);
   const [programs, setPrograms] = useState([]);
   const reviewOnly = searchParams.get('review') === '1';
@@ -112,6 +173,41 @@ export function StudentsPage() {
     },
     [setSearchParams],
   );
+
+  const refreshPins = useCallback(() => setPinReload((value) => value + 1), []);
+
+  useEffect(() => {
+    const code = selectedClass && selectedClass !== ALL_CLASSES_VALUE ? selectedClass : '';
+    if (!code) {
+      setPinByStudent({});
+      setPinEnabled(false);
+      return undefined;
+    }
+    let cancelled = false;
+    let warned = false;
+    const pull = () => fetchPinBoard(code)
+      .then((board) => {
+        if (cancelled) return;
+        setPinEnabled(board?.enabled === true);
+        const next = pinMapFromBoard(board);
+        setPinByStudent((current) => (pinMapsEqual(current, next) ? current : next));
+      })
+      .catch((error) => {
+        if (cancelled || warned) return;
+        warned = true;
+        toast.error(getErrorMessage(error));
+      });
+    pull();
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      pull();
+    }, 2500);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClass, pinReload]);
 
   const handleClassChange = useCallback(
     (code) => {
@@ -308,13 +404,7 @@ export function StudentsPage() {
             />
           ) : (
             <div className="card overflow-hidden">
-              <div className="hidden grid-cols-12 gap-3 border-b border-slate-100 bg-slate-50 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:grid dark:border-slate-800 dark:bg-slate-800/40">
-                <span className={isAllClasses ? 'col-span-4' : 'col-span-3'}>Học sinh</span>
-                <span className={isAllClasses ? 'col-span-2' : 'col-span-3'}>Dự án</span>
-                <span className="col-span-2">Trạng thái</span>
-                <span className="col-span-2">Tiến độ</span>
-                <span className="col-span-2 text-right">Thao tác</span>
-              </div>
+              <StudentTableHead showClass={isAllClasses} showPin={pinEnabled} />
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
                 {filtered.map((s) => (
                   <StudentRow
@@ -325,6 +415,9 @@ export function StudentsPage() {
                     onEdit={() => { setEditing(s); setShowForm(true); }}
                     onDelete={() => setDeleteTarget(s)}
                     onView={() => setHistoryTarget(s)}
+                    pinInfo={pinByStudent[s.id]}
+                    showPin={pinEnabled}
+                    onPinsChanged={refreshPins}
                   />
                 ))}
               </div>
@@ -353,7 +446,7 @@ export function StudentsPage() {
       />
 
       {historyTarget && (
-        <StudentHistoryModal student={historyTarget} onClose={() => setHistoryTarget(null)} />
+        <StudentHistoryModal student={historyTarget} onClose={() => setHistoryTarget(null)} onPinChanged={refreshPins} />
       )}
     </AppShell>
   );
@@ -413,7 +506,28 @@ function ProjectProposalDetails({ student }) {
   );
 }
 
-function StudentRow({ student, showClass, studentClassDoc, onEdit, onDelete, onView }) {
+const COLUMN_SPAN = {
+  1: 'md:col-span-1',
+  2: 'md:col-span-2',
+  3: 'md:col-span-3',
+  4: 'md:col-span-4',
+};
+
+function StudentTableHead({ showClass, showPin }) {
+  const columns = studentColumns({ showClass, showPin });
+  return (
+    <div className="hidden grid-cols-12 gap-3 border-b border-slate-100 bg-slate-50 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500 md:grid dark:border-slate-800 dark:bg-slate-800/40">
+      <span className={COLUMN_SPAN[columns.name]}>Học sinh</span>
+      {showPin ? <span className={`${COLUMN_SPAN[columns.pin]} text-center`}>PIN</span> : null}
+      <span className={COLUMN_SPAN[columns.project]}>Dự án</span>
+      <span className={COLUMN_SPAN[columns.status]}>Trạng thái</span>
+      <span className={COLUMN_SPAN[columns.progress]}>Tiến độ</span>
+      <span className={`${COLUMN_SPAN[columns.actions]} text-right`}>Thao tác</span>
+    </div>
+  );
+}
+
+function StudentRow({ student, showClass, showPin = false, studentClassDoc, onEdit, onDelete, onView, pinInfo, onPinsChanged }) {
   const usesProjectNames = classUsesProjectNames(studentClassDoc);
   const hasProposal = hasViewableProjectProposal(student);
   const canReview = canReviewStudentProjectName(student, studentClassDoc);
@@ -422,6 +536,7 @@ function StudentRow({ student, showClass, studentClassDoc, onEdit, onDelete, onV
   const [reviewOpen, setReviewOpen] = useState(false);
   const [rejectNote, setRejectNote] = useState('');
   const [reviewing, setReviewing] = useState(false);
+  const [pinBusy, setPinBusy] = useState(false);
 
   const closeReview = () => {
     setReviewOpen(false);
@@ -456,6 +571,19 @@ function StudentRow({ student, showClass, studentClassDoc, onEdit, onDelete, onV
     }
   };
 
+  const changePin = async (action, success) => {
+    setPinBusy(true);
+    try {
+      await action();
+      toast.success(success);
+      onPinsChanged?.();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setPinBusy(false);
+    }
+  };
+
   const projectCell = () => {
     if (hasProposal) {
       return (
@@ -475,9 +603,11 @@ function StudentRow({ student, showClass, studentClassDoc, onEdit, onDelete, onV
     return <span className="text-slate-400">{usesProjectNames ? 'Chưa gửi' : '—'}</span>;
   };
 
+  const columns = studentColumns({ showClass, showPin });
+
   return (
     <div className="grid grid-cols-1 gap-2 px-5 py-3 md:grid-cols-12 md:items-center md:gap-3">
-      <div className={`min-w-0 ${showClass ? 'md:col-span-4' : 'md:col-span-3'}`}>
+      <div className={`min-w-0 ${COLUMN_SPAN[columns.name]}`}>
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-2">
             <p className="min-w-0 truncate font-medium text-slate-800 dark:text-slate-100">
@@ -496,15 +626,30 @@ function StudentRow({ student, showClass, studentClassDoc, onEdit, onDelete, onV
         </div>
         <div className="mt-1 text-xs text-slate-400 md:hidden">{projectCell()}</div>
       </div>
-      <div className={`hidden min-w-0 text-sm md:block ${showClass ? 'md:col-span-2' : 'md:col-span-3'}`}>
+      {showPin ? (
+        <div className={`${COLUMN_SPAN[columns.pin]} flex justify-center`}>
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">PIN</p>
+          {pinInfo ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <MaskedPin pin={pinInfo.pin} hasCredential={pinInfo.hasCredential} />
+              {PIN_ROW_TONES[pinInfo.status] ? (
+                <Badge tone={PIN_ROW_TONES[pinInfo.status]}>{pinInfo.status}</Badge>
+              ) : null}
+            </div>
+          ) : (
+            <span className="text-sm text-slate-400">—</span>
+          )}
+        </div>
+      ) : null}
+      <div className={`hidden min-w-0 text-sm md:block ${COLUMN_SPAN[columns.project]}`}>
         {projectCell()}
       </div>
-      <div className="md:col-span-2">
+      <div className={COLUMN_SPAN[columns.status]}>
         <Badge tone={displayStudentStatusTone(student, studentClassDoc)}>
           {displayStudentStatus(student, studentClassDoc)}
         </Badge>
       </div>
-      <div className="md:col-span-2">
+      <div className={COLUMN_SPAN[columns.progress]}>
         <div className="flex items-center gap-2">
           <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
             <div
@@ -518,7 +663,7 @@ function StudentRow({ student, showClass, studentClassDoc, onEdit, onDelete, onV
           {student.lastReportedAt ? formatDateTime(student.lastReportedAt) : 'Chưa báo cáo'}
         </p>
       </div>
-      <div className="flex flex-wrap gap-1 md:col-span-2 md:justify-end">
+      <div className={`flex flex-wrap gap-1 ${COLUMN_SPAN[columns.actions]} md:justify-end`}>
         {hasProposal && (
           <Button
             size="sm"
@@ -529,6 +674,15 @@ function StudentRow({ student, showClass, studentClassDoc, onEdit, onDelete, onV
             {canReview ? 'Đọc & duyệt' : 'Xem'}
           </Button>
         )}
+        {pinInfo?.requestId ? (
+          <Button
+            size="sm"
+            loading={pinBusy}
+            onClick={() => changePin(() => approvePinReset(pinInfo.requestId), 'Đã duyệt đặt lại PIN.')}
+          >
+            Duyệt đặt lại
+          </Button>
+        ) : null}
         <Button size="sm" variant="ghost" onClick={onView} title="Xem lịch sử">
           <History className="h-4 w-4" />
         </Button>

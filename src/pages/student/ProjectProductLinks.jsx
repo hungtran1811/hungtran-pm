@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Code2, ExternalLink, Globe, Link2, Palette, Presentation, Save } from 'lucide-react';
+import { Code2, ExternalLink, Globe, Link2, Palette, Plus, Presentation, Save } from 'lucide-react';
 import { Button } from '../../ui/components/Button.jsx';
 import { Field, Input } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
@@ -18,8 +18,10 @@ export function ProjectProductLinks({
 }) {
   const toast = useToast();
   const [saving, setSaving] = useState(false);
+  const [added, setAdded] = useState({});
 
   const update = (key, value) => onChange?.(key, value);
+  const showExtra = (key) => added[key] || Boolean(String(links[key] || '').trim());
 
   const handleSave = async () => {
     const validated = validateProjectLinks(links);
@@ -57,83 +59,82 @@ export function ProjectProductLinks({
         </div>
       )}
 
-      <div className={compact ? 'grid gap-3 sm:grid-cols-2' : 'space-y-4'}>
-        <Field
-          label="GitHub"
-          hint={compact && onOpenGuide ? <GithubGuideHints onOpenGuide={onOpenGuide} /> : undefined}
-        >
-        <div className="relative">
-          <Code2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input
-            type="url"
-            inputMode="url"
-            value={links.githubUrl}
-            onChange={(e) => update('githubUrl', e.target.value)}
-            placeholder="https://github.com/..."
-            className="pl-9"
-            disabled={disabled || saving}
-          />
-        </div>
-        </Field>
-
-        <Field
+      <div className="space-y-4">
+        <LinkField
           label="Canva"
+          icon={Palette}
+          value={links.canvaUrl}
+          onChange={(value) => update('canvaUrl', value)}
+          placeholder="https://www.canva.com/design/... hoặc canva.link/..."
+          disabled={disabled || saving}
           hint={
             compact && onOpenGuide ? (
               <GuideHint onOpen={() => onOpenGuide(GUIDE_SECTIONS.canva)} label="Hướng dẫn Canva" />
             ) : undefined
           }
-        >
-          <div className="relative">
-            <Palette className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input
-            type="url"
-            inputMode="url"
-            value={links.canvaUrl}
-            onChange={(e) => update('canvaUrl', e.target.value)}
-            placeholder="https://www.canva.com/design/... hoặc canva.link/..."
-            className="pl-9"
+        />
+
+        {showExtra('githubUrl') ? (
+          <LinkField
+            label="GitHub"
+            icon={Code2}
+            value={links.githubUrl}
+            onChange={(value) => update('githubUrl', value)}
+            placeholder="https://github.com/..."
             disabled={disabled || saving}
+            hint={compact && onOpenGuide ? <GithubGuideHints onOpenGuide={onOpenGuide} /> : undefined}
           />
-        </div>
-        </Field>
+        ) : null}
 
-        <Field
-          label="Google Slides"
-          hint="Share → Anyone with the link → Copy link"
-        >
-          <div className="relative">
-            <Presentation className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              type="url"
-              inputMode="url"
-              value={links.slidesUrl || ''}
-              onChange={(e) => update('slidesUrl', e.target.value)}
-              placeholder="https://docs.google.com/presentation/d/..."
-              className="pl-9"
-              disabled={disabled || saving}
-            />
-          </div>
-        </Field>
+        {showExtra('slidesUrl') ? (
+          <LinkField
+            label="Google Slides"
+            icon={Presentation}
+            value={links.slidesUrl || ''}
+            onChange={(value) => update('slidesUrl', value)}
+            placeholder="https://docs.google.com/presentation/d/..."
+            disabled={disabled || saving}
+            hint="Share → Anyone with the link → Copy link"
+          />
+        ) : null}
 
-        <Field
-          label="Link khác"
-          hint="Sản phẩm đang chạy trên mạng, hoặc tài liệu liên quan"
-          className={compact ? 'sm:col-span-2' : undefined}
-        >
-          <div className="relative">
-            <Globe className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input
-              type="url"
-              inputMode="url"
-              value={links.otherUrl || ''}
-              onChange={(e) => update('otherUrl', e.target.value)}
-              placeholder="https://..."
-              className="pl-9"
-              disabled={disabled || saving}
-            />
+        {showExtra('otherUrl') ? (
+          <LinkField
+            label="Link khác"
+            icon={Globe}
+            value={links.otherUrl || ''}
+            onChange={(value) => update('otherUrl', value)}
+            placeholder="https://..."
+            disabled={disabled || saving}
+            hint="Sản phẩm đang chạy trên mạng, hoặc tài liệu liên quan"
+          />
+        ) : null}
+
+        {showExtra('githubUrl') && showExtra('slidesUrl') && showExtra('otherUrl') ? null : (
+          <div className="flex flex-wrap gap-2">
+            {!showExtra('githubUrl') ? (
+              <AddLinkButton
+                label="GitHub"
+                disabled={disabled || saving}
+                onClick={() => setAdded((prev) => ({ ...prev, githubUrl: true }))}
+              />
+            ) : null}
+            {!showExtra('slidesUrl') ? (
+              <AddLinkButton
+                label="Google Slides"
+                disabled={disabled || saving}
+                onClick={() => setAdded((prev) => ({ ...prev, slidesUrl: true }))}
+              />
+            ) : null}
+            {!showExtra('otherUrl') ? (
+              <AddLinkButton
+                label="Link khác"
+                disabled={disabled || saving}
+                onClick={() => setAdded((prev) => ({ ...prev, otherUrl: true }))}
+              />
+            ) : null}
           </div>
-        </Field>
+        )}
       </div>
 
       <Button
@@ -148,6 +149,39 @@ export function ProjectProductLinks({
         Lưu liên kết
       </Button>
     </div>
+  );
+}
+
+function LinkField({ label, icon: Icon, value, onChange, placeholder, disabled, hint }) {
+  return (
+    <Field label={label} hint={hint}>
+      <div className="relative">
+        <Icon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <Input
+          type="url"
+          inputMode="url"
+          value={value || ''}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          className="pl-9"
+          disabled={disabled}
+        />
+      </div>
+    </Field>
+  );
+}
+
+function AddLinkButton({ label, onClick, disabled }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex items-center gap-1 rounded-lg border border-dashed border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-600 transition hover:border-brand-300 hover:text-brand-700 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-slate-300 dark:hover:border-brand-500/50 dark:hover:text-brand-300"
+    >
+      <Plus className="h-3.5 w-3.5" />
+      {label}
+    </button>
   );
 }
 

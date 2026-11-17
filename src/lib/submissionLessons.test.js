@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { buildLessonOptions, buildStudentLessonOptions, defaultLessonKey } from './submissionLessons.js';
+import {
+  buildLessonOptions,
+  buildStudentLessonOptions,
+  classRoadmapSessions,
+  defaultLessonKey,
+  lockedSessionNumbers,
+} from './submissionLessons.js';
 
 const program = {
   lessons: [
@@ -37,5 +43,30 @@ describe('submission lesson options', () => {
       'Buổi 2 — Biến',
       'Buổi 3',
     ]);
+  });
+});
+
+describe('class roadmap sessions', () => {
+  it('uses the program session count and marks sessions after the current one locked', () => {
+    const sessions = classRoadmapSessions({ curriculumCurrentSession: 2 }, { totalSessionCount: 8 });
+    expect(sessions).toHaveLength(8);
+    expect(sessions.map((item) => item.state)).toEqual([
+      'opened',
+      'current',
+      'locked',
+      'locked',
+      'locked',
+      'locked',
+      'locked',
+      'locked',
+    ]);
+    expect(sessions[1].lessonKey).toBe('L02');
+    expect(classRoadmapSessions({ curriculumCurrentSession: 2 }, { totalSessionCount: 0 })).toEqual([]);
+  });
+
+  it('keeps sessions after the current one unreadable', () => {
+    expect(lockedSessionNumbers({ curriculumCurrentSession: 2 }, program)).toEqual([3, 4, 5, 6, 7, 8]);
+    expect(lockedSessionNumbers({ curriculumCurrentSession: 8 }, program)).toEqual([]);
+    expect(lockedSessionNumbers({ curriculumCurrentSession: 0 }, { totalSessionCount: 3 })).toEqual([1, 2, 3]);
   });
 });

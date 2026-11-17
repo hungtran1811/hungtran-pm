@@ -15,29 +15,57 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
-import { db } from '../config/firebase.js';
+import { appDb } from '../config/activeFirestore.js';
 import { toStudentModel } from '../models/index.js';
 import { normalizeKey } from '../lib/firestore.js';
 import { validateProjectLinks } from '../lib/projectLinks.js';
 import { isLegacyUnapprovedProject, meaningfulProjectName } from '../lib/classFinalMode.js';
 import { DEFAULT_STAGE, DEFAULT_STATUS } from '../constants/index.js';
 
-const studentsRef = collection(db, 'students');
+function studentsRef() {
+  return collection(appDb(), 'students');
+}
 
 export async function listStudentsByClass(classCode) {
-  const snapshot = await getDocs(query(studentsRef, where('classId', '==', classCode)));
+  const snapshot = await getDocs(query(studentsRef(), where('classId', '==', classCode)));
   return snapshot.docs.map(toStudentModel).sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi'));
 }
 
 export async function listActiveStudentsByClass(classCode) {
   const snapshot = await getDocs(
-    query(studentsRef, where('classId', '==', classCode), where('active', '==', true)),
+    query(studentsRef(), where('classId', '==', classCode), where('active', '==', true)),
   );
   return snapshot.docs.map(toStudentModel).sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi'));
 }
 
+export async function listRosterForClass(classCode, { includeHistory = false } = {}) {
+  let enrollments;
+  try {
+    enrollments = await getDocs(
+      query(collection(appDb(), 'classEnrollments'), where('classCode', '==', classCode)),
+    );
+  } catch (error) {
+    if (error?.code === 'permission-denied') return listActiveStudentsByClass(classCode);
+    throw error;
+  }
+  if (enrollments.empty) return listActiveStudentsByClass(classCode);
+  const rows = enrollments.docs
+    .map((item) => item.data())
+    .filter((row) => row.status === 'active' || (includeHistory && row.status === 'completed'));
+  const students = await Promise.all(
+    rows.map(async (row) => {
+      const snapshot = await getDoc(doc(appDb(), 'students', row.studentId));
+      if (!snapshot.exists()) return null;
+      return { ...toStudentModel(snapshot), enrollmentStatus: row.status };
+    }),
+  );
+  return students
+    .filter((student) => student?.active)
+    .sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi'));
+}
+
 export async function listAllStudents(max = 500) {
-  const snapshot = await getDocs(query(studentsRef, orderBy('fullNameKey', 'asc'), limit(max)));
+  const snapshot = await getDocs(query(studentsRef(), orderBy('fullNameKey', 'asc'), limit(max)));
   return snapshot.docs.map(toStudentModel);
 }
 
@@ -55,7 +83,7 @@ export async function listStudentsByClassCodes(classCodes, { activeOnly = false 
 
   const rows = await Promise.all(
     chunks.map(async (codes) => {
-      const snapshot = await getDocs(query(studentsRef, where('classId', 'in', codes)));
+      const snapshot = await getDocs(query(studentsRef(), where('classId', 'in', codes)));
       return snapshot.docs.map(toStudentModel);
     }),
   );
@@ -70,7 +98,7 @@ function sortStudents(docs) {
 }
 
 export function subscribeAllStudents(onData, onError, max = 500) {
-  const q = query(studentsRef, orderBy('fullNameKey', 'asc'), limit(max));
+  const q = query(studentsRef(), orderBy('fullNameKey', 'asc'), limit(max));
   return onSnapshot(
     q,
     (snapshot) => onData(snapshot.docs.map(toStudentModel)),
@@ -80,7 +108,7 @@ export function subscribeAllStudents(onData, onError, max = 500) {
 
 export function subscribeStudentsByClass(classCode, onData, onError) {
   if (!classCode) return () => {};
-  const q = query(studentsRef, where('classId', '==', classCode));
+  const q = query(studentsRef(), where('classId', '==', classCode));
   return onSnapshot(
     q,
     (snapshot) => onData(sortStudents(snapshot.docs)),
@@ -90,7 +118,7 @@ export function subscribeStudentsByClass(classCode, onData, onError) {
 
 export function subscribeActiveStudentsByClass(classCode, onData, onError) {
   if (!classCode) return () => {};
-  const q = query(studentsRef, where('classId', '==', classCode), where('active', '==', true));
+  const q = query(studentsRef(), where('classId', '==', classCode), where('active', '==', true));
   return onSnapshot(
     q,
     (snapshot) => onData(sortStudents(snapshot.docs)),
@@ -101,7 +129,7 @@ export function subscribeActiveStudentsByClass(classCode, onData, onError) {
 export function subscribeStudent(studentId, onData, onError) {
   if (!studentId) return () => {};
   return onSnapshot(
-    doc(db, 'students', studentId),
+    doc(appDb(), 'students', studentId),
     (snapshot) => onData(snapshot.exists() ? toStudentModel(snapshot) : null),
     onError,
   );
@@ -109,10 +137,10 @@ export function subscribeStudent(studentId, onData, onError) {
 
 export async function markAllStudentsCompletedForClass(classCode) {
   const snapshot = await getDocs(
-    query(studentsRef, where('classId', '==', classCode), where('active', '==', true)),
+    query(studentsRef(), where('classId', '==', classCode), where('active', '==', true)),
   );
   if (!snapshot.docs.length) return 0;
-  const batch = writeBatch(db);
+  const batch = writeBatch(appDb());
   snapshot.docs.forEach((docSnap) => {
     batch.update(docSnap.ref, {
       currentStatus: 'Hoàn thành',
@@ -125,7 +153,7 @@ export async function markAllStudentsCompletedForClass(classCode) {
 }
 
 export async function getStudent(studentId) {
-  const snapshot = await getDoc(doc(db, 'students', studentId));
+  const snapshot = await getDoc(doc(appDb(), 'students', studentId));
   return snapshot.exists() ? toStudentModel(snapshot) : null;
 }
 
@@ -135,7 +163,7 @@ const MAX_OPENED_LESSON_IDS = 200;
 export async function recordLessonOpened(studentId, classCode, lessonId, sessionNumber) {
   if (!studentId || !classCode || !lessonId) return;
 
-  const ref = doc(db, 'students', studentId);
+  const ref = doc(appDb(), 'students', studentId);
   const snap = await getDoc(ref);
   if (!snap.exists()) return;
 
@@ -158,7 +186,7 @@ export async function recordLessonOpened(studentId, classCode, lessonId, session
 
 export async function createStudent(payload) {
   const classCode = payload.classCode.trim();
-  const ref = await addDoc(studentsRef, {
+  const ref = await addDoc(studentsRef(), {
     fullName: payload.fullName.trim(),
     fullNameKey: normalizeKey(payload.fullName),
     classId: classCode,
@@ -191,7 +219,7 @@ export async function createStudent(payload) {
 }
 
 export async function updateStudent(studentId, payload) {
-  await updateDoc(doc(db, 'students', studentId), {
+  await updateDoc(doc(appDb(), 'students', studentId), {
     fullName: payload.fullName.trim(),
     fullNameKey: normalizeKey(payload.fullName),
     active: Boolean(payload.active ?? true),
@@ -253,7 +281,7 @@ export async function submitProjectName(studentId, {
   if (!status && meaningfulProjectName(student.projectName)) {
     throw new Error('Tên dự án đang chờ giáo viên duyệt.');
   }
-  await updateDoc(doc(db, 'students', studentId), {
+  await updateDoc(doc(appDb(), 'students', studentId), {
     projectNameSubmission: trimmed,
     projectNameStatus: 'pending',
     projectNameReviewNote: '',
@@ -274,7 +302,7 @@ export async function submitProjectLinks(studentId, { githubUrl, canvaUrl, slide
   if (!student?.active) {
     throw new Error('Học sinh không hợp lệ.');
   }
-  await updateDoc(doc(db, 'students', studentId), {
+  await updateDoc(doc(appDb(), 'students', studentId), {
     projectGithubUrl: validated.githubUrl,
     projectCanvaUrl: validated.canvaUrl,
     projectSlidesUrl: validated.slidesUrl,
@@ -296,7 +324,7 @@ export async function reviewProjectName(studentId, { approved, reviewNote = '' }
   }
   const note = reviewNote.trim();
   if (approved) {
-    await updateDoc(doc(db, 'students', studentId), {
+    await updateDoc(doc(appDb(), 'students', studentId), {
       projectName: candidate,
       projectNameStatus: 'approved',
       projectNameSubmission: '',
@@ -305,7 +333,7 @@ export async function reviewProjectName(studentId, { approved, reviewNote = '' }
     });
     return;
   }
-  await updateDoc(doc(db, 'students', studentId), {
+  await updateDoc(doc(appDb(), 'students', studentId), {
     projectName: '',
     projectNameStatus: 'rejected',
     projectNameSubmission: candidate,
@@ -315,7 +343,7 @@ export async function reviewProjectName(studentId, { approved, reviewNote = '' }
 }
 
 export async function deleteStudent(studentId, classCode) {
-  await deleteDoc(doc(db, 'students', studentId));
+  await deleteDoc(doc(appDb(), 'students', studentId));
   if (classCode) {
     await updateClassCount(classCode, -1);
   }
@@ -323,7 +351,7 @@ export async function deleteStudent(studentId, classCode) {
 
 async function updateClassCount(classCode, delta) {
   try {
-    await updateDoc(doc(db, 'classes', classCode), {
+    await updateDoc(doc(appDb(), 'classes', classCode), {
       studentCount: increment(delta),
       updatedAt: serverTimestamp(),
     });

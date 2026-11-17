@@ -81,6 +81,7 @@ function normalizeMeta(meta = {}) {
     name: meta.name?.trim() ?? '',
     subject: meta.subject?.trim() ?? '',
     level: meta.level?.trim() ?? '',
+    catalog: meta.catalog === 'custom' ? 'custom' : 'mindx',
     description: meta.description?.trim() ?? '',
     active: Boolean(meta.active),
     totalSessionCount: Number(meta.totalSessionCount) || 14,
@@ -453,11 +454,12 @@ export async function getProgramLesson(programId, lessonId, { parts, force = fal
   return hydrateLessonHtml(loaded, { programId: snapshot.id, parts, force });
 }
 
-export function subscribeCurriculumProgram(programId, onData, onError) {
+export function subscribeCurriculumProgram(programId, onData, onError, { full = true } = {}) {
   if (!programId) return () => {};
 
   let unsub = () => {};
   let cancelled = false;
+  let generation = 0;
 
   readProgramSnapshot(programId)
     .then((initial) => {
@@ -469,19 +471,21 @@ export function subscribeCurriculumProgram(programId, onData, onError) {
       const ref = doc(db, 'curriculumPrograms', initial.id);
       unsub = onSnapshot(
         ref,
-        async (snapshot) => {
-          try {
-            if (!snapshot.exists()) {
-              onData(null);
-              return;
+        (snapshot) => {
+          const current = ++generation;
+          (async () => {
+            try {
+              if (!snapshot.exists()) {
+                if (current === generation) onData(null);
+                return;
+              }
+              const lessons = await resolveLessonsForProgram(snapshot.data(), snapshot.id, { full });
+              if (cancelled || current !== generation) return;
+              onData(toCurriculumProgramModel(snapshot, lessons));
+            } catch (error) {
+              if (!cancelled && current === generation) onError?.(error);
             }
-            const lessons = await resolveLessonsForProgram(snapshot.data(), snapshot.id, {
-              full: true,
-            });
-            onData(toCurriculumProgramModel(snapshot, lessons));
-          } catch (error) {
-            onError?.(error);
-          }
+          })();
         },
         onError,
       );

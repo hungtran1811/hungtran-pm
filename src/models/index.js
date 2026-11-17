@@ -25,6 +25,11 @@ export function toClassModel(snapshot) {
       ? data.curriculumExerciseVisibleSessions.map((n) => Number(n))
       : [],
     finalMode: data.finalMode === 'exam' ? 'exam' : 'project',
+    pinRequired: data.pinRequired === true,
+    studentAccessCode: data.studentAccessCode ?? '',
+    previousClassCode: data.previousClassCode ?? '',
+    nextClassCode: data.nextClassCode ?? '',
+    cohortId: data.cohortId ?? '',
     studentCount: Number(data.studentCount ?? 0),
     driveFolderId: data.driveFolderId ?? '',
     driveSchoolPackFolderId: data.driveSchoolPackFolderId ?? '',
@@ -291,12 +296,14 @@ export function toCurriculumProgramModel(snapshot, lessonsOverride = null) {
     name: data.name ?? '',
     subject: data.subject ?? '',
     level: data.level ?? '',
+    catalog: data.catalog === 'custom' ? 'custom' : data.catalog === 'mindx' ? 'mindx' : '',
     knowledgePhaseEndSession: Number(data.knowledgePhaseEndSession ?? 1),
     totalSessionCount,
     finalMode: data.finalMode === 'exam' ? 'exam' : 'project',
     description: data.description ?? '',
     active: Boolean(data.active ?? true),
     lessonsStorage: data.lessonsStorage ?? 'embedded',
+    updatedAt: toDate(data.updatedAt),
     lessons,
   };
 }

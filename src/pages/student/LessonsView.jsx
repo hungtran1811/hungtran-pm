@@ -10,6 +10,7 @@ import {
   ArrowLeft,
   ArrowRight,
   BookOpen,
+  FolderOpen,
   CheckCircle2,
   Maximize2,
   Minimize2,
@@ -30,6 +31,7 @@ import { Spinner } from '../../ui/components/Spinner.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { UNDERSTANDING_LEVELS } from '../../constants/index.js';
 import { unlockedLessonSessionCap } from '../../lib/sessionScope.js';
+import { lockedSessionNumbers } from '../../lib/submissionLessons.js';
 import { getProgramLesson } from '../../services/curriculum.service.js';
 import {
   subscribeFeedbackReceipt,
@@ -220,6 +222,11 @@ export function LessonsView({
       .sort((a, b) => Number(a.sessionNumber) - Number(b.sessionNumber));
   }, [program, classDoc]);
 
+  const lockedSessions = useMemo(
+    () => lockedSessionNumbers(classDoc, program),
+    [classDoc, program],
+  );
+
   const submittedMap = useMemo(() => {
     const map = {};
     submittedLessonIds.forEach((lessonId) => {
@@ -310,11 +317,13 @@ export function LessonsView({
     return (
       <LessonDetail
         lessons={lessons}
+        lockedSessions={lockedSessions}
         activeIndex={activeIndex}
         lesson={lessons[activeIndex]}
         classDoc={classDoc}
         student={student}
         programId={program?.id}
+        contentRevision={program?.updatedAt?.getTime?.() ?? 0}
         onSelectLesson={openLesson}
         onBack={closeLesson}
         onSubmitted={(lessonId) => onFeedbackSubmitted?.(lessonId)}
@@ -423,29 +432,25 @@ export function LessonsView({
   );
 }
 
-const CONTENT_TABS = [
-  { id: 'lesson', label: 'Bài giảng', icon: BookOpen },
-  { id: 'exercise', label: 'Bài tập', icon: PencilLine },
-];
-
-function LessonTabs({ contentTab, hasExercise, onChange, compact = false }) {
-  return CONTENT_TABS.map((tab) => {
+function LessonTabs({ contentTab, hasExercise, hasResources = false, onChange, compact = false }) {
+  const tabs = [
+    { id: 'lesson', label: 'Nội dung', icon: BookOpen },
+    hasExercise ? { id: 'exercise', label: 'Bài tập', icon: PencilLine } : null,
+    hasResources ? { id: 'resources', label: 'Tài nguyên', icon: FolderOpen } : null,
+  ].filter(Boolean);
+  return tabs.map((tab) => {
     const Icon = tab.icon;
-    const disabled = tab.id === 'exercise' && !hasExercise;
     return (
       <button
         key={tab.id}
         type="button"
-        disabled={disabled}
         onClick={() => onChange(tab.id)}
         className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg font-medium transition ${
           compact ? 'px-2 py-2 text-xs sm:text-sm' : 'px-2 py-2.5 text-sm sm:gap-2 sm:px-4'
         } ${
           contentTab === tab.id
             ? 'bg-white text-brand-700 shadow-sm dark:bg-slate-900 dark:text-brand-300'
-            : disabled
-              ? 'cursor-not-allowed text-slate-300 dark:text-slate-600'
-              : 'text-slate-500 hover:text-slate-700 dark:text-slate-300 dark:hover:text-white'
+            : 'text-slate-500 hover:text-slate-700 dark:text-slate-300 dark:hover:text-white'
         }`}
       >
         <Icon className="h-4 w-4 shrink-0" />
@@ -455,15 +460,44 @@ function LessonTabs({ contentTab, hasExercise, onChange, compact = false }) {
   });
 }
 
-function LessonSessionStrip({ lessons, activeIndex, onSelectLesson }) {
+function LockedSessionButton({ sessionNumber, compact = false }) {
+  return (
+    <button
+      type="button"
+      disabled
+      title="Chưa mở buổi này"
+      aria-label={`Buổi ${sessionNumber} chưa mở`}
+      className={
+        compact
+          ? 'min-h-10 min-w-12 shrink-0 cursor-not-allowed rounded-xl bg-slate-100 px-3 text-sm font-semibold tabular-nums text-slate-400'
+          : 'flex min-h-11 w-full cursor-not-allowed items-center gap-2 rounded-xl px-3 text-left text-sm text-slate-400'
+      }
+    >
+      <span className="shrink-0 font-semibold tabular-nums">{sessionNumber}</span>
+      {!compact ? <span>Chưa mở</span> : null}
+    </button>
+  );
+}
+
+function revealInside(container, child, axis) {
+  if (!container || !child) return;
+  const box = container.getBoundingClientRect();
+  const item = child.getBoundingClientRect();
+  if (axis === 'x') {
+    if (item.left < box.left) container.scrollLeft -= box.left - item.left;
+    else if (item.right > box.right) container.scrollLeft += item.right - box.right;
+    return;
+  }
+  if (item.top < box.top) container.scrollTop -= box.top - item.top;
+  else if (item.bottom > box.bottom) container.scrollTop += item.bottom - box.bottom;
+}
+
+function LessonSessionStrip({ lessons, lockedSessions = [], activeIndex, onSelectLesson }) {
+  const scrollerRef = useRef(null);
   const activeButtonRef = useRef(null);
 
   useEffect(() => {
-    activeButtonRef.current?.scrollIntoView?.({
-      behavior: 'smooth',
-      block: 'nearest',
-      inline: 'center',
-    });
+    revealInside(scrollerRef.current, activeButtonRef.current, 'x');
   }, [activeIndex]);
 
   return (
@@ -479,7 +513,11 @@ function LessonSessionStrip({ lessons, activeIndex, onSelectLesson }) {
         >
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto py-0.5" aria-label="Danh sách buổi học">
+        <div
+          ref={scrollerRef}
+          className="flex min-w-0 flex-1 gap-2 overflow-x-auto py-0.5"
+          aria-label="Danh sách buổi học"
+        >
           {lessons.map((item, itemIndex) => (
             <button
               key={item.id}
@@ -496,6 +534,9 @@ function LessonSessionStrip({ lessons, activeIndex, onSelectLesson }) {
             >
               {item.sessionNumber}
             </button>
+          ))}
+          {lockedSessions.map((sessionNumber) => (
+            <LockedSessionButton key={`locked-${sessionNumber}`} sessionNumber={sessionNumber} compact />
           ))}
         </div>
         <Button
@@ -546,15 +587,32 @@ function LessonBackToTop({ scrollRoot }) {
   );
 }
 
-function LessonSessionRail({ lessons, activeIndex, collapsed, onCollapsedChange, onSelectLesson }) {
+function LessonSessionRail({
+  lessons,
+  lockedSessions = [],
+  activeIndex,
+  collapsed,
+  onCollapsedChange,
+  onSelectLesson,
+}) {
+  const scrollerRef = useRef(null);
+  const activeButtonRef = useRef(null);
+
+  useEffect(() => {
+    revealInside(scrollerRef.current, activeButtonRef.current, 'y');
+  }, [activeIndex]);
+
   return (
     <aside
-      className={`hidden xl:sticky xl:top-[calc(var(--student-header-height)+1rem)] xl:block ${
+      className={`hidden xl:sticky xl:top-[calc(var(--student-header-height)+1rem)] xl:z-20 xl:block xl:self-start ${
         collapsed ? 'xl:w-[4.25rem]' : 'xl:w-[13.5rem]'
       }`}
       aria-label="Điều hướng buổi học"
     >
-      <div className="max-h-[calc(100dvh-var(--student-header-height)-2rem)] overflow-y-auto rounded-2xl border border-slate-200 bg-white/90 p-2 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
+      <div
+        ref={scrollerRef}
+        className="max-h-[calc(100dvh-var(--student-header-height)-2rem)] overflow-y-auto rounded-2xl border border-slate-200 bg-white/90 p-2 shadow-sm backdrop-blur dark:border-slate-800 dark:bg-slate-900/90"
+      >
         <div
           className={`mb-2 flex items-center ${collapsed ? 'justify-center' : 'justify-between gap-2 px-1'}`}
         >
@@ -581,6 +639,7 @@ function LessonSessionRail({ lessons, activeIndex, collapsed, onCollapsedChange,
           {lessons.map((item, itemIndex) => (
             <button
               key={item.id}
+              ref={itemIndex === activeIndex ? activeButtonRef : undefined}
               type="button"
               onClick={() => onSelectLesson(itemIndex)}
               aria-label={`Buổi ${item.sessionNumber}: ${item.title || ''}`}
@@ -602,6 +661,13 @@ function LessonSessionRail({ lessons, activeIndex, collapsed, onCollapsedChange,
               )}
             </button>
           ))}
+          {lockedSessions.map((sessionNumber) => (
+            <LockedSessionButton
+              key={`locked-${sessionNumber}`}
+              sessionNumber={sessionNumber}
+              compact={collapsed}
+            />
+          ))}
         </div>
       </div>
     </aside>
@@ -610,11 +676,13 @@ function LessonSessionRail({ lessons, activeIndex, collapsed, onCollapsedChange,
 
 function LessonDetail({
   lessons,
+  lockedSessions = [],
   activeIndex,
   lesson,
   classDoc,
   student,
   programId,
+  contentRevision = 0,
   onSelectLesson,
   onBack,
   onSubmitted,
@@ -633,9 +701,11 @@ function LessonDetail({
   const focusTriggerRef = useRef(null);
   const focusWasOpenRef = useRef(false);
   const displayLesson = fullLesson || lesson;
+  const seenRevisionRef = useRef(contentRevision);
   const hasExercise = Boolean(
     displayLesson.exerciseVisible || String(displayLesson.exercise || '').trim(),
   );
+  const hasResources = Boolean(displayLesson.resources?.length);
   const hydratePart = contentTab === 'exercise' ? 'exercise' : 'lecture';
   const hydratedPartsRef = useRef({ id: '', lecture: false, exercise: false });
   const allImages = lessonImages(displayLesson);
@@ -711,20 +781,22 @@ function LessonDetail({
       lecture: lessonHasHydratedPart(lesson, 'lecture'),
       exercise: lessonHasHydratedPart(lesson, 'exercise'),
     };
-  }, [lesson]);
+  }, [lesson?.id]);
 
   useEffect(() => {
     if (!programId || !lesson?.id) return undefined;
     const part = hydratePart;
+    const revisionChanged = seenRevisionRef.current !== contentRevision;
+    seenRevisionRef.current = contentRevision;
     const alreadyHasPart =
       hydratedPartsRef.current.id === lesson.id && hydratedPartsRef.current[part];
-    if (contentRetryTick === 0 && alreadyHasPart) return undefined;
+    if (!revisionChanged && contentRetryTick === 0 && alreadyHasPart) return undefined;
 
     let cancelled = false;
     setLoadingContent(true);
     getProgramLesson(programId, lesson.id, {
       parts: [part],
-      force: contentRetryTick > 0,
+      force: contentRetryTick > 0 || revisionChanged,
     })
       .then((loaded) => {
         if (!cancelled && loaded) {
@@ -749,7 +821,7 @@ function LessonDetail({
     return () => {
       cancelled = true;
     };
-  }, [programId, lesson, contentRetryTick, hydratePart]);
+  }, [programId, lesson, contentRetryTick, hydratePart, contentRevision]);
 
   const setIndex = (i) => openLightbox(images, i);
   const handleRailCollapsedChange = useCallback((collapsed) => {
@@ -822,6 +894,7 @@ function LessonDetail({
               <LessonTabs
                 contentTab={contentTab}
                 hasExercise={hasExercise}
+                hasResources={hasResources}
                 onChange={setContentTab}
                 compact
               />
@@ -865,6 +938,7 @@ function LessonDetail({
       {!focusMode && (
         <LessonSessionStrip
           lessons={lessons}
+          lockedSessions={lockedSessions}
           activeIndex={activeIndex}
           onSelectLesson={onSelectLesson}
         />
@@ -884,6 +958,7 @@ function LessonDetail({
         {!focusMode && (
           <LessonSessionRail
             lessons={lessons}
+            lockedSessions={lockedSessions}
             activeIndex={activeIndex}
             collapsed={railCollapsed}
             onCollapsedChange={handleRailCollapsedChange}
@@ -891,7 +966,7 @@ function LessonDetail({
           />
         )}
 
-        <div className="min-w-0">
+        <div className="min-w-0 xl:min-h-[calc(100dvh-var(--student-header-height)-2rem)]">
           <article className="card overflow-hidden">
               {!focusMode && (
               <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-3 dark:border-slate-700 sm:px-6 sm:py-4 lg:px-8">
@@ -920,6 +995,7 @@ function LessonDetail({
                   <LessonTabs
                     contentTab={contentTab}
                     hasExercise={hasExercise}
+                    hasResources={hasResources}
                     onChange={setContentTab}
                   />
                 </div>
@@ -1039,6 +1115,13 @@ function LessonDetail({
                         </div>
                       )}
                   </>
+                )}
+
+                {contentTab === 'resources' && (
+                  <LessonResourcesCard
+                    sessionNumber={displayLesson.sessionNumber}
+                    resources={displayLesson.resources}
+                  />
                 )}
 
                 {contentTab === 'exercise' &&

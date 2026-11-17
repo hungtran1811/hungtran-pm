@@ -13,6 +13,9 @@ import { listKnowledgeReportsByStudent } from '../../services/knowledgeReports.s
 import { listCodeSubmissionsByStudent } from '../../services/codeSubmissions.service.js';
 import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
 import { formatLessonKey } from '../../lib/submissionFileName.js';
+import { approvePinReset, fetchPinStatus, lockStudentPin } from '../../services/studentGate.service.js';
+import { Button } from './Button.jsx';
+import { MaskedPin } from './ClassPinBoard.jsx';
 import {
   FEATURE_CODE_UPLOAD_ENABLED,
   FEATURE_KNOWLEDGE_FEEDBACK_ENABLED,
@@ -24,12 +27,14 @@ const UNDERSTANDING_LABELS = UNDERSTANDING_LEVELS.reduce((acc, item) => {
   return acc;
 }, {});
 
-export function StudentHistoryModal({ student, onClose, feedbackOnly = false }) {
+export function StudentHistoryModal({ student, onClose, onPinChanged, feedbackOnly = false }) {
   const toast = useToast();
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
   const [codeSubmissions, setCodeSubmissions] = useState([]);
+  const [pinStatus, setPinStatus] = useState(null);
+  const [pinBusy, setPinBusy] = useState(false);
 
   const loadFeedback = FEATURE_KNOWLEDGE_FEEDBACK_ENABLED;
   const loadReports = FEATURE_PROGRESS_REPORTS_ENABLED && !feedbackOnly;
@@ -63,20 +68,45 @@ export function StudentHistoryModal({ student, onClose, feedbackOnly = false }) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [student.id, student.classId, student.classCode, loadFeedback, loadReports, loadCode]);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetchPinStatus(student.id)
+      .then((result) => {
+        if (!cancelled) setPinStatus(result?.enabled ? result : null);
+      })
+      .catch(() => {
+        if (!cancelled) setPinStatus(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [student.id]);
+
+  const refreshPin = async () => {
+    const result = await fetchPinStatus(student.id);
+    setPinStatus(result?.enabled ? result : null);
+  };
+
+  const classReports = useMemo(() => {
+    const code = student.classId || student.classCode;
+    return reports.filter((row) => !code || row.classId === code || row.classCode === code);
+  }, [reports, student.classId, student.classCode]);
+
   const timeline = useMemo(() => {
     const items = [
-      ...reports.map((r) => ({ kind: 'report', at: r.submittedAt, data: r })),
+      ...classReports.map((r) => ({ kind: 'report', at: r.submittedAt, data: r })),
       ...feedbacks.map((f) => ({ kind: 'feedback', at: f.submittedAt, data: f })),
     ];
     return items.sort((a, b) => (b.at?.getTime?.() ?? 0) - (a.at?.getTime?.() ?? 0));
-  }, [reports, feedbacks]);
+  }, [classReports, feedbacks]);
 
-  const latestReportId = useMemo(() => {
-    if (!reports.length) return null;
-    return [...reports].sort(
+  const latestReport = useMemo(() => {
+    if (!classReports.length) return null;
+    return [...classReports].sort(
       (a, b) => (b.submittedAt?.getTime?.() ?? 0) - (a.submittedAt?.getTime?.() ?? 0),
-    )[0]?.id;
-  }, [reports]);
+    )[0];
+  }, [classReports]);
+  const latestReportId = latestReport?.id || null;
 
   const codeFileCount = useMemo(
     () => codeSubmissions.reduce((sum, row) => sum + (row.files?.length ?? 0), 0),
@@ -93,10 +123,92 @@ export function StudentHistoryModal({ student, onClose, feedbackOnly = false }) 
     <Modal
       open
       onClose={onClose}
-      title={feedbackOnly ? `Phản hồi · ${student.fullName}` : `Lịch sử · ${student.fullName}`}
+      title={feedbackOnly ? `Phản hồi · ${student.fullName}` : `Hồ sơ · ${student.fullName}`}
       size="xl"
     >
       <div className="space-y-4">
+        {!feedbackOnly ? (
+          <section className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Hồ sơ</p>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{student.fullName}</h3>
+              {pinStatus ? <MaskedPin pin={pinStatus.pin} hasCredential={pinStatus.hasCredential} /> : null}
+            </div>
+            <p className="text-sm text-slate-500">{classCode}</p>
+            <p className="mt-3 text-sm font-medium text-slate-800 dark:text-slate-100">
+              {student.projectName || 'Chưa có dự án'}
+            </p>
+            <p className="text-sm text-slate-500">
+              {student.currentStage || 'Chưa có giai đoạn'} · {student.currentProgressPercent ?? 0}%
+            </p>
+            <div className="mt-3">
+              <ProjectLinksReadonly
+                githubUrl={student.projectGithubUrl}
+                canvaUrl={student.projectCanvaUrl}
+                slidesUrl={student.projectSlidesUrl}
+                otherUrl={student.projectOtherUrl}
+              />
+            </div>
+            {latestReport ? (
+              <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+                Báo cáo mới nhất · {formatLessonKey(latestReport.lessonKey)} · {formatDateTime(latestReport.submittedAt)}
+              </p>
+            ) : (
+              <p className="mt-3 text-sm text-slate-500">Chưa có báo cáo trong lớp này.</p>
+            )}
+            {pinStatus ? (
+              <div className="mt-4 border-t border-slate-200 pt-3 dark:border-slate-700">
+                <p className="text-sm text-slate-700 dark:text-slate-200">PIN · {pinStatus.status}</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {pinStatus.status === 'Chờ reset' && pinStatus.requestId ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      loading={pinBusy}
+                      onClick={async () => {
+                        setPinBusy(true);
+                        try {
+                          await approvePinReset(pinStatus.requestId);
+                          await refreshPin();
+                          onPinChanged?.();
+                          toast.success('Đã duyệt đặt lại PIN.');
+                        } catch (pinError) {
+                          toast.error(getErrorMessage(pinError));
+                        } finally {
+                          setPinBusy(false);
+                        }
+                      }}
+                    >
+                      Duyệt đặt lại
+                    </Button>
+                  ) : null}
+                  {pinStatus.status !== 'Chưa tạo' && pinStatus.status !== 'Tạm khóa' ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      loading={pinBusy}
+                      onClick={async () => {
+                        setPinBusy(true);
+                        try {
+                          await lockStudentPin(student.id);
+                          await refreshPin();
+                          onPinChanged?.();
+                          toast.success('Đã khóa PIN.');
+                        } catch (pinError) {
+                          toast.error(getErrorMessage(pinError));
+                        } finally {
+                          setPinBusy(false);
+                        }
+                      }}
+                    >
+                      Khóa PIN
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
         {statCols > 0 && (
           <div
             className={`grid gap-3 ${
@@ -107,7 +219,7 @@ export function StudentHistoryModal({ student, onClose, feedbackOnly = false }) 
               <>
                 <div className="rounded-xl bg-slate-50 p-3 text-center dark:bg-slate-800/50">
                   <p className="text-xs text-slate-500">Báo cáo tiến độ</p>
-                  <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{reports.length}</p>
+                  <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{classReports.length}</p>
                 </div>
                 <div className="rounded-xl bg-slate-50 p-3 text-center dark:bg-slate-800/50">
                   <p className="text-xs text-slate-500">Tiến độ hiện tại</p>

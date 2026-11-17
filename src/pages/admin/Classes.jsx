@@ -9,6 +9,7 @@ import { ConfirmDialog } from '../../ui/components/ConfirmDialog.jsx';
 import { EmptyState } from '../../ui/components/EmptyState.jsx';
 import { SkeletonRows } from '../../ui/components/Skeleton.jsx';
 import { GroupedProgramSelect } from '../../ui/components/GroupedProgramSelect.jsx';
+import { SubjectFilterSelect } from '../../ui/components/SubjectFilterSelect.jsx';
 import { Field, Input, Select } from '../../ui/components/Field.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import {
@@ -38,6 +39,14 @@ import { filterClassesBySubject, subjectsWithClasses } from '../../lib/subjectGr
 import { CodeSubmissionsPurgePanel } from '../../ui/components/CodeSubmissionsPurgePanel.jsx';
 import { FEATURE_KNOWLEDGE_FEEDBACK_ENABLED, FEATURE_CODE_UPLOAD_ENABLED } from '../../config/features.js';
 import { getPublicBaseUrl } from '../../config/publicUrl.js';
+import { classRoadmapSessions, defaultLessonKey } from '../../lib/submissionLessons.js';
+import {
+  findActiveAliasConflicts,
+  suggestStudentAccessCode,
+} from '../../lib/classAccessCode.js';
+import { upLevelGate } from '../../lib/upLevel.js';
+import { UpLevelWizard } from './UpLevelWizard.jsx';
+import { auditClassAccessCode } from '../../services/studentGate.service.js';
 
 const STATUS_TONES = { active: 'green', completed: 'blue', archived: 'slate' };
 
@@ -67,6 +76,7 @@ export function ClassesPage() {
   const [subjectFilter, setSubjectFilter] = useState('all');
   const [classSearch, setClassSearch] = useState('');
   const [feedbacksByClass, setFeedbacksByClass] = useState({});
+  const [selectedClassCode, setSelectedClassCode] = useState('');
 
   const reloadPrograms = async () => {
     try {
@@ -165,6 +175,11 @@ export function ClassesPage() {
     return list;
   }, [tabClasses, subjectFilter, programsById, classSearch]);
 
+  const selectedClass = useMemo(
+    () => visibleClasses.find((cls) => cls.classCode === selectedClassCode) || null,
+    [visibleClasses, selectedClassCode],
+  );
+
   const visibleClassCodes = useMemo(
     () => visibleClasses.map((c) => c.classCode).join('|'),
     [visibleClasses],
@@ -216,34 +231,28 @@ export function ClassesPage() {
             Lưu trữ ({archivedClasses.length})
           </TabButton>
         </div>
-        {subjectOptions.length > 2 && (
-          <div className="flex flex-wrap gap-1.5">
-            {subjectOptions.map((g) => (
-              <button
-                key={g.id}
-                type="button"
-                onClick={() => setSubjectFilter(g.id)}
-                className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                  subjectFilter === g.id
-                    ? 'bg-brand-600 text-white shadow-sm'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300'
-                }`}
-              >
-                {g.label}
-              </button>
-            ))}
-          </div>
-        )}
-        {tabClasses.length > 8 && (
-          <div className="max-w-xs">
-            <Input
-              placeholder="Tìm lớp..."
-              value={classSearch}
-              onChange={(e) => setClassSearch(e.target.value)}
-            />
-          </div>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <SubjectFilterSelect options={subjectOptions} value={subjectFilter} onChange={setSubjectFilter} />
+          {tabClasses.length > 8 ? (
+            <div className="max-w-xs">
+              <Input
+                placeholder="Tìm lớp..."
+                value={classSearch}
+                onChange={(e) => setClassSearch(e.target.value)}
+              />
+            </div>
+          ) : null}
+        </div>
       </div>
+
+      {selectedClass ? (
+        <ClassProgressPanel
+          cls={selectedClass}
+          program={programsById[selectedClass.curriculumProgramId]}
+          programs={programs}
+          classes={classes}
+        />
+      ) : null}
 
       {FEATURE_CODE_UPLOAD_ENABLED && tab === 'archived' && (
         <CodeSubmissionsPurgePanel classes={classes} />
@@ -271,6 +280,7 @@ export function ClassesPage() {
               key={cls.id}
               cls={cls}
               programs={programs}
+              classes={classes}
               avgUnderstanding={
                 FEATURE_KNOWLEDGE_FEEDBACK_ENABLED
                   ? averageUnderstanding(feedbacksByClass[cls.classCode] || [])
@@ -284,6 +294,8 @@ export function ClassesPage() {
                     )
                   : null
               }
+              selected={cls.classCode === selectedClassCode}
+              onSelect={() => setSelectedClassCode(cls.classCode)}
               onEdit={() => openEdit(cls)}
               onDelete={() => setDeleteTarget(cls)}
               onArchive={() => handleStatusChange(cls, 'completed')}
@@ -297,6 +309,7 @@ export function ClassesPage() {
         <ClassFormModal
           initial={editing}
           programs={programs}
+          classes={classes}
           onClose={() => setShowForm(false)}
           onSaved={() => setShowForm(false)}
         />
@@ -331,20 +344,115 @@ function TabButton({ active, onClick, children }) {
   );
 }
 
+function ClassProgressPanel({ cls, program, programs, classes }) {
+  const [upLevelOpen, setUpLevelOpen] = useState(false);
+  const [upLevelEarly, setUpLevelEarly] = useState(false);
+  const gate = upLevelGate(cls.curriculumCurrentSession, program?.totalSessionCount);
+  const sessions = classRoadmapSessions(cls, program);
+  const lessonKey = defaultLessonKey(cls, program);
+  const reportHref = lessonKey
+    ? `/admin/reports?class=${encodeURIComponent(cls.classCode)}&lesson=${encodeURIComponent(lessonKey)}`
+    : `/admin/reports?class=${encodeURIComponent(cls.classCode)}`;
+  const phaseLabel = cls.curriculumPhase === 'final' ? 'Sản phẩm' : 'Đang học kiến thức';
+
+  return (
+    <section className="card mb-5 p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+            {cls.classCode} · {cls.className || 'Chưa có tên'}
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            {program?.name || 'Chưa gắn chương trình'}
+            {' · '}
+            {sessions.length ? `${sessions.length} buổi` : 'Chưa có số buổi'}
+            {' · hiện tại buổi '}
+            {Number(cls.curriculumCurrentSession) || 0}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Badge tone="brand">{program?.name || 'Chương trình'}</Badge>
+          <Badge tone={cls.curriculumPhase === 'final' ? 'blue' : 'green'}>{phaseLabel}</Badge>
+        </div>
+      </div>
+      {sessions.length ? (
+        <div className="mt-4 flex flex-wrap gap-1.5" aria-label="Lộ trình buổi">
+          {sessions.map((session) => (
+            <span
+              key={session.lessonKey}
+              className={`inline-flex h-9 min-w-9 items-center justify-center rounded-xl px-2 text-sm font-semibold tabular-nums ${
+                session.state === 'current'
+                  ? 'bg-brand-600 text-white'
+                  : session.state === 'opened'
+                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200'
+                    : 'bg-slate-100 text-slate-400 dark:bg-slate-800'
+              }`}
+              title={
+                session.state === 'current'
+                  ? 'Buổi hiện tại'
+                  : session.state === 'opened'
+                    ? 'Đã mở'
+                    : 'Chưa mở'
+              }
+            >
+              {session.sessionNumber}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-4 text-sm text-slate-500">Chương trình này chưa có tổng số buổi.</p>
+      )}
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <Link to={reportHref}>
+          <Button size="sm" variant="secondary">Kiểm tra bài nộp</Button>
+        </Link>
+        {cls.nextClassCode ? (
+          <p className="text-sm text-slate-500">Đã chuyển sang {cls.nextClassCode}. Đường dẫn cũ vẫn là lớp này.</p>
+        ) : (
+          <Button
+            size="sm"
+            onClick={() => {
+              setUpLevelEarly(!gate.ready);
+              setUpLevelOpen(true);
+            }}
+          >
+            Up Level
+          </Button>
+        )}
+      </div>
+      {upLevelOpen ? (
+        <UpLevelWizard
+          cls={cls}
+          program={program}
+          programs={programs}
+          classes={classes}
+          requireOverride={upLevelEarly}
+          onClose={() => setUpLevelOpen(false)}
+        />
+      ) : null}
+    </section>
+  );
+}
+
 function ClassCard({
   cls,
   programs,
+  classes = [],
   avgUnderstanding,
   sessionAvgUnderstanding,
+  selected = false,
+  onSelect,
   onEdit,
   onDelete,
   onArchive,
   onRestore,
 }) {
   const archived = cls.status !== 'active';
+  const [upLevelOpen, setUpLevelOpen] = useState(false);
   const toast = useToast();
   const { understandingTone } = useSettings();
   const program = programs.find((p) => p.id === cls.curriculumProgramId);
+  const gate = upLevelGate(cls.curriculumCurrentSession, program?.totalSessionCount);
   const studentLink = `${getPublicBaseUrl()}/c/${encodeURIComponent(cls.classCode)}`;
 
   const copyLink = async () => {
@@ -357,14 +465,14 @@ function ClassCard({
   };
 
   return (
-    <div className="card flex flex-col p-5">
+    <div className={`card flex flex-col p-5 ${selected ? 'ring-2 ring-brand-500' : ''}`}>
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
+        <button type="button" onClick={onSelect} className="min-w-0 text-left">
           <h3 className="truncate text-base font-semibold text-slate-800 dark:text-slate-100">
             {cls.classCode}
           </h3>
           <p className="truncate text-xs text-slate-400">{cls.className || 'Chưa có khóa học'}</p>
-        </div>
+        </button>
         <div className="flex flex-col items-end gap-1">
           <Badge tone={STATUS_TONES[cls.status]}>{CLASS_STATUS_LABELS[cls.status] || cls.status}</Badge>
           {cls.hidden && <Badge tone="amber">Đang ẩn</Badge>}
@@ -438,6 +546,13 @@ function ClassCard({
       </dl>
 
       <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
+        {!cls.nextClassCode ? (
+          <Button size="sm" onClick={() => setUpLevelOpen(true)}>
+            Up Level
+          </Button>
+        ) : (
+          <span className="inline-flex min-h-8 items-center text-xs text-slate-500">Đã sang {cls.nextClassCode}</span>
+        )}
         <Button size="sm" variant="secondary" onClick={onEdit}>
           Sửa
         </Button>
@@ -462,21 +577,51 @@ function ClassCard({
           Xoá
         </Button>
       </div>
+      {upLevelOpen ? (
+        <UpLevelWizard
+          cls={cls}
+          program={program}
+          programs={programs}
+          classes={classes}
+          requireOverride={!gate.ready}
+          onClose={() => setUpLevelOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }
 
-function ClassFormModal({ initial, programs, onClose, onSaved }) {
+function ClassFormModal({ initial, programs, classes = [], onClose, onSaved }) {
   const toast = useToast();
   const isEdit = Boolean(initial);
-  const [form, setForm] = useState(() => ({
-    ...EMPTY_FORM,
-    ...(initial || {}),
-    finalMode: initial?.finalMode === 'exam' ? 'exam' : 'project',
-  }));
+  const [form, setForm] = useState(() => {
+    const suggestion = suggestStudentAccessCode(initial?.classCode || '');
+    return {
+      ...EMPTY_FORM,
+      ...(initial || {}),
+      finalMode: initial?.finalMode === 'exam' ? 'exam' : 'project',
+      pinRequired: initial ? Boolean(initial.pinRequired) : true,
+      studentAccessCode: initial?.studentAccessCode || suggestion.code,
+    };
+  });
+  const [accessCodeTouched, setAccessCodeTouched] = useState(Boolean(initial?.studentAccessCode));
   const [saving, setSaving] = useState(false);
 
   const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+
+  const updateClassCode = (value) => {
+    setForm((prev) => {
+      const suggestion = suggestStudentAccessCode(value);
+      return {
+        ...prev,
+        classCode: value,
+        studentAccessCode: accessCodeTouched ? prev.studentAccessCode : suggestion.code,
+      };
+    });
+  };
+
+  const suggestion = suggestStudentAccessCode(form.classCode);
+  const aliasConflicts = findActiveAliasConflicts(form.studentAccessCode, classes, form.classCode);
 
   const handleProgramChange = (programId) => {
     const prog = programs.find((p) => p.id === programId);
@@ -493,6 +638,10 @@ function ClassFormModal({ initial, programs, onClose, onSaved }) {
       toast.error('Vui lòng nhập mã lớp.');
       return;
     }
+    if (suggestion.needsChoice && !form.studentAccessCode.trim()) {
+      toast.error('Mã lớp có nhiều mã ngắn. Hãy chọn một mã để học sinh nhập.');
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -507,6 +656,12 @@ function ClassFormModal({ initial, programs, onClose, onSaved }) {
         await createClass(form.classCode, payload);
         invalidateAdminSnapshots();
         toast.success('Đã tạo lớp mới.');
+      }
+      if (payload.studentAccessCode) {
+        auditClassAccessCode({
+          classCode: isEdit ? initial.classCode : form.classCode.trim(),
+          studentAccessCode: payload.studentAccessCode,
+        }).catch(() => {});
       }
       await onSaved();
     } catch (error) {
@@ -538,7 +693,7 @@ function ClassFormModal({ initial, programs, onClose, onSaved }) {
           <Field label="Mã lớp" required>
             <Input
               value={form.classCode}
-              onChange={(e) => update('classCode', e.target.value)}
+              onChange={(e) => updateClassCode(e.target.value)}
               disabled={isEdit}
               required
             />
@@ -548,14 +703,9 @@ function ClassFormModal({ initial, programs, onClose, onSaved }) {
           </Field>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Ngày bắt đầu">
-            <Input type="date" value={form.startDate} onChange={(e) => update('startDate', e.target.value)} />
-          </Field>
-          <Field label="Ngày kết thúc">
-            <Input type="date" value={form.endDate} onChange={(e) => update('endDate', e.target.value)} />
-          </Field>
-        </div>
+        <Field label="Ngày bắt đầu">
+          <Input type="date" value={form.startDate} onChange={(e) => update('startDate', e.target.value)} />
+        </Field>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Trạng thái">
@@ -609,6 +759,35 @@ function ClassFormModal({ initial, programs, onClose, onSaved }) {
             />
           </Field>
         </div>
+
+        <Field
+          label="Mã học sinh nhập"
+          hint={suggestion.needsChoice ? `Chọn một mã: ${suggestion.options.join(', ')}` : 'Ví dụ GB25 hoặc JSB05'}
+        >
+          <Input
+            value={form.studentAccessCode}
+            onChange={(e) => {
+              setAccessCodeTouched(true);
+              update('studentAccessCode', e.target.value);
+            }}
+          />
+        </Field>
+        {aliasConflicts.length ? (
+          <p className="text-sm text-amber-700 dark:text-amber-300">
+            Mã ngắn này đang trùng lớp {aliasConflicts.map((item) => item.classCode).join(', ')}. Học sinh sẽ phải nhập mã đầy đủ.
+          </p>
+        ) : null}
+        <label className="flex items-center gap-2.5 rounded-xl border border-slate-200 px-3.5 py-3 dark:border-slate-700">
+          <input
+            type="checkbox"
+            checked={Boolean(form.pinRequired)}
+            onChange={(e) => update('pinRequired', e.target.checked)}
+            className="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+          />
+          <span className="text-sm text-slate-700 dark:text-slate-200">
+            Yêu cầu PIN. Lớp đang chạy để tắt nếu học sinh vẫn vào bằng chọn tên.
+          </span>
+        </label>
 
         <label className="flex items-center gap-2.5 rounded-xl border border-slate-200 px-3.5 py-3 dark:border-slate-700">
           <input

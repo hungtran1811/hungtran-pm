@@ -7,11 +7,17 @@ function bearerToken(event) {
   return header.startsWith('Bearer ') ? header.slice(7).trim() : '';
 }
 
+const adminCache = new Map();
+const ADMIN_CACHE_MS = 20000;
+
 export async function requireAdmin(event) {
   const token = bearerToken(event);
   if (!token) {
     return { ok: false, status: 401, error: 'Cần đăng nhập quản trị.' };
   }
+
+  const cached = adminCache.get(token);
+  if (cached && cached.until > Date.now()) return cached.result;
 
   try {
     const db = getAdminDb();
@@ -26,7 +32,13 @@ export async function requireAdmin(event) {
       return { ok: false, status: 403, error: 'Không có quyền quản trị.' };
     }
 
-    return { ok: true, email: claims.email, uid: claims.uid };
+    const result = { ok: true, email: claims.email, uid: claims.uid };
+    adminCache.set(token, { until: Date.now() + ADMIN_CACHE_MS, result });
+    if (adminCache.size > 20) {
+      const oldest = adminCache.keys().next().value;
+      adminCache.delete(oldest);
+    }
+    return result;
   } catch (error) {
     logFunctionError('requireAdmin', 'ADMIN_AUTH_FAILED', error);
     return { ok: false, status: 401, error: 'Phiên đăng nhập không hợp lệ. Hãy đăng xuất rồi đăng nhập lại.' };

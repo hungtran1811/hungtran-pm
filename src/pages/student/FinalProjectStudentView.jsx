@@ -68,7 +68,7 @@ export function FinalProjectStudentView({ classDoc, program, student, onUpdateSt
       <div className="rounded-2xl border border-brand-200 bg-gradient-to-r from-brand-50 to-white px-4 py-4 dark:border-brand-500/30 dark:from-brand-500/10 dark:to-slate-900 sm:px-5">
         <div className="flex items-start justify-between gap-3">
           <p className="text-xs font-semibold uppercase tracking-wider text-brand-600 dark:text-brand-400">
-            Sản phẩm cuối khóa
+            Dự án của em
           </p>
           {nameApproved ? (
             <span className="text-xl font-bold tabular-nums text-brand-600 dark:text-brand-300">

@@ -16,7 +16,6 @@ import { invalidateAdminSnapshots, loadAdminClasses, loadReportsPanelSnapshot } 
 import { AdminSnapshotControls } from '../../ui/components/AdminSnapshotControls.jsx';
 import { getErrorMessage } from '../../lib/firestore.js';
 import { listCurriculumPrograms } from '../../services/curriculum.service.js';
-import { reportFromStudentSnapshot } from '../../services/reports.service.js';
 import {
   buildClassExport,
   copyToClipboard,
@@ -27,24 +26,19 @@ import {
   summarizeCodeSubmissions,
 } from '../../services/codeSubmissions.service.js';
 import { FEATURE_CODE_UPLOAD_ENABLED, FEATURE_DRIVE_SUBMISSION_ENABLED } from '../../config/features.js';
-import { deleteProgressReportsAsAdmin, listReportsByClass } from '../../services/reports.service.js';
+import { deleteProgressReportsAsAdmin, subscribeReportsByClass } from '../../services/reports.service.js';
 import {
   deleteDriveSubmissionAsAdmin,
   deleteDriveSubmissionsAsAdmin,
-  listSubmissionsByClass,
+  subscribeSubmissionsByClass,
 } from '../../services/submissions.service.js';
 import {
   driveFolderUrl,
   summarizeDriveSubmissionsByStudent,
   uniqueLessonKeys,
 } from '../../lib/submissionAdmin.js';
-import {
-  hasOverlappingLesson,
-  latestReportForLesson,
-  latestReportsByStudentLesson,
-  reportsForStudentLesson,
-  scopeDriveToLesson,
-} from '../../lib/progressReports.js';
+import { buildClassReviewItem } from '../../lib/classReview.js';
+import { latestReportsByStudentLesson, reportsForStudentLesson } from '../../lib/progressReports.js';
 import { buildLessonOptions, defaultLessonKey } from '../../lib/submissionLessons.js';
 import {
   classRequiresProgressAndProduct,
@@ -107,7 +101,7 @@ export function ReportsPanel({
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastLoadedAt, setLastLoadedAt] = useState(null);
-  const [search, setSearch] = useState('');
+  const search = searchParams.get('q') || '';
   const [historyTarget, setHistoryTarget] = useState(null);
   const [codeByStudent, setCodeByStudent] = useState(() => new Map());
   const [programs, setPrograms] = useState([]);
@@ -123,6 +117,24 @@ export function ReportsPanel({
   const showArchived = showArchivedProp ?? internalArchived;
   const setShowArchived = onShowArchivedChange ?? setInternalArchived;
   const completionFilter = completionFilterProp ?? readCompletionFilter(searchParams);
+
+  const setSearch = (value) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set('q', value);
+      else next.delete('q');
+      return next;
+    }, { replace: true });
+  };
+
+  const writeLessonParam = useCallback((value) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (value) next.set('lesson', value);
+      else next.delete('lesson');
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   const setCompletionFilter = (value) => {
     if (onCompletionFilterChange) {
@@ -207,6 +219,8 @@ export function ReportsPanel({
 
   const showDriveOverview =
     FEATURE_DRIVE_SUBMISSION_ENABLED && Boolean(selectedClass) && !isAllClasses;
+  const watchLiveClass = Boolean(selectedClass) && !isAllClasses;
+  const [liveReady, setLiveReady] = useState(false);
 
   const loadSnapshot = useCallback(
     async ({ force = false, initial = false } = {}) => {
@@ -220,22 +234,17 @@ export function ReportsPanel({
       if (initial) setLoading(true);
       else setRefreshing(true);
       try {
-        const [data, drive, reports] = await Promise.all([
-          loadReportsPanelSnapshot(classCodes, {
-            force,
-            includeLatestReports: !selectedClass || selectedClass === ALL_CLASSES_VALUE,
-          }),
-          FEATURE_DRIVE_SUBMISSION_ENABLED && selectedClass && selectedClass !== ALL_CLASSES_VALUE
-            ? listSubmissionsByClass(selectedClass)
-            : Promise.resolve([]),
-          selectedClass && selectedClass !== ALL_CLASSES_VALUE
-            ? listReportsByClass(selectedClass, 400)
-            : Promise.resolve([]),
-        ]);
+        const singleClass = selectedClass && selectedClass !== ALL_CLASSES_VALUE;
+        const data = await loadReportsPanelSnapshot(classCodes, {
+          force,
+          includeLatestReports: !singleClass,
+        });
         setStudents(data.students);
         setLatestByStudent(data.latestByStudent);
-        setDriveRows(drive);
-        setClassReports(reports);
+        if (!singleClass) {
+          setDriveRows([]);
+          setClassReports([]);
+        }
         setLastLoadedAt(Date.now());
       } catch (error) {
         toast.error(getErrorMessage(error));
@@ -252,12 +261,56 @@ export function ReportsPanel({
   }, [loadSnapshot]);
 
   useEffect(() => {
-    setReviewLessonKey(
-      selectedClass && selectedClass !== ALL_CLASSES_VALUE
-        ? defaultLessonKey(selectedClassDoc, selectedProgram)
-        : '',
+    if (!watchLiveClass) {
+      setClassReports([]);
+      setDriveRows([]);
+      setLiveReady(true);
+      return undefined;
+    }
+    setLiveReady(false);
+    setClassReports([]);
+    setDriveRows([]);
+    let reportsReady = false;
+    let driveReady = !FEATURE_DRIVE_SUBMISSION_ENABLED;
+    const markReady = () => {
+      if (reportsReady && driveReady) setLiveReady(true);
+    };
+    const unsubReports = subscribeReportsByClass(
+      selectedClass,
+      (rows) => {
+        setClassReports(rows);
+        setLastLoadedAt(Date.now());
+        reportsReady = true;
+        markReady();
+      },
+      (error) => {
+        toast.error(getErrorMessage(error));
+        reportsReady = true;
+        markReady();
+      },
+      400,
     );
-  }, [selectedClass, selectedClassDoc, selectedProgram]);
+    const unsubDrive = FEATURE_DRIVE_SUBMISSION_ENABLED
+      ? subscribeSubmissionsByClass(
+          selectedClass,
+          (rows) => {
+            setDriveRows(rows);
+            setLastLoadedAt(Date.now());
+            driveReady = true;
+            markReady();
+          },
+          (error) => {
+            toast.error(getErrorMessage(error));
+            driveReady = true;
+            markReady();
+          },
+        )
+      : () => {};
+    return () => {
+      unsubReports();
+      unsubDrive();
+    };
+  }, [watchLiveClass, selectedClass, toast]);
 
   useEffect(() => {
     if (!showCodeOverview || !selectedClass) {
@@ -287,11 +340,6 @@ export function ReportsPanel({
     }
   };
 
-  const resolveReport = useCallback(
-    (student) => latestByStudent.get(student.id) ?? reportFromStudentSnapshot(student),
-    [latestByStudent],
-  );
-
   const driveByStudent = useMemo(
     () => summarizeDriveSubmissionsByStudent(driveRows),
     [driveRows],
@@ -307,70 +355,40 @@ export function ReportsPanel({
     );
     return [...fromProgram, ...extra.map((value) => ({ value, label: value }))];
   }, [selectedClassDoc, selectedProgram, driveRows, classReports]);
+
+  useEffect(() => {
+    if (!selectedClass || selectedClass === ALL_CLASSES_VALUE) {
+      setReviewLessonKey('');
+      return;
+    }
+    if (!selectedClassDoc) return;
+    const fromUrl = searchParams.get('lesson') || '';
+    const valid = reviewLessonOptions.some((option) => option.value === fromUrl);
+    const next = valid ? fromUrl : defaultLessonKey(selectedClassDoc, selectedProgram);
+    setReviewLessonKey(next || '');
+    if (next && fromUrl !== next) writeLessonParam(next);
+  }, [
+    selectedClass,
+    selectedClassDoc,
+    selectedProgram,
+    reviewLessonOptions,
+    searchParams,
+    writeLessonParam,
+  ]);
+
   const scanned = useMemo(() => {
     let list = students.map((student) => {
-      const fallbackReport = resolveReport(student);
-      const allDrive = driveByStudent.get(student.id) || null;
-      const lessons = reportsByStudentLesson.get(student.id);
-
-      const lessonReports = reportsForStudentLesson(classReports, student.id, reviewLessonKey)
-        .slice()
-        .sort((left, right) => (right.submittedAt?.getTime?.() || 0) - (left.submittedAt?.getTime?.() || 0));
-      const reportCount = lessonReports.length;
-      const history = {
-        reportHistory: isAllClasses ? undefined : lessonReports,
-        driveHistory: isAllClasses ? null : allDrive,
-      };
-
-      if (isAllClasses) {
-        const hasReport = Boolean(fallbackReport) || Boolean(student.lastReportedAt);
-        return {
-          student,
-          report: fallbackReport,
-          drive: null,
-          hasReport,
-          hasFile: false,
-          isComplete: hasReport,
-          reportCount,
-          showClass: true,
-          ...history,
-        };
-      }
-
-      if (requiresBoth) {
-        const report = latestReportForLesson(lessons, reviewLessonKey) || (!reviewLessonKey ? fallbackReport : null);
-        const drive = scopeDriveToLesson(allDrive, reviewLessonKey);
-        const hasReport = Boolean(latestReportForLesson(lessons, reviewLessonKey));
-        const hasFile = Boolean(drive);
-        const isComplete = reviewLessonKey
-          ? hasReport && hasFile
-          : hasOverlappingLesson(lessons, allDrive);
-        return {
-          student,
-          report,
-          drive,
-          hasReport,
-          hasFile,
-          isComplete,
-          reportCount,
-          showClass: false,
-          ...history,
-        };
-      }
-
-      const drive = scopeDriveToLesson(allDrive, reviewLessonKey);
-      const hasFile = Boolean(drive);
-      return {
+      const latest = latestByStudent.get(student.id);
+      return buildClassReviewItem({
         student,
-        report: fallbackReport,
-        drive,
-        hasReport: Boolean(student.lastReportedAt),
-        hasFile,
-        isComplete: hasFile,
-        reportCount,
-        showClass: false,
-        ...history,
-      };
+        lessonKey: reviewLessonKey,
+        lessons: reportsByStudentLesson.get(student.id),
+        classReports,
+        allDrive: driveByStudent.get(student.id) || null,
+        requiresBoth,
+        isAllClasses,
+        latestReport: latest && !latest.snapshotOnly ? latest : null,
+      });
     });
 
     if (isAllClasses) {
@@ -388,7 +406,7 @@ export function ReportsPanel({
     return sortByRecentActivity(list);
   }, [
     students,
-    resolveReport,
+    latestByStudent,
     search,
     isAllClasses,
     driveByStudent,
@@ -406,10 +424,10 @@ export function ReportsPanel({
   );
 
   const reportsForCopy = useMemo(
-    () => scanned
+    () => visible
       .filter((item) => item.report && !item.report.snapshotOnly)
       .map((item) => ({ report: item.report, displayName: item.student.fullName })),
-    [scanned],
+    [visible],
   );
 
   const completeCount = useMemo(
@@ -541,18 +559,15 @@ export function ReportsPanel({
               <div>
                 <p className="mb-1.5 text-xs font-medium text-slate-500">Buổi</p>
                 <div className="flex flex-wrap gap-1.5" role="group" aria-label="Chọn buổi">
-                  <FilterChip
-                    active={!reviewLessonKey}
-                    onClick={() => setReviewLessonKey('')}
-                  >
-                    Tất cả
-                  </FilterChip>
                   {reviewLessonOptions.map((option) => (
                     <FilterChip
                       key={option.value}
                       active={reviewLessonKey === option.value}
                       title={option.label}
-                      onClick={() => setReviewLessonKey(option.value)}
+                      onClick={() => {
+                        setReviewLessonKey(option.value);
+                        writeLessonParam(option.value);
+                      }}
                     >
                       <span className="tabular-nums">{shortLessonLabel(option)}</span>
                       {option.value === currentLessonKey ? (
@@ -685,7 +700,7 @@ export function ReportsPanel({
                 className="mb-3"
               />
 
-              {loading ? (
+              {loading || (watchLiveClass && !liveReady) ? (
                 <LoadingCatState
                   message={showReports ? 'Đang tải báo cáo học sinh...' : 'Đang tải bài nộp...'}
                 />
@@ -714,7 +729,10 @@ export function ReportsPanel({
                       <ClassCodeSubmissionsOverview
                         codeByStudent={codeByStudent}
                         students={visible.map(({ student }) => student)}
-                        onSelectStudent={(student) => openHistory(student, resolveReport(student))}
+                        onSelectStudent={(student) => {
+                          const row = visible.find((item) => item.student.id === student.id);
+                          openHistory(student, row?.report);
+                        }}
                       />
                     </div>
                   )}

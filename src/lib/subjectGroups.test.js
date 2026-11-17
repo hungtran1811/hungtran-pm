@@ -3,8 +3,11 @@ import {
   filterClassesBySubject,
   firstProgramForSubject,
   groupProgramsBySubjectAndLevel,
+  catalogForGroupName,
+  nextMindxProgram,
   resolveClassSubject,
   resolveProgramLevel,
+  resolveProgramLevelMeta,
   resolveProgramSubject,
   resolveProgramSubjectMeta,
   subjectsWithClasses,
@@ -71,6 +74,34 @@ describe('subject grouping', () => {
     expect(filterClassesBySubject(classes, 'robotics', programsById).map((c) => c.classCode)).toEqual([
       'ROB1',
     ]);
+  });
+
+  it('follows the MindX path and stops after Computer Scientist', () => {
+    const mindx = [
+      { id: 'scratch-basic', name: 'Scratch Basic', subject: 'Scratch', level: 'Basic' },
+      { id: 'scratch-advanced', name: 'Scratch Advanced', subject: 'Scratch', level: 'Advanced' },
+      { id: 'scratch-intensive', name: 'Scratch Intensive', subject: 'Scratch', level: 'Intensive' },
+      { id: 'gamemaker-basic', name: 'Gamemaker Basic', subject: 'Gamemaker', level: 'Basic' },
+      { id: 'python-app-basic', name: 'Python Basic', subject: 'Python', level: 'Basic' },
+      { id: 'python-intensive', name: 'Python Intensive', subject: 'Python App', level: 'Intensive' },
+      { id: 'web-basic', name: 'Web Basic', subject: 'Web', level: 'Basic' },
+      { id: 'web-intensive', name: 'Web Intensive', subject: 'Web', level: 'Intensive' },
+      { id: 'computer-science-basic', name: 'Computer Science Basic', subject: 'Computer Science', level: 'Basic' },
+      { id: 'computer-science-intensive', name: 'Computer Science Intensive', subject: 'Computer Science', level: 'Intensive' },
+      { id: 'robot-lab', name: 'Robot Lab', subject: 'Robotics', level: 'Basic', catalog: 'custom' },
+    ];
+    const groups = groupProgramsBySubjectAndLevel(mindx.filter((program) => program.catalog !== 'custom'));
+    expect(groups.map((group) => group.id)).toEqual(['scratch', 'gamemaker', 'python', 'web', 'cs']);
+    expect(nextMindxProgram(mindx[0], mindx).program.id).toBe('scratch-advanced');
+    expect(nextMindxProgram(mindx[2], mindx).program.id).toBe('gamemaker-basic');
+    expect(nextMindxProgram(mindx[5], mindx).program.id).toBe('web-basic');
+    expect(nextMindxProgram(mindx[7], mindx).toLabel).toBe('Computer Scientist · Basic');
+    expect(nextMindxProgram(mindx[9], mindx)).toMatchObject({ program: null, terminal: true });
+    expect(nextMindxProgram(mindx[10], mindx).program).toBeNull();
+    expect(resolveProgramSubjectMeta('robot-lab', mindx[10]).id).toBe('custom-robotics');
+    expect(catalogForGroupName('Scratch')).toBe('mindx');
+    expect(catalogForGroupName('Robotics')).toBe('custom');
+    expect(resolveProgramLevelMeta({ level: 'Khối 6' })).toEqual({ id: 'level-khoi-6', label: 'Khối 6' });
   });
 
   it('picks the first basic program for a subject chip', () => {

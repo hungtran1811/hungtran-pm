@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, query, where, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, query, where, writeBatch } from 'firebase/firestore';
 import { db } from '../config/firebase.js';
 import { toDriveSubmissionModel } from '../models/index.js';
 import { nextLatestSubmission, sortAdminSubmissions } from '../lib/submissionAdmin.js';
@@ -11,6 +11,16 @@ export async function listSubmissionsByClass(classCode) {
   if (!code) return [];
   const snap = await getDocs(query(collection(db, COL), where('classCode', '==', code)));
   return sortAdminSubmissions(snap.docs.map((docSnap) => toDriveSubmissionModel(docSnap)));
+}
+
+export function subscribeSubmissionsByClass(classCode, onData, onError) {
+  const code = String(classCode || '').trim();
+  if (!code) return () => {};
+  return onSnapshot(
+    query(collection(db, COL), where('classCode', '==', code)),
+    (snap) => onData(sortAdminSubmissions(snap.docs.map((docSnap) => toDriveSubmissionModel(docSnap)))),
+    onError,
+  );
 }
 
 /** Latest files for one session (Lnn + legacy Bnn). Uses existing classCode+lessonKey+isLatest index. */

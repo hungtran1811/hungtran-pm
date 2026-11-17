@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { Dices, Gift, Hash, Layers, Search, Sparkles, Compass } from 'lucide-react';
+import { Dices, Gift, Hash, Layers, Search, Sparkles } from 'lucide-react';
 import { AppShell } from '../../ui/components/AppShell.jsx';
 import { SkeletonRows } from '../../ui/components/Skeleton.jsx';
 import { Spinner } from '../../ui/components/Spinner.jsx';
@@ -25,6 +25,7 @@ import {
   FEATURE_CODING_SHOWDOWN_ENABLED,
   FEATURE_SPY_GAME_ENABLED,
 } from '../../config/features.js';
+import { adminGameCards } from '../../lib/adminGames.js';
 
 const RandomStudentPicker = lazy(() =>
   import('./games/RandomStudentPicker.jsx').then((m) => ({ default: m.RandomStudentPicker })),
@@ -45,32 +46,14 @@ const CodingShowdownGame = FEATURE_CODING_SHOWDOWN_ENABLED
   )
   : null;
 
-const GAME_GROUPS = [
-  {
-    id: 'random',
-    title: 'Ngẫu nhiên',
-    icon: Sparkles,
-    games: [
-      { id: 'random-student', title: 'Quay tên', icon: Dices },
-      { id: 'card-flip', title: 'Lật bài', icon: Layers },
-      { id: 'mystery-box', title: 'Hộp bí ẩn', icon: Gift },
-      { id: 'number-guess', title: 'Đoán số', icon: Hash },
-    ],
-  },
-  {
-    id: 'adventure',
-    title: 'Phiêu lưu',
-    icon: Compass,
-    games: [
-      ...(FEATURE_SPY_GAME_ENABLED
-        ? [{ id: 'spy-game', title: 'Truy tìm gián điệp', icon: Search }]
-        : []),
-      ...(FEATURE_CODING_SHOWDOWN_ENABLED
-        ? [{ id: 'coding-showdown', title: 'Coding Showdown', icon: Search }]
-        : []),
-    ],
-  },
-].filter((g) => g.games.length > 0);
+const GAME_ICONS = {
+  'random-student': Dices,
+  'card-flip': Layers,
+  'mystery-box': Gift,
+  'number-guess': Hash,
+  'spy-game': Search,
+  'coding-showdown': Search,
+};
 
 const GAMES_WITH_ATTENDANCE = new Set([
   'random-student',
@@ -113,8 +96,11 @@ export function MiniGamesPage() {
   const [classes, setClasses] = useState([]);
   const [programs, setPrograms] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeGroup, setActiveGroup] = useState(GAME_GROUPS[0]?.id || 'random');
-  const [activeGame, setActiveGame] = useState(GAME_GROUPS[0]?.games[0]?.id || 'random-student');
+  const [activeGame, setActiveGame] = useState('random-student');
+  const gameCards = useMemo(
+    () => adminGameCards({ showdownEnabled: FEATURE_CODING_SHOWDOWN_ENABLED }),
+    [],
+  );
   const [selectedClass, setSelectedClass] = useState('');
   const [students, setStudents] = useState([]);
   const [presentStudentIds, setPresentStudentIds] = useState(() => new Set());
@@ -126,21 +112,7 @@ export function MiniGamesPage() {
     [classes],
   );
 
-  const currentGroup = useMemo(
-    () => GAME_GROUPS.find((g) => g.id === activeGroup) || GAME_GROUPS[0],
-    [activeGroup],
-  );
-
   const showAttendance = GAMES_WITH_ATTENDANCE.has(activeGame) && Boolean(selectedClass);
-
-  const selectGroup = (groupId) => {
-    const group = GAME_GROUPS.find((g) => g.id === groupId);
-    if (!group) return;
-    setActiveGroup(groupId);
-    if (!group.games.some((g) => g.id === activeGame)) {
-      setActiveGame(group.games[0]?.id || '');
-    }
-  };
 
   useEffect(() => {
     const unsubscribe = subscribeClasses(
@@ -260,53 +232,29 @@ export function MiniGamesPage() {
 
   return (
     <AppShell title="Mini game">
-      <div className="mb-3 flex flex-wrap gap-2">
-        {GAME_GROUPS.map((group) => {
-          const Icon = group.icon;
-          const active = group.id === activeGroup;
+      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-5">
+        {gameCards.map((game) => {
+          const Icon = GAME_ICONS[game.id] || Sparkles;
+          const active = game.id === activeGame;
           return (
             <button
-              key={group.id}
+              key={game.id}
               type="button"
-              aria-selected={active}
-              onClick={() => selectGroup(group.id)}
-              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${
+              aria-pressed={active}
+              onClick={() => setActiveGame(game.id)}
+              className={`rounded-2xl border p-3 text-left ${
                 active
-                  ? 'bg-slate-900 text-white shadow-sm dark:bg-slate-100 dark:text-slate-900'
-                  : 'border border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:text-brand-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
+                  ? 'border-brand-600 bg-brand-50 dark:bg-brand-500/10'
+                  : 'border-slate-200 bg-white hover:border-brand-300 dark:border-slate-700 dark:bg-slate-900'
               }`}
             >
-              <Icon className="h-4 w-4" />
-              {group.title}
+              <Icon className="h-5 w-5 text-brand-600" aria-hidden="true" />
+              <span className="mt-2 block text-sm font-semibold text-slate-800 dark:text-slate-100">{game.title}</span>
+              <span className="mt-1 block text-xs text-slate-500">{game.detail}</span>
             </button>
           );
         })}
       </div>
-
-      {currentGroup && (
-        <div className="mb-5 flex flex-wrap gap-2">
-          {currentGroup.games.map((game) => {
-            const Icon = game.icon;
-            const active = game.id === activeGame;
-            return (
-              <button
-                key={game.id}
-                type="button"
-                aria-selected={active}
-                onClick={() => setActiveGame(game.id)}
-                className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold transition ${
-                  active
-                    ? 'bg-brand-600 text-white shadow-sm'
-                    : 'border border-slate-200 bg-white text-slate-600 hover:border-brand-300 hover:text-brand-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:border-brand-500/40 dark:hover:text-brand-300'
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {game.title}
-              </button>
-            );
-          })}
-        </div>
-      )}
 
       {loading ? (
         <SkeletonRows count={5} />

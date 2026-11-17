@@ -1,32 +1,36 @@
-import { NavLink } from 'react-router-dom';
-import { BookOpen, ClipboardList, LayoutDashboard, MessageSquare, Upload } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
+import { studentNavIsActive } from '../../lib/studentWorkspace.js';
+import { BookOpen, FolderKanban, Gamepad2, House, MessageSquare } from 'lucide-react';
 
 const ICONS = {
-  overview: LayoutDashboard,
+  home: House,
+  overview: House,
   lessons: BookOpen,
   learn: BookOpen,
   feedback: MessageSquare,
-  report: ClipboardList,
-  project: ClipboardList,
-  submit: Upload,
+  report: FolderKanban,
+  project: FolderKanban,
+  submit: FolderKanban,
+  games: Gamepad2,
 };
 
 export function StudentBottomNav({ items, activeId, onSelect }) {
+  const location = useLocation();
   if (!items.length) return null;
 
   return (
     <nav
-      className="student-bottom-nav fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/90 bg-white/95 backdrop-blur-md dark:border-slate-800/90 dark:bg-slate-950/95 sm:hidden"
+      className="student-bottom-nav fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 backdrop-blur-md dark:border-slate-800/90 dark:bg-slate-950/95"
       aria-label="Điều hướng nhanh"
     >
       <div className="mx-auto flex max-w-[90rem]">
         {items.map((item) => {
           const Icon = ICONS[item.id] || BookOpen;
           const className = (active) =>
-            `flex min-h-[3.25rem] flex-1 cursor-pointer flex-col items-center justify-center gap-0.5 px-1 py-2 text-[10px] font-medium transition ${
+            `flex min-h-[3.25rem] flex-1 cursor-pointer flex-col items-center justify-center gap-0.5 px-1 py-2 text-[10px] font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
               active
                 ? 'text-brand-600 dark:text-brand-300'
-                : 'text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200'
+                : 'text-slate-500 dark:text-slate-400'
             }`;
           const body = (active) => (
             <>
@@ -36,14 +40,14 @@ export function StudentBottomNav({ items, activeId, onSelect }) {
           );
           if (item.to) {
             return (
-              <NavLink
+              <Link
                 key={item.id}
                 to={item.to}
-                aria-current={undefined}
-                className={({ isActive }) => className(isActive)}
+                aria-current={studentNavIsActive(item.to, location) ? 'page' : undefined}
+                className={className(studentNavIsActive(item.to, location))}
               >
-                {({ isActive }) => body(isActive)}
-              </NavLink>
+                {body(studentNavIsActive(item.to, location))}
+              </Link>
             );
           }
           const active = activeId === item.id;

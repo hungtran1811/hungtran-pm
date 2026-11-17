@@ -40,10 +40,7 @@ import {
 import { CURRICULUM_FINAL_MODES } from '../../constants/index.js';
 import { getErrorMessage } from '../../lib/firestore.js';
 import {
-  LEVEL_FORM_OPTIONS,
-  SUBJECT_FORM_OPTIONS,
-  canonicalProgramLevelValue,
-  canonicalProgramSubjectValue,
+  catalogForGroupName,
   resolveProgramLevelMeta,
   resolveProgramSubjectMeta,
 } from '../../lib/subjectGroups.js';
@@ -112,8 +109,8 @@ export function LessonsPage() {
     const list = await listCurriculumPrograms();
     setPrograms(list);
     if (selectId) setSelectedProgramId(selectId);
-    else if (list.length && !list.some((p) => p.id === selectedProgramId)) {
-      setSelectedProgramId(list[0].id);
+    else if (selectedProgramId && !list.some((p) => p.id === selectedProgramId)) {
+      setSelectedProgramId('');
     }
     return list;
   };
@@ -123,7 +120,6 @@ export function LessonsPage() {
       try {
         const list = await listCurriculumPrograms();
         setPrograms(list);
-        if (list.length) setSelectedProgramId(list[0].id);
       } catch (error) {
         toast.error(getErrorMessage(error));
       } finally {
@@ -268,8 +264,13 @@ export function LessonsPage() {
     setProgramForm({
       id: program.id,
       name: program.name,
-      subject: canonicalProgramSubjectValue(program),
-      level: canonicalProgramLevelValue(program),
+      subject:
+        resolveProgramSubjectMeta(program.id, program).id === 'other'
+          ? program.subject || ''
+          : resolveProgramSubjectMeta(program.id, program).label,
+      level:
+        program.level ||
+        (resolveProgramLevelMeta(program).id === 'other' ? '' : resolveProgramLevelMeta(program).label),
       description: program.description,
       totalSessionCount: program.totalSessionCount,
       knowledgePhaseEndSession: program.knowledgePhaseEndSession,
@@ -288,6 +289,11 @@ export function LessonsPage() {
       toast.error('Vui lòng nhập tên chương trình.');
       return;
     }
+    if (!form.subject.trim()) {
+      toast.error('Vui lòng nhập tên nhóm chương trình.');
+      return;
+    }
+    form.catalog = catalogForGroupName(form.subject);
     setSavingProgram(true);
     try {
       if (form._isNew) {
@@ -355,26 +361,29 @@ export function LessonsPage() {
                 onChange={setSelectedProgramId}
                 className="min-w-0 flex-1"
               />
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={openEditProgram}
-                title="Sửa thông tin chương trình"
-              >
-                <Settings2 className="h-4 w-4" />
-              </Button>
+              {program ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={openEditProgram}
+                  title="Sửa thông tin chương trình"
+                >
+                  <Settings2 className="h-4 w-4" />
+                </Button>
+              ) : null}
             </div>
-            <Button size="sm" onClick={openNew}>
-              <Plus className="h-4 w-4" />
-              Thêm bài giảng
-            </Button>
+            {program ? (
+              <Button size="sm" onClick={openNew}>
+                <Plus className="h-4 w-4" />
+                Thêm bài giảng
+              </Button>
+            ) : null}
           </div>
 
           {program && (
             <p className="mb-4 text-sm text-slate-500">
               {resolveProgramSubjectMeta(program.id, program).label}
-              {' · '}
-              {resolveProgramLevelMeta(program).label}
+              {program.level ? ` · ${resolveProgramLevelMeta(program).label}` : ''}
               {' · '}
               {lessons.length} bài giảng
             </p>
@@ -382,6 +391,8 @@ export function LessonsPage() {
 
           {loading ? (
             <SkeletonRows count={4} />
+          ) : !selectedProgramId ? (
+            <p className="text-sm text-slate-500">Chọn chương trình để xem bài giảng.</p>
           ) : lessons.length === 0 ? (
             <EmptyState
               icon={<FileText className="h-7 w-7" />}
@@ -475,6 +486,7 @@ export function LessonsPage() {
       {programForm && (
         <ProgramFormModal
           initial={programForm}
+          programs={programs}
           saving={savingProgram}
           onClose={() => setProgramForm(null)}
           onSave={handleSaveProgram}
@@ -484,9 +496,11 @@ export function LessonsPage() {
   );
 }
 
-function ProgramFormModal({ initial, saving, onClose, onSave }) {
+function ProgramFormModal({ initial, programs = [], saving, onClose, onSave }) {
   const [form, setForm] = useState(initial);
   const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+  const groupNames = [...new Set(programs.map((item) => resolveProgramSubjectMeta(item.id, item).label).filter(Boolean))];
+  const levelNames = [...new Set(programs.map((item) => String(item.level || '').trim()).filter(Boolean))];
 
   return (
     <Modal
@@ -519,33 +533,33 @@ function ProgramFormModal({ initial, saving, onClose, onSave }) {
           <Input value={form.name} onChange={(e) => update('name', e.target.value)} />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Môn học">
-            <Select value={form.subject} onChange={(e) => update('subject', e.target.value)}>
-              <option value="">— Chọn môn —</option>
-              {SUBJECT_FORM_OPTIONS.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-              {form.subject && !SUBJECT_FORM_OPTIONS.some((option) => option.id === form.subject) && (
-                <option value={form.subject}>{form.subject}</option>
-              )}
-            </Select>
+          <Field label="Nhóm chương trình" required>
+            <Input
+              list="program-group-names"
+              value={form.subject}
+              onChange={(event) => update('subject', event.target.value)}
+              placeholder="Tên nhóm mới hoặc nhóm có sẵn"
+            />
           </Field>
           <Field label="Trình độ">
-            <Select value={form.level} onChange={(e) => update('level', e.target.value)}>
-              <option value="">— Chọn trình độ —</option>
-              {LEVEL_FORM_OPTIONS.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-              {form.level && !LEVEL_FORM_OPTIONS.some((option) => option.id === form.level) && (
-                <option value={form.level}>{form.level}</option>
-              )}
-            </Select>
+            <Input
+              list="program-level-names"
+              value={form.level}
+              onChange={(event) => update('level', event.target.value)}
+              placeholder="Tự đặt, ví dụ Basic"
+            />
           </Field>
         </div>
+        <datalist id="program-group-names">
+          {groupNames.map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
+        <datalist id="program-level-names">
+          {levelNames.map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
         <Field label="Mô tả">
           <Textarea
             rows={3}

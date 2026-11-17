@@ -1,14 +1,19 @@
 /** Nhóm môn để rút gọn filter lớp / chương trình. */
 export const OTHER_SUBJECT_ID = 'other';
 
+/** Lộ trình K12 MindX. Hết Intensive thì sang môn kế. Computer Scientist là bậc cuối. */
+export const MINDX_PATH = [
+  { id: 'scratch', label: 'Scratch' },
+  { id: 'gamemaker', label: 'GameMaker' },
+  { id: 'python', label: 'Python App' },
+  { id: 'web', label: 'Web' },
+  { id: 'cs', label: 'Computer Scientist', terminal: true },
+];
+
+export const MINDX_PATH_SUMMARY = 'Scratch → GameMaker → Python App → Web → Computer Scientist';
+
 export const SUBJECT_FILTERS = [
   { id: 'all', label: 'Tất cả' },
-  {
-    id: 'python',
-    label: 'Python',
-    match: ({ id, subject, name }) =>
-      /python/.test(id) || /python/.test(subject) || /python/.test(name),
-  },
   {
     id: 'scratch',
     label: 'Scratch',
@@ -17,21 +22,15 @@ export const SUBJECT_FILTERS = [
   },
   {
     id: 'gamemaker',
-    label: 'Game Maker',
+    label: 'GameMaker',
     match: ({ id, subject, name }) =>
       /game\s*maker|gamemaker|gmk/.test(`${id} ${subject} ${name}`),
   },
   {
-    id: 'javascript',
-    label: 'Javascript',
+    id: 'python',
+    label: 'Python App',
     match: ({ id, subject, name }) =>
-      /javascript|\bjs\b|node/.test(`${id} ${subject} ${name}`),
-  },
-  {
-    id: 'cs',
-    label: 'Computer Science',
-    match: ({ id, subject, name }) =>
-      /computer\s*science|\bcs\b|tin\s*học/.test(`${id} ${subject} ${name}`),
+      /python/.test(id) || /python/.test(subject) || /python/.test(name),
   },
   {
     id: 'web',
@@ -41,19 +40,34 @@ export const SUBJECT_FILTERS = [
         `${id} ${subject} ${name}`,
       ),
   },
-  { id: OTHER_SUBJECT_ID, label: 'Khác' },
+  {
+    id: 'cs',
+    label: 'Computer Scientist',
+    match: ({ id, subject, name }) =>
+      /computer[\s-]*science|computer[\s-]*scientist|\bcs\b|tin\s*hoc|tin\s*học/.test(
+        `${id} ${subject} ${name}`,
+      ),
+  },
+  {
+    id: 'javascript',
+    label: 'Javascript',
+    match: ({ id, subject, name }) =>
+      /javascript|\bjs\b|node/.test(`${id} ${subject} ${name}`),
+  },
+  { id: OTHER_SUBJECT_ID, label: 'Ngoài MindX' },
 ];
 
 export const LEVEL_FILTERS = [
-  { id: 'basic', label: 'Cơ bản' },
-  { id: 'advanced', label: 'Nâng cao' },
-  { id: 'intensive', label: 'Tăng cường' },
+  { id: 'basic', label: 'Basic' },
+  { id: 'advanced', label: 'Advanced' },
+  { id: 'intensive', label: 'Intensive' },
   { id: 'other', label: 'Khác' },
 ];
 
 const MATCHABLE_SUBJECTS = SUBJECT_FILTERS.filter((g) => typeof g.match === 'function');
+const MINDX_LEVEL_IDS = LEVEL_FILTERS.filter((level) => level.id !== 'other').map((level) => level.id);
 
-export const SUBJECT_FORM_OPTIONS = MATCHABLE_SUBJECTS.map(({ id, label }) => ({ id, label }));
+export const SUBJECT_FORM_OPTIONS = MINDX_PATH.map(({ id, label }) => ({ id, label }));
 export const LEVEL_FORM_OPTIONS = LEVEL_FILTERS.filter((l) => l.id !== 'other');
 
 const LEVEL_MATCHERS = [
@@ -105,6 +119,11 @@ function sortSubjectGroups(groups) {
 }
 
 export function resolveProgramSubjectMeta(programId, program = null) {
+  if (program?.catalog === 'custom') {
+    const raw = String(program.subject || '').trim();
+    if (!raw) return { id: OTHER_SUBJECT_ID, label: 'Ngoài MindX' };
+    return { id: `custom-${slugSubject(raw)}`, label: raw };
+  }
   const meta = programMeta(programId, program);
   const hit = MATCHABLE_SUBJECTS.find((g) => g.match(meta));
   if (hit) return { id: hit.id, label: hit.label };
@@ -116,7 +135,7 @@ export function resolveProgramSubjectMeta(programId, program = null) {
       return { id, label: raw };
     }
   }
-  return { id: OTHER_SUBJECT_ID, label: 'Khác' };
+  return { id: OTHER_SUBJECT_ID, label: 'Ngoài MindX' };
 }
 
 export function resolveProgramSubject(programId, program = null) {
@@ -129,8 +148,11 @@ export function resolveProgramSubject(programId, program = null) {
 
 export function resolveProgramLevel(program = null) {
   const levelText = foldText(program?.level);
-  for (const matcher of LEVEL_MATCHERS) {
-    if (matcher.re.test(levelText)) return matcher.id;
+  if (levelText) {
+    for (const matcher of LEVEL_MATCHERS) {
+      if (matcher.re.test(levelText)) return matcher.id;
+    }
+    return 'other';
   }
   const blob = `${foldText(program?.id)} ${foldText(program?.name)}`;
   for (const matcher of LEVEL_MATCHERS) {
@@ -141,8 +163,32 @@ export function resolveProgramLevel(program = null) {
 
 export function resolveProgramLevelMeta(program = null) {
   const id = resolveProgramLevel(program);
-  const hit = LEVEL_FILTERS.find((l) => l.id === id);
-  return { id, label: hit?.label || 'Khác' };
+  if (id !== 'other') {
+    const hit = LEVEL_FILTERS.find((level) => level.id === id);
+    return { id, label: hit?.label || id };
+  }
+  const raw = String(program?.level || '').trim();
+  if (!raw) return { id: 'other', label: 'Khác' };
+  return { id: `level-${slugSubject(raw)}`, label: raw };
+}
+
+const MINDX_GROUP_ALIASES = new Set([
+  'scratch',
+  'gamemaker',
+  'game maker',
+  'python',
+  'python app',
+  'web',
+  'computer science',
+  'computer scientist',
+  'cs',
+]);
+
+export function catalogForGroupName(name) {
+  const folded = foldText(name).replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!folded) return 'custom';
+  if (MINDX_PATH.some((item) => foldText(item.label) === folded || foldText(item.id) === folded)) return 'mindx';
+  return MINDX_GROUP_ALIASES.has(folded) ? 'mindx' : 'custom';
 }
 
 export function canonicalProgramSubjectValue(program) {
@@ -186,7 +232,7 @@ export function subjectsWithClasses(classes, programsById = {}) {
     .sort((a, b) => a[1].localeCompare(b[1], 'vi'))
     .map(([id, label]) => ({ id, label }));
   const other = present.has(OTHER_SUBJECT_ID)
-    ? [{ id: OTHER_SUBJECT_ID, label: 'Khác' }]
+    ? [{ id: OTHER_SUBJECT_ID, label: 'Ngoài MindX' }]
     : [];
   return [...known, ...extras, ...other];
 }
@@ -205,7 +251,7 @@ export function subjectsWithPrograms(programs = []) {
     .sort((a, b) => a[1].localeCompare(b[1], 'vi'))
     .map(([id, label]) => ({ id, label }));
   const other = present.has(OTHER_SUBJECT_ID)
-    ? [{ id: OTHER_SUBJECT_ID, label: 'Khác' }]
+    ? [{ id: OTHER_SUBJECT_ID, label: 'Ngoài MindX' }]
     : [];
   return [...known, ...extras, ...other];
 }
@@ -249,7 +295,11 @@ export function groupProgramsBySubjectAndLevel(programs = []) {
         ...level,
         programs: level.programs.sort((a, b) => a.name.localeCompare(b.name, 'vi')),
       }))
-      .sort((a, b) => (levelOrder.get(a.id) ?? 99) - (levelOrder.get(b.id) ?? 99)),
+      .sort((a, b) => {
+        const delta = (levelOrder.get(a.id) ?? 50) - (levelOrder.get(b.id) ?? 50);
+        if (delta) return delta;
+        return a.label.localeCompare(b.label, 'vi');
+      }),
   }));
 }
 
@@ -267,6 +317,67 @@ export function firstProgramForSubject(programs = [], subjectId, preferredLevel 
   if (!group) return null;
   const preferred = group.levels.find((level) => level.id === preferredLevel);
   return firstVisibleProgram(preferred?.programs) || firstVisibleProgram(group.levels[0]?.programs);
+}
+
+export function programCatalog(program) {
+  if (program?.catalog === 'custom') return 'custom';
+  if (program?.catalog === 'mindx') return 'mindx';
+  const subjectId = resolveProgramSubjectMeta(program?.id, program).id;
+  return MINDX_PATH.some((item) => item.id === subjectId) ? 'mindx' : 'custom';
+}
+
+export function programPathLabel(program) {
+  const subject = resolveProgramSubjectMeta(program?.id, program);
+  const level = resolveProgramLevelMeta(program);
+  const index = MINDX_PATH.findIndex((item) => item.id === subject.id);
+  const levelText = level.id === 'other' ? '' : ` · ${level.label}`;
+  if (index < 0) return `Ngoài MindX · ${subject.label}${levelText}`;
+  return `MindX K12 · ${index + 1}. ${subject.label}${levelText}`;
+}
+
+/** Bậc kế trên lộ trình MindX. Hết Intensive sang môn sau. Computer Scientist không có môn tiếp. */
+export function nextMindxProgram(current, programs = []) {
+  if (!current || current.catalog === 'custom') return { program: null, terminal: false, fromLabel: '', toLabel: '' };
+  const subject = resolveProgramSubjectMeta(current.id, current);
+  const subjectIndex = MINDX_PATH.findIndex((item) => item.id === subject.id);
+  const level = resolveProgramLevelMeta(current);
+  const fromLabel = subjectIndex < 0 ? '' : `${subject.label} · ${level.label}`;
+  if (subjectIndex < 0) return { program: null, terminal: false, fromLabel, toLabel: '' };
+
+  const levelIndex = MINDX_LEVEL_IDS.indexOf(level.id);
+  const steps = [];
+  const restOfSubject = levelIndex >= 0 ? MINDX_LEVEL_IDS.slice(levelIndex + 1) : MINDX_LEVEL_IDS;
+  restOfSubject.forEach((levelId) => steps.push({ subjectId: subject.id, levelId }));
+  const finishedSubject = levelIndex === MINDX_LEVEL_IDS.length - 1;
+  if (!(MINDX_PATH[subjectIndex].terminal && finishedSubject)) {
+    for (let index = subjectIndex + 1; index < MINDX_PATH.length; index += 1) {
+      MINDX_LEVEL_IDS.forEach((levelId) => steps.push({ subjectId: MINDX_PATH[index].id, levelId }));
+    }
+  }
+  if (MINDX_PATH[subjectIndex].terminal && finishedSubject) {
+    return { program: null, terminal: true, fromLabel, toLabel: '' };
+  }
+
+  const pool = programs.filter(
+    (program) => program && program.id !== current.id && program.catalog !== 'custom' && program.active !== false,
+  );
+  for (const step of steps) {
+    const match = pool.find(
+      (program) =>
+        resolveProgramSubjectMeta(program.id, program).id === step.subjectId &&
+        resolveProgramLevel(program) === step.levelId,
+    );
+    if (!match) continue;
+    const toSubject = MINDX_PATH.find((item) => item.id === step.subjectId);
+    const toLevel = LEVEL_FILTERS.find((item) => item.id === step.levelId);
+    return {
+      program: match,
+      terminal: false,
+      fromLabel,
+      toLabel: `${toSubject.label} · ${toLevel.label}`,
+    };
+  }
+  return { program: null, terminal: Boolean(MINDX_PATH[subjectIndex].terminal), fromLabel, toLabel: '' };
 }
 
 export function formatClassOptionLabel(cls, { compact = false, showCount = false } = {}) {

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { studentNavIsActive } from '../../lib/studentWorkspace.js';
 import { BrandLogo } from '../../ui/components/BrandLogo.jsx';
 import { ThemeToggle } from '../../ui/components/ThemeToggle.jsx';
 import {
@@ -20,6 +21,7 @@ export function StudentShell({
   hideSubtitleOnMobile = false,
   children,
 }) {
+  const location = useLocation();
   const isReadingLesson = activeLessonSession != null;
   const usesPathNav = Boolean(bottomNavItems?.some((item) => item.to));
   const sectionIds = useMemo(
@@ -54,30 +56,56 @@ export function StudentShell({
   const hasBottomNav = Boolean(bottomNavItems?.length) && (!isReadingLesson || usesPathNav);
 
   return (
-    <div className="student-portal min-h-screen bg-gradient-to-b from-brand-50/40 via-slate-50 to-slate-50 dark:from-slate-950 dark:via-slate-950 dark:to-slate-950">
-      <header className="student-header sticky top-0 z-30 border-b border-slate-200/80 bg-white/90 pt-[env(safe-area-inset-top)] backdrop-blur-md dark:border-slate-800/80 dark:bg-slate-950/90">
+    <div className="student-portal min-h-screen bg-canvas text-ink dark:bg-slate-950 dark:text-slate-100">
+      <header className="student-header sticky top-0 z-30 border-b border-line bg-white/95 pt-[env(safe-area-inset-top)] backdrop-blur-md dark:border-slate-800 dark:bg-slate-950/95">
         <div
-          className={`mx-auto flex items-center justify-between gap-2 px-4 py-3 sm:gap-3 sm:py-3.5 ${SHELL_WIDTH}`}
+          className={`mx-auto flex min-h-[4.5rem] items-center gap-3 px-4 py-2 min-[701px]:px-7 ${SHELL_WIDTH}`}
         >
           <Link
             to="/"
             title="Nhập mã lớp khác"
-            className="group flex min-w-0 shrink-0 items-center rounded-xl py-0.5 pr-2 transition hover:bg-slate-100/80 dark:hover:bg-slate-800/60"
+            className="flex min-w-0 shrink-0 items-center gap-2.5 rounded-xl"
           >
-            <BrandLogo
-              size="md"
-              subtitle={subtitle}
-              subtitleClassName={hideSubtitleOnMobile ? 'hidden sm:block' : ''}
-            />
+            <BrandLogo size="sm" />
+            <span className="min-w-0">
+              <span className="block text-[15px] font-semibold leading-none tracking-tight text-ink dark:text-slate-100">
+                hungtran<span className="text-brand-600">PM</span>
+              </span>
+              <span
+                className={`mt-1 block truncate text-[11px] text-muted ${
+                  hideSubtitleOnMobile ? 'hidden min-[701px]:block' : ''
+                }`}
+              >
+                {subtitle || 'Learning Campus'}
+              </span>
+            </span>
           </Link>
-          <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5 sm:gap-2">
+          {bottomNavItems?.some((item) => item.to) ? (
+            <nav className="hidden min-w-0 items-center gap-1 min-[701px]:flex" aria-label="Điều hướng chính">
+              {bottomNavItems.filter((item) => item.to).map((item) => (
+                <Link
+                  key={item.id}
+                  to={item.to}
+                  aria-current={studentNavIsActive(item.to, location) ? 'page' : undefined}
+                  className={`inline-flex min-h-10 items-center rounded-xl px-3 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600 ${
+                    studentNavIsActive(item.to, location)
+                      ? 'bg-brand-50 text-brand-600'
+                      : 'text-muted'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
+          ) : null}
+          <div className="ml-auto flex min-w-0 items-center justify-end gap-1.5 sm:gap-2">
             {right}
             <ThemeToggle />
           </div>
         </div>
       </header>
       <main
-        className={`student-main mx-auto overflow-x-hidden px-4 ${SHELL_WIDTH} ${
+        className={`student-main mx-auto overflow-x-clip px-4 ${SHELL_WIDTH} ${
           compactMain
             ? 'pt-2 sm:pt-3'
             : 'pt-5 sm:pt-6'

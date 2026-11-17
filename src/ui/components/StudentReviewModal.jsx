@@ -10,8 +10,7 @@ import { completionSignal, signalLabel } from '../../lib/reportSignals.js';
 import { formatLessonKey, lessonKeysEqual } from '../../lib/submissionFileName.js';
 import { listReportsByStudent } from '../../services/reports.service.js';
 import { ProjectSummaryDisclosure } from './ProjectSummaryDisclosure.jsx';
-import { StudentReportDetail, productLinksOf } from './StudentReportDetail.jsx';
-import { ProjectLinksReadonly } from '../../pages/student/ProjectProductLinks.jsx';
+import { StudentReportDetail } from './StudentReportDetail.jsx';
 import { copyToClipboard, formatProgressReport } from '../../utils/exportText.js';
 import { useToast } from './Toast.jsx';
 import { STAGE_TONES, STATUS_TONES } from '../../constants/index.js';
@@ -259,13 +258,12 @@ export function StudentReviewModal({
 
   const signal = completionSignal(item, { showReport, showDrive });
   const files = item.drive?.files || (item.drive?.latest ? [item.drive.latest] : []);
-  const latestFile = item.drive?.latest || files[0] || null;
-  const latestFiles = latestFile ? [latestFile] : [];
-  const groups = lessonKey ? [[lessonKey, latestFiles]] : groupFilesByLesson(latestFiles);
-  const report = item.report;
-  const links = productLinksOf(report, item.student);
+  const groups = lessonKey ? [[lessonKey, files]] : groupFilesByLesson(files);
+  const report = item.hasReport && item.report && !item.report.snapshotOnly ? item.report : null;
   const showLessonDelete = canDelete && lessonKey && (item.hasReport || item.hasFile);
-  const canCopy = Boolean(item.hasReport && report && !report.snapshotOnly);
+  const canCopy = Boolean(report);
+  const canDeleteReport = Boolean(canDelete && report);
+  const hasRecordActions = canDelete && (files.length > 0 || canDeleteReport || showLessonDelete);
 
   const copyReport = async () => {
     if (!canCopy) return;
@@ -288,21 +286,17 @@ export function StudentReviewModal({
           </Badge>
           {item.showClass ? <Badge tone="slate">{item.student.classCode}</Badge> : null}
           {lessonKey ? <Badge tone="slate">{formatLessonKey(lessonKey)}</Badge> : null}
-          {(report?.stage || item.student.currentStage) ? (
-            <Badge tone={STAGE_TONES[report?.stage || item.student.currentStage] || 'slate'}>
-              {report?.stage || item.student.currentStage}
-            </Badge>
+          {report?.stage ? (
+            <Badge tone={STAGE_TONES[report.stage] || 'slate'}>{report.stage}</Badge>
           ) : null}
-          {(report?.status || item.student.currentStatus) ? (
-            <Badge tone={STATUS_TONES[report?.status || item.student.currentStatus] || 'slate'}>
-              {report?.status || item.student.currentStatus}
-            </Badge>
+          {report?.status ? (
+            <Badge tone={STATUS_TONES[report.status] || 'slate'}>{report.status}</Badge>
           ) : null}
         </div>
 
         {showReport ? (
           <section>
-            <ProjectSummaryDisclosure student={item.student} className="mb-3" />
+            {report ? <ProjectSummaryDisclosure student={item.student} className="mb-3" /> : null}
             <div className="mb-2 flex items-center justify-between gap-2">
               <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Báo cáo</h4>
               <div className="flex shrink-0 items-center gap-1">
@@ -312,28 +306,14 @@ export function StudentReviewModal({
                     Copy báo cáo
                   </Button>
                 ) : null}
-                {canDelete && item.hasReport && report && !report.snapshotOnly ? (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
-                    onClick={() => onDeleteReport(item, report)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Xóa
-                  </Button>
-                ) : null}
               </div>
             </div>
-            {!item.hasReport ? (
-              <div className="space-y-3">
-                <p className="text-sm text-amber-800 dark:text-amber-200">Chưa báo cáo</p>
-                <ProjectLinksReadonly
-                  githubUrl={links.githubUrl}
-                  canvaUrl={links.canvaUrl}
-                  slidesUrl={links.slidesUrl}
-                  otherUrl={links.otherUrl}
-                />
+            {!report ? (
+              <div className="space-y-2">
+                <p className="text-sm text-amber-800 dark:text-amber-200">Chưa nộp báo cáo buổi này</p>
+                {item.hasFile ? (
+                  <p className="text-sm text-amber-800 dark:text-amber-200">Có file, chưa có báo cáo</p>
+                ) : null}
               </div>
             ) : (
               <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
@@ -351,7 +331,7 @@ export function StudentReviewModal({
         {showDrive ? (
           <section>
             <h4 className="mb-2 text-sm font-semibold text-slate-800 dark:text-slate-100">File đã nộp</h4>
-            {!latestFiles.length ? (
+            {!files.length ? (
               <p className="text-sm text-amber-800 dark:text-amber-200">Chưa nộp</p>
             ) : (
               groups.map(([key, rows]) => (
@@ -361,8 +341,7 @@ export function StudentReviewModal({
                       <FileRow
                         key={file.id || `${file.lessonKey}-${file.attempt}-${file.originalFileName}`}
                         file={file}
-                        canDelete={canDelete}
-                        onDelete={(row) => onDeleteFile(item, row)}
+                        canDelete={false}
                       />
                     ))}
                   </ul>
@@ -377,20 +356,45 @@ export function StudentReviewModal({
           showReport={showReport}
           showDrive={showDrive}
           lessonKey={lessonKey}
-          canDelete={canDelete}
-          onDeleteFile={onDeleteFile}
+          canDelete={false}
         />
 
-        {showLessonDelete ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
-            onClick={() => onDeleteLesson(item)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Xóa buổi
-          </Button>
+        {hasRecordActions ? (
+          <details className="rounded-xl border border-slate-200 dark:border-slate-700">
+            <summary className="cursor-pointer list-none px-3 py-2 text-xs text-slate-400 [&::-webkit-details-marker]:hidden">
+              Quản lý bản ghi
+            </summary>
+            <div className="space-y-1 border-t border-slate-200 px-3 py-2 dark:border-slate-700">
+              {files.map((file) => (
+                <button
+                  key={file.id || `${file.lessonKey}-${file.attempt}-${file.originalFileName}`}
+                  type="button"
+                  className="block text-left text-xs text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400"
+                  onClick={() => onDeleteFile(item, file)}
+                >
+                  Xóa file {file.originalFileName || ''}
+                </button>
+              ))}
+              {canDeleteReport ? (
+                <button
+                  type="button"
+                  className="block text-left text-xs text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400"
+                  onClick={() => onDeleteReport(item, report)}
+                >
+                  Xóa báo cáo
+                </button>
+              ) : null}
+              {showLessonDelete ? (
+                <button
+                  type="button"
+                  className="block text-left text-xs text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400"
+                  onClick={() => onDeleteLesson(item)}
+                >
+                  Xóa buổi
+                </button>
+              ) : null}
+            </div>
+          </details>
         ) : null}
       </div>
     </Modal>

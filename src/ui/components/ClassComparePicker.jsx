@@ -11,6 +11,7 @@ import {
   subjectsWithClasses,
 } from '../../lib/subjectGroups.js';
 import { Input } from './Field.jsx';
+import { SubjectFilterSelect } from './SubjectFilterSelect.jsx';
 
 const MAX_SELECTION = 8;
 
@@ -133,26 +134,8 @@ export function ClassComparePicker({
 
   return (
     <div className={`space-y-2 ${className}`}>
-      {subjectOptions.length > 2 && (
-        <div className="flex flex-wrap gap-1.5">
-          {subjectOptions.map((g) => (
-            <button
-              key={g.id}
-              type="button"
-              onClick={() => setSubjectId(g.id)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                subjectId === g.id
-                  ? 'bg-brand-600 text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
-              }`}
-            >
-              {g.label}
-            </button>
-          ))}
-        </div>
-      )}
-
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <SubjectFilterSelect options={subjectOptions} value={subjectId} onChange={setSubjectId} />
         <div ref={rootRef} className="relative min-w-0 flex-1 sm:max-w-md">
           <button
             type="button"

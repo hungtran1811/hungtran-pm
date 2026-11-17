@@ -15,6 +15,7 @@ import { loadOpenClass } from './_lib/submissionValidate.js';
 import { clientIp, json, parseJsonBody, preflight } from './_lib/http.js';
 import { checkRateLimit, DRIVE_LIMITS } from './_lib/rateLimit.js';
 import { functionErrorCode, logFunctionError } from './_lib/functionLog.js';
+import { assertPinClassStudent } from './_lib/pinAccess.js';
 
 function sameSize(left, right) {
   return Number(left) === Number(right);
@@ -140,6 +141,9 @@ export async function handler(event) {
     }
 
     const studentId = sessions[0].studentId;
+    const classDoc = await loadOpenClass(db, sessions[0].classCode);
+    const pinAccess = await assertPinClassStudent(event, db, classDoc, studentId);
+    if (!pinAccess.ok) return json(pinAccess.status, { error: pinAccess.error });
     if (studentId && !checkRateLimit(`complete:student:${studentId}`, { max: DRIVE_LIMITS.complete.student })) {
       return json(429, { error: 'Bạn thao tác quá nhanh. Thử lại sau vài phút.' });
     }

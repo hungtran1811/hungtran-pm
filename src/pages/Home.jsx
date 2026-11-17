@@ -5,12 +5,15 @@ import { Field, Input } from '../ui/components/Field.jsx';
 import { ThemeToggle } from '../ui/components/ThemeToggle.jsx';
 import { BrandLogo } from '../ui/components/BrandLogo.jsx';
 import { OAUTH_APP_NAME } from '../data/publicLegal.js';
+import { resolveClassCode } from '../services/studentGate.service.js';
 
 export function HomePage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [classCode, setClassCode] = useState('');
   const [portalHint, setPortalHint] = useState(false);
+  const [lookupError, setLookupError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     document.title = OAUTH_APP_NAME;
@@ -23,11 +26,35 @@ export function HomePage() {
     }
   }, [location.state, navigate]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const code = classCode.trim();
-    if (code) {
-      navigate(`/c/${encodeURIComponent(code)}`);
+    if (!code || submitting) return;
+    setSubmitting(true);
+    setLookupError('');
+    try {
+      const result = await resolveClassCode(code);
+      if (result.status === 'resolved') {
+        navigate(`/c/${encodeURIComponent(result.canonicalClassCode)}`);
+        return;
+      }
+      if (result.status === 'ambiguous') {
+        setLookupError(result.message);
+        return;
+      }
+      if (result.status === 'unavailable') {
+        setLookupError('Lớp học này hiện không mở. Vui lòng liên hệ giáo viên.');
+        return;
+      }
+      setLookupError('Không tìm thấy lớp học với mã này.');
+    } catch (error) {
+      if (code.includes('-')) {
+        navigate(`/c/${encodeURIComponent(code)}`);
+        return;
+      }
+      setLookupError(error.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -51,7 +78,6 @@ export function HomePage() {
             Cổng lớp học
           </p>
           <h1 className="mt-1.5 text-2xl font-bold text-slate-800 dark:text-slate-50">{OAUTH_APP_NAME}</h1>
-          <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">Nhập mã lớp để vào bài giảng.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="card space-y-4 p-6 shadow-md ring-1 ring-brand-100/80 dark:ring-brand-500/20">
@@ -63,7 +89,10 @@ export function HomePage() {
           <Field label="Mã lớp">
             <Input
               value={classCode}
-              onChange={(e) => setClassCode(e.target.value)}
+              onChange={(e) => {
+                setClassCode(e.target.value);
+                setLookupError('');
+              }}
               onPaste={(e) => {
                 const pasted = e.clipboardData.getData('text').trim();
                 if (pasted) {
@@ -71,12 +100,13 @@ export function HomePage() {
                   setClassCode(pasted);
                 }
               }}
-              placeholder="Nhập hoặc dán mã lớp..."
+              placeholder="GB25 hoặc PVĐ-C4K-GB25-HB"
               autoFocus
               className="text-lg"
             />
           </Field>
-          <Button type="submit" size="lg" className="w-full min-h-12 text-base shadow-md" disabled={!classCode.trim()}>
+          {lookupError ? <p className="text-sm text-red-600">{lookupError}</p> : null}
+          <Button type="submit" size="lg" className="w-full min-h-12 text-base shadow-md" disabled={!classCode.trim()} loading={submitting}>
             Vào lớp
           </Button>
         </form>

@@ -20,7 +20,7 @@ afterEach(async () => {
   delete globalThis.IS_REACT_ACT_ENVIRONMENT;
 });
 
-function item({ id, name, hasReport, hasFile, report, drive, reportCount, reportHistory, driveHistory }) {
+function item({ id, name, hasReport, hasFile, report, drive, reportHistory, student = {} }) {
   return {
     student: {
       id,
@@ -29,17 +29,16 @@ function item({ id, name, hasReport, hasFile, report, drive, reportCount, report
       projectName: name === 'An' ? 'món ăn việt nam' : '',
       projectNameStatus: name === 'An' ? 'approved' : '',
       projectTopic: name === 'An' ? 'Tìm quán ăn' : '',
-      projectGithubUrl: name === 'An' ? 'https://github.com/an/food' : '',
-      projectCanvaUrl: name === 'An' ? 'https://www.canva.com/design/an' : '',
+      currentStage: 'Giai đoạn buổi khác',
+      currentStatus: 'Trạng thái buổi khác',
+      ...student,
     },
     hasReport,
     hasFile,
-    isComplete: hasReport && hasFile,
+    isComplete: Boolean(hasReport && hasFile),
     report,
     drive,
-    reportCount,
     reportHistory,
-    driveHistory,
   };
 }
 
@@ -59,97 +58,85 @@ const completeItem = item({
     difficulties: 'Chưa có dữ liệu quán',
     projectGithubUrl: 'https://github.com/an/food',
     projectCanvaUrl: 'https://www.canva.com/design/an',
+    lessonKey: 'B09',
     submittedAt: new Date('2026-09-12T10:00:00'),
   },
-  reportCount: 2,
   reportHistory: [
     {
       id: 'r2',
-      progressPercent: 40,
-      status: 'Đang làm',
-      stage: 'Làm sản phẩm',
-      projectName: 'món ăn việt nam',
       doneToday: 'Xong trang chủ',
-      nextGoal: 'Thêm trang chi tiết quán',
-      difficulties: 'Chưa có dữ liệu quán',
-      projectGithubUrl: 'https://github.com/an/food',
       lessonKey: 'B09',
       submittedAt: new Date('2026-09-12T10:00:00'),
     },
     {
       id: 'r1',
-      progressPercent: 20,
-      status: 'Đang làm',
-      stage: 'Phân tích vấn đề',
       doneToday: 'Làm wireframe',
-      nextGoal: 'Chốt bố cục',
-      difficulties: '',
-      lessonKey: 'B09',
+      lessonKey: 'B08',
       submittedAt: new Date('2026-09-12T08:00:00'),
     },
   ],
-  driveHistory: {
-    files: [
-      {
-        id: 'f2',
-        originalFileName: 'an-v2.zip',
-        attempt: 2,
-        isLatest: true,
-        lessonKey: 'B09',
-        submittedAt: new Date('2026-09-12T10:05:00'),
-        driveFileId: 'file-2',
-      },
-      {
-        id: 'f1',
-        originalFileName: 'an.zip',
-        attempt: 1,
-        isLatest: false,
-        lessonKey: 'B09',
-        submittedAt: new Date('2026-09-12T09:00:00'),
-        driveFileId: 'file-1',
-      },
-    ],
-  },
   drive: {
     latest: {
       id: 'f2',
       originalFileName: 'an-v2.zip',
-      attempt: 2,
       isLatest: true,
       submittedAt: new Date('2026-09-12T10:05:00'),
-      driveFileId: 'file-2',
     },
     files: [
-      {
-        id: 'f2',
-        originalFileName: 'an-v2.zip',
-        attempt: 2,
-        isLatest: true,
-        submittedAt: new Date('2026-09-12T10:05:00'),
-        driveFileId: 'file-2',
-      },
-      {
-        id: 'f1',
-        originalFileName: 'an.zip',
-        attempt: 1,
-        isLatest: false,
-        submittedAt: new Date('2026-09-12T09:00:00'),
-        driveFileId: 'file-1',
-      },
+      { id: 'f2', originalFileName: 'an-v2.zip', isLatest: true },
+      { id: 'f1', originalFileName: 'an.zip', isLatest: false },
     ],
   },
 });
 
 describe('ClassCompletionRoster', () => {
-  it('renders compact signal cards and opens details in a modal', async () => {
+  it('shows file and report status on the card, and the report inside the popup', async () => {
     await act(async () => {
       root.render(
         createElement(ClassCompletionRoster, {
           showDrive: true,
           showReport: true,
           lessonKey: 'B09',
+          canDelete: true,
+          onDeleteFile: () => {},
+          onDeleteReport: () => {},
+          onDeleteLesson: () => {},
+          items: [completeItem],
+        }),
+      );
+    });
+
+    const card = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent.includes('An'),
+    );
+    expect(card.textContent).toContain('Báo cáo');
+    expect(card.textContent).toContain('File');
+    expect(card.textContent).toContain('Đủ');
+    expect(card.textContent).not.toContain('Xong trang chủ');
+    expect(card.textContent).not.toContain('Xóa');
+
+    await act(async () => {
+      card.click();
+    });
+
+    const dialog = container.querySelector('[role="dialog"]');
+    expect(dialog.textContent).toContain('Xong trang chủ');
+    expect(dialog.textContent).toContain('Thêm trang chi tiết quán');
+    expect(dialog.textContent).toContain('an-v2.zip');
+    expect(dialog.textContent).toContain('Copy báo cáo');
+    const records = dialog.querySelector('details');
+    expect(records.open).toBe(false);
+    expect(records.textContent).toContain('Xóa file');
+    expect(records.textContent).toContain('Xóa buổi');
+  });
+
+  it('keeps a missing report off the card until the popup opens', async () => {
+    await act(async () => {
+      root.render(
+        createElement(ClassCompletionRoster, {
+          showDrive: true,
+          showReport: true,
           items: [
-            completeItem,
             item({
               id: 'b',
               name: 'Bình',
@@ -161,54 +148,60 @@ describe('ClassCompletionRoster', () => {
       );
     });
 
-    expect(container.textContent).toContain('An');
-    expect(container.textContent).toContain('món ăn việt nam');
-    expect(container.textContent).toContain('Tìm quán ăn');
-    expect(container.textContent).toContain('Bình');
-    expect(container.textContent).toContain('Đủ');
-    expect(container.textContent).toContain('Chưa có');
-    expect(container.textContent).toContain('GitHub');
-    expect(container.textContent).toContain('Canva');
-    expect(container.textContent).toContain('Copy');
-    expect(container.textContent).toContain('Làm sản phẩm');
-    expect(container.textContent).toContain('Đang làm');
-    expect(container.textContent).not.toContain('Xong trang chủ');
-    expect(container.textContent).not.toContain('Thêm trang chi tiết quán');
-
     const card = [...container.querySelectorAll('button')].find((button) =>
-      button.textContent.includes('An'),
+      button.textContent.includes('Bình'),
     );
+    expect(card.textContent).toContain('Chưa có');
+    expect(card.textContent).not.toContain('Chưa nộp báo cáo buổi này');
+    expect(card.textContent).not.toContain('Giai đoạn buổi khác');
+    expect(card.textContent).not.toContain('Đủ');
+
     await act(async () => {
       card.click();
     });
 
-    expect(container.textContent).toContain('Xong trang chủ');
-    expect(container.textContent).toContain('Đang làm');
-    expect(container.textContent).toContain('Đã làm được');
-    expect(container.textContent).toContain('Mục tiêu tiếp');
-    expect(container.textContent).toContain('Thêm trang chi tiết quán');
-    expect(container.textContent).toContain('Khó khăn');
-    expect(container.textContent).toContain('Chưa có dữ liệu quán');
-    expect(container.textContent).toContain('Tên dự án');
-    expect(container.textContent).toContain('Copy báo cáo');
-    expect(container.textContent).toContain('an-v2.zip');
-    expect(container.textContent).toContain('Mới nhất · 2 bản');
-    expect(container.textContent).toContain('Lần 2');
-    expect(container.textContent).toContain('Lịch sử');
-    expect(container.textContent).toContain('2 báo cáo · 2 file');
-    expect(container.textContent).not.toContain('an.zip');
-    expect(container.textContent).not.toContain('Làm wireframe');
+    const dialog = container.querySelector('[role="dialog"]');
+    expect(dialog.textContent).toContain('Chưa nộp báo cáo buổi này');
+    expect(dialog.textContent).not.toContain('Giai đoạn buổi khác');
+    expect(dialog.textContent).not.toContain('Trạng thái buổi khác');
+  });
 
-    const historyToggle = [...container.querySelectorAll('button')].find((button) =>
-      button.textContent.includes('Lịch sử'),
-    );
+  it('shows a file in the popup without marking the card complete', async () => {
     await act(async () => {
-      historyToggle.click();
+      root.render(
+        createElement(ClassCompletionRoster, {
+          showDrive: true,
+          showReport: true,
+          items: [
+            item({
+              id: 'c',
+              name: 'Chi',
+              hasReport: false,
+              hasFile: true,
+              drive: {
+                latest: { id: 'f3', originalFileName: 'chi.zip' },
+                files: [{ id: 'f3', originalFileName: 'chi.zip' }],
+              },
+            }),
+          ],
+        }),
+      );
     });
 
-    expect(container.textContent).toContain('an.zip');
-    expect(container.textContent).toContain('Lần 1');
-    expect(container.textContent).toContain('Làm wireframe');
-    expect(container.textContent).toContain('Mở');
+    const card = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent.includes('Chi'),
+    );
+    expect(card.textContent).toContain('File');
+    expect(card.textContent).not.toContain('Đủ');
+    expect(card.textContent).not.toContain('chi.zip');
+
+    await act(async () => {
+      card.click();
+    });
+
+    const dialog = container.querySelector('[role="dialog"]');
+    expect(dialog.textContent).toContain('chi.zip');
+    expect(dialog.textContent).toContain('Có file, chưa có báo cáo');
+    expect(dialog.textContent).not.toContain('Đủ');
   });
 });

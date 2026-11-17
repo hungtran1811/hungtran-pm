@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   decodeFirebaseIdToken,
   readFirebaseIdTokenClaims,
+  readStudentTokenClaims,
   resetSecureTokenCertsCache,
   verifyFirebaseIdToken,
   verifyJwtRs256,
@@ -127,5 +128,36 @@ describe('verifyFirebaseIdToken', () => {
         json: async () => ({ 'test-kid': otherPem }),
       })),
     ).resolves.toBeNull();
+  });
+});
+
+describe('readStudentTokenClaims', () => {
+  it('accepts a student custom-token session and rejects a teacher token', () => {
+    const exp = Math.floor(Date.now() / 1000) + 3600;
+    expect(
+      readStudentTokenClaims(
+        {
+          aud: projectId,
+          iss: `https://securetoken.google.com/${projectId}`,
+          sub: 'stu_student-1',
+          studentId: 'student-1',
+          credentialVersion: 2,
+          exp,
+        },
+        projectId,
+      ),
+    ).toEqual({ uid: 'stu_student-1', studentId: 'student-1', credentialVersion: 2 });
+    expect(
+      readStudentTokenClaims(
+        {
+          aud: projectId,
+          iss: `https://securetoken.google.com/${projectId}`,
+          email: 'teacher@example.com',
+          sub: 'uid-1',
+          exp,
+        },
+        projectId,
+      ),
+    ).toBeNull();
   });
 });

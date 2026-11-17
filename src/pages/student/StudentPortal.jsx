@@ -1,18 +1,24 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowRight, Ban, UserRound, Users } from 'lucide-react';
+import { Link, Navigate, Outlet, useLocation, useNavigate, useOutletContext, useParams, useSearchParams } from 'react-router-dom';
+import { signInWithCustomToken, signOut } from 'firebase/auth';
+import { ArrowRight, Ban, BookOpen, FolderKanban, UserRound, Users } from 'lucide-react';
 import { StudentShell } from './StudentShell.jsx';
 import { StudentGameJoinNotice } from './StudentGameJoinNotice.jsx';
+import { Badge } from '../../ui/components/Badge.jsx';
 import { Button } from '../../ui/components/Button.jsx';
 import { Field, Input } from '../../ui/components/Field.jsx';
 import { EmptyState } from '../../ui/components/EmptyState.jsx';
 import { FullPageLoader } from '../../ui/components/Spinner.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { subscribeClass } from '../../services/classes.service.js';
-import { listActiveStudentsByClass, subscribeStudent } from '../../services/students.service.js';
-import { getCurriculumProgram } from '../../services/curriculum.service.js';
+import { listRosterForClass, subscribeStudent } from '../../services/students.service.js';
+import { subscribeCurriculumProgram } from '../../services/curriculum.service.js';
 import { getStudentFeedbackLessonIds } from '../../services/knowledgeReports.service.js';
 import { getErrorMessage } from '../../lib/firestore.js';
+import { resolveClassCode } from '../../services/studentGate.service.js';
+import { getStudentAuth } from '../../config/studentFirebase.js';
+import { setStudentFirestoreActive } from '../../config/activeFirestore.js';
+import { StudentPinGate } from '../../ui/components/StudentPinGate.jsx';
 import { ProjectNamePendingBanner, ProjectNameSetup } from './ProjectNameSetup.jsx';
 import {
   isProjectNameApproved,
@@ -27,6 +33,7 @@ import {
   FEATURE_SPY_GAME_ENABLED,
 } from '../../config/features.js';
 import {
+  studentClassBasePath,
   studentLearnPath,
   studentLessonsPath,
   studentProjectPath,
@@ -36,6 +43,7 @@ import {
   studentWorkspaceHomePath,
 } from '../../lib/studentWorkspace.js';
 import { DriveSubmitPage } from './DriveSubmitPage.jsx';
+import { classRoadmapSessions } from '../../lib/submissionLessons.js';
 
 const LessonsViewLazy = lazy(() =>
   import('./LessonsView.jsx').then((m) => ({ default: m.LessonsView })),
@@ -86,6 +94,7 @@ export function StudentPortalPage() {
   const [activeSpy, setActiveSpy] = useState(null);
   const [spySessionId, setSpySessionId] = useState(() => spyParam || null);
   const [activeLessonSession, setActiveLessonSession] = useState(null);
+  const [pinReady, setPinReady] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -94,23 +103,50 @@ export function StudentPortalPage() {
     setLoading(true);
     setError('');
 
+    let cancelled = false;
     const unsubscribeClass = subscribeClass(
       classCode,
       (cls) => {
         if (!cls) {
-          setError('Không tìm thấy lớp học với mã này.');
-          setClassDoc(null);
-          setLoading(false);
+          resolveClassCode(classCode)
+            .then((result) => {
+              if (result.status === 'resolved' && result.canonicalClassCode !== classCode) {
+                navigate(`/c/${encodeURIComponent(result.canonicalClassCode)}${location.search}`, { replace: true });
+                return;
+              }
+              setError(
+                result.status === 'ambiguous'
+                  ? result.message
+                  : result.status === 'unavailable'
+                    ? 'Lớp học này hiện không mở. Vui lòng liên hệ giáo viên.'
+                    : 'Không tìm thấy lớp học với mã này.',
+              );
+              setClassDoc(null);
+              setLoading(false);
+            })
+            .catch(() => {
+              setError('Không tìm thấy lớp học với mã này.');
+              setClassDoc(null);
+              setLoading(false);
+            });
           return;
         }
-        if (cls.status !== 'active' || cls.hidden) {
+        if (cls.hidden || (cls.status !== 'active' && cls.status !== 'completed')) {
           setError('Lớp học này hiện không mở. Vui lòng liên hệ giáo viên.');
           setClassDoc(null);
+          setStudents([]);
           setLoading(false);
           return;
         }
         setClassDoc(cls);
         setLoading(false);
+        listRosterForClass(cls.classCode, { includeHistory: cls.status === 'completed' })
+          .then((rows) => {
+            if (!cancelled) setStudents(rows);
+          })
+          .catch((err) => {
+            if (!cancelled) toast.error(getErrorMessage(err));
+          });
       },
       (err) => {
         const msg = getErrorMessage(err);
@@ -123,30 +159,24 @@ export function StudentPortalPage() {
       },
     );
 
-    listActiveStudentsByClass(classCode)
-      .then(setStudents)
-      .catch((err) => toast.error(getErrorMessage(err)));
-
     return () => {
+      cancelled = true;
       unsubscribeClass();
     };
-  }, [classCode, toast]);
+  }, [classCode, location.search, navigate, toast]);
 
   useEffect(() => {
     if (!classDoc?.curriculumProgramId) {
       setProgram(null);
       return undefined;
     }
-    let cancelled = false;
-    getCurriculumProgram(classDoc.curriculumProgramId, { full: false })
-      .then((data) => {
-        if (!cancelled) setProgram(data);
-      })
-      .catch((err) => toast.error(getErrorMessage(err)));
-    return () => {
-      cancelled = true;
-    };
-  }, [classDoc?.curriculumProgramId, classDoc?.curriculumCurrentSession, toast]);
+    return subscribeCurriculumProgram(
+      classDoc.curriculumProgramId,
+      (data) => setProgram(data),
+      (err) => toast.error(getErrorMessage(err)),
+      { full: false },
+    );
+  }, [classDoc?.curriculumProgramId, toast]);
 
   useEffect(() => {
     if (!FEATURE_KNOWLEDGE_FEEDBACK_ENABLED || !selectedStudentId || !classDoc?.classCode) {
@@ -351,24 +381,22 @@ export function StudentPortalPage() {
 
   const isFinalPhase = classDoc?.curriculumPhase === 'final';
   const usesProjectWorkspace = studentUsesProjectWorkspace(classDoc, program);
-  const workspaceHome = classCode ? studentWorkspaceHomePath(classCode, classDoc, program) : '';
   const onProjectHome = location.pathname.endsWith('/project');
 
   const bottomNavItems = useMemo(() => {
-    const items = [];
-    if (usesProjectWorkspace) {
-      items.push(
-        { id: 'project', label: 'Dự án', to: studentProjectPath(classCode) },
-        { id: 'lessons', label: 'Bài giảng', to: studentLessonsPath(classCode) },
-      );
-    } else if (FEATURE_DRIVE_SUBMISSION_ENABLED) {
-      items.push({ id: 'learn', label: 'Bài học', to: studentLearnPath(classCode) });
-    }
-    if (FEATURE_DRIVE_SUBMISSION_ENABLED) {
-      items.push({ id: 'submit', label: 'Nộp bài', to: studentSubmitPath(classCode) });
-    }
-    return items;
-  }, [usesProjectWorkspace, classCode]);
+    const home = studentClassBasePath(classCode);
+    const lessons = usesProjectWorkspace ? studentLessonsPath(classCode) : studentLearnPath(classCode);
+    const project = usesProjectWorkspace
+      ? studentProjectPath(classCode)
+      : FEATURE_DRIVE_SUBMISSION_ENABLED
+        ? studentSubmitPath(classCode)
+        : studentProjectPath(classCode);
+    return [
+      { id: 'home', label: 'Trang chủ', to: home },
+      { id: 'lessons', label: 'Bài học', to: lessons },
+      { id: 'project', label: 'Dự án', to: project },
+    ];
+  }, [usesProjectWorkspace, classCode, classDoc, program]);
 
   const shellSubtitle = classDoc?.className || classDoc?.classCode || '';
   const sessionContext = studentSessionContextLabel(classDoc, activeLessonSession);
@@ -406,7 +434,7 @@ export function StudentPortalPage() {
       {
         pathname: stayOnSubmit
           ? studentSubmitPath(classCode)
-          : studentWorkspaceHomePath(classCode, classDoc, program),
+          : studentClassBasePath(classCode),
         search: location.search,
       },
       { replace: true },
@@ -414,6 +442,9 @@ export function StudentPortalPage() {
   };
 
   const clearStudent = () => {
+    setPinReady(false);
+    setStudentFirestoreActive(false);
+    signOut(getStudentAuth()).catch(() => {});
     setSelectedStudentId(null);
     setSelectedStudent(null);
     setActiveLessonSession(null);
@@ -430,6 +461,23 @@ export function StudentPortalPage() {
           icon={<Ban className="h-7 w-7" />}
           title="Không thể truy cập"
           description={error}
+        />
+      </StudentShell>
+    );
+  }
+
+  if (selectedStudent && classDoc.pinRequired && !pinReady) {
+    return (
+      <StudentShell subtitle={classDoc.className || classDoc.classCode}>
+        <StudentPinGate
+          classCode={classDoc.classCode}
+          student={selectedStudent}
+          onBack={clearStudent}
+          onSuccess={async (token) => {
+            await signInWithCustomToken(getStudentAuth(), token);
+            setStudentFirestoreActive(true);
+            setPinReady(true);
+          }}
         />
       </StudentShell>
     );
@@ -519,46 +567,9 @@ export function StudentPortalPage() {
       }
       right={
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-          {(usesProjectWorkspace || FEATURE_DRIVE_SUBMISSION_ENABLED) && (
-            <nav className="hidden items-center gap-0.5 sm:flex" aria-label="Trang học sinh">
-              {usesProjectWorkspace ? (
-                <>
-                  <NavLink
-                    to={studentProjectPath(classCode)}
-                    className={({ isActive }) => studentHeaderNavClass(isActive)}
-                  >
-                    Dự án
-                  </NavLink>
-                  <NavLink
-                    to={studentLessonsPath(classCode)}
-                    className={({ isActive }) => studentHeaderNavClass(isActive)}
-                  >
-                    Bài giảng
-                  </NavLink>
-                </>
-              ) : (
-                FEATURE_DRIVE_SUBMISSION_ENABLED && (
-                  <NavLink
-                    to={studentLearnPath(classCode)}
-                    className={({ isActive }) => studentHeaderNavClass(isActive)}
-                  >
-                    Bài học
-                  </NavLink>
-                )
-              )}
-              {FEATURE_DRIVE_SUBMISSION_ENABLED && (
-                <NavLink
-                  to={studentSubmitPath(classCode)}
-                  className={({ isActive }) => studentHeaderNavClass(isActive)}
-                >
-                  Nộp bài
-                </NavLink>
-              )}
-            </nav>
-          )}
           <div className="min-w-0 text-right">
             <Link
-              to={workspaceHome}
+              to={studentClassBasePath(classCode)}
               className="block truncate text-sm font-semibold text-slate-800 hover:text-brand-700 dark:text-slate-100 dark:hover:text-brand-300"
               title={selectedStudent.fullName}
             >
@@ -614,13 +625,221 @@ export function StudentPortalPage() {
 }
 
 export function StudentPhaseHome() {
-  const { classCode, classDoc, program } = useOutletContext();
-  const location = useLocation();
+  const { classCode, classDoc, program, student } = useOutletContext();
+  const total = Number(program?.totalSessionCount || 0);
+  const current = Number(classDoc?.curriculumCurrentSession || 0);
+  const projectWorkspace = studentUsesProjectWorkspace(classDoc, program);
+  const continueTo = projectWorkspace ? studentLessonsPath(classCode) : studentLearnPath(classCode);
+  const projectTo = projectWorkspace ? studentProjectPath(classCode) : studentSubmitPath(classCode);
+  const sessionLabel = total > 0 ? `${current}/${total}` : String(current || '—');
+  const progress = Math.min(100, Math.max(0, Number(student?.currentProgressPercent) || 0));
+  const projectTitle = projectNameDisplay(student) || 'Chưa có dự án';
+  const stageLabel = projectWorkspace ? student?.currentStage || 'Chưa có giai đoạn' : 'Học kiến thức';
+  const sessions = classRoadmapSessions(classDoc, program);
+  const historyOnly = classDoc?.status === 'completed';
+  const tasks = [
+    {
+      id: 'lessons',
+      title: 'Xem tài liệu buổi hiện tại',
+      detail: 'Nội dung và bài tập thực hành',
+      to: continueTo,
+      icon: BookOpen,
+    },
+    historyOnly
+      ? null
+      : projectWorkspace
+      ? {
+          id: 'project',
+          title: 'Cập nhật sản phẩm',
+          detail: 'Báo cáo tiến độ hoặc nộp file',
+          to: projectTo,
+          icon: FolderKanban,
+        }
+      : FEATURE_DRIVE_SUBMISSION_ENABLED
+        ? {
+            id: 'submit',
+            title: 'Nộp bài',
+            detail: 'Gửi file của buổi đã mở',
+            to: studentSubmitPath(classCode),
+            icon: FolderKanban,
+          }
+        : null,
+  ].filter(Boolean);
+  const reportValue = student?.latestReportId ? 'Đã có' : '0';
+  const orbitMarks = sessions.length ? sessions : [{ sessionNumber: 1, state: 'current' }];
+  const sideMarks = [0, 1, 2, 3, 4, 5].map((index) => ({
+    sessionNumber: index + 1,
+    state: index % 2 ? 'opened' : 'locked',
+  }));
+  const sparks = [
+    ['8%', '22%', '0s'],
+    ['24%', '68%', '0.8s'],
+    ['38%', '30%', '1.4s'],
+    ['57%', '74%', '0.4s'],
+    ['71%', '24%', '1.1s'],
+    ['88%', '62%', '0.2s'],
+  ];
+
   return (
-    <Navigate
-      to={`${studentWorkspaceHomePath(classCode, classDoc, program)}${location.search}`}
-      replace
-    />
+    <div className="space-y-4">
+      <header>
+        <h1 className="text-3xl font-semibold tracking-tight text-ink dark:text-slate-50">
+          Xin chào, {student?.fullName || 'bạn'}!
+        </h1>
+      </header>
+
+      <section className="relative min-h-[16rem] overflow-hidden rounded-[22px] bg-gradient-to-br from-navy via-[#2d3371] to-brand-600 px-6 py-7 text-white sm:px-8">
+        <div className="student-hero-field" aria-hidden="true">
+          <span className="student-hero-wash" />
+          {sparks.map(([x, y, delay]) => (
+            <span key={`${x}-${y}`} className="student-hero-spark" style={{ '--x': x, '--y': y, '--d': delay }} />
+          ))}
+          {[
+            ['left', '18%', sideMarks, false],
+            ['center', '50%', orbitMarks, true],
+            ['right', '82%', sideMarks, false],
+          ].map(([place, at, marks, featured]) => (
+            <div
+              key={place}
+              className={`student-hero-orbit student-hero-orbit-${place}`}
+              style={{ '--at': at }}
+            >
+              <span className="student-hero-glow" />
+              <span className="student-hero-ring student-hero-ring-a" />
+              <span className="student-hero-ring student-hero-ring-b" />
+              {featured ? <span className="student-hero-ring student-hero-ring-c" /> : null}
+              {featured ? <span className="student-hero-core" /> : null}
+              <span className="student-hero-nodes">
+                {marks.map((session, index, list) => (
+                  <span
+                    key={session.sessionNumber}
+                    className="student-hero-arm"
+                    style={{ '--i': index, '--n': list.length }}
+                  >
+                    <span className={`student-hero-node student-hero-node-${session.state}`} />
+                  </span>
+                ))}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="relative z-10 flex min-h-[12.5rem] flex-col justify-between">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-100">
+            Bài học của em · {classDoc?.className || classCode}
+          </p>
+          <Link
+            to={continueTo}
+            className="inline-flex min-h-10 w-fit items-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-brand-700"
+          >
+            <BookOpen className="h-4 w-4" aria-hidden="true" />
+            Tiếp tục bài giảng
+          </Link>
+        </div>
+      </section>
+
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <article className="card px-3 py-4 sm:px-5">
+          <b className="block text-2xl font-semibold tracking-tight text-ink dark:text-slate-50">{sessionLabel}</b>
+          <p className="mt-1 text-[11px] font-medium text-muted">Buổi hiện tại</p>
+        </article>
+        <article className="card px-3 py-4 sm:px-5">
+          <b className="block text-2xl font-semibold tracking-tight text-ink dark:text-slate-50">{progress}%</b>
+          <p className="mt-1 text-[11px] font-medium text-muted">Tiến độ dự án</p>
+        </article>
+        <article className="card px-3 py-4 sm:px-5">
+          <b className="block text-2xl font-semibold tracking-tight text-ink dark:text-slate-50">{reportValue}</b>
+          <p className="mt-1 text-[11px] font-medium text-muted">Báo cáo đã gửi</p>
+        </article>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.55fr)_minmax(16rem,0.75fr)]">
+        <section className="card p-5 sm:p-6">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-ink dark:text-slate-50">Hành trình học tập</h2>
+              <p className="mt-1 text-sm text-muted">Đọc theo thứ tự những buổi giáo viên đã mở</p>
+            </div>
+            {program?.name ? <Badge tone="brand">{program.name}</Badge> : null}
+          </div>
+          {sessions.length ? (
+            <div className="mt-4 flex gap-1.5" aria-hidden="true">
+              {sessions.map((session) => (
+                <span
+                  key={session.sessionNumber}
+                  className={`h-1.5 min-w-0 flex-1 rounded-full ${
+                    session.state === 'opened'
+                      ? 'bg-brand-600'
+                      : session.state === 'current'
+                        ? 'bg-amber-400'
+                        : 'bg-line dark:bg-slate-700'
+                  }`}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-muted">Lớp chưa có lộ trình buổi học.</p>
+          )}
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <p className="text-sm text-muted">
+              {total > 0 ? `Buổi ${current || 0} của ${total}` : 'Chưa có buổi hiện tại'}
+            </p>
+            <Link
+              to={continueTo}
+              className="inline-flex min-h-9 items-center gap-1 rounded-xl bg-brand-50 px-3 text-sm font-medium text-brand-700 dark:bg-brand-500/10 dark:text-brand-200"
+            >
+              Vào bài học
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+          </div>
+          <h3 className="mt-5 text-base font-semibold text-ink dark:text-slate-50">Công việc nên làm tiếp</h3>
+          <ul className="mt-2 divide-y divide-line dark:divide-slate-800">
+            {tasks.map((task) => {
+              const Icon = task.icon;
+              return (
+                <li key={task.id}>
+                  <Link to={task.to} className="flex items-center gap-3 py-3">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-200">
+                      <Icon className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold text-ink dark:text-slate-50">{task.title}</span>
+                      <span className="block text-xs text-muted">{task.detail}</span>
+                    </span>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+
+        <aside className="card p-5 sm:p-6">
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="text-lg font-semibold text-ink dark:text-slate-50">Dự án của em</h2>
+            <Badge tone="brand">{progress}%</Badge>
+          </div>
+          <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-brand-600 dark:text-brand-300">
+            {projectWorkspace ? 'Final Project' : 'Sản phẩm'}
+          </p>
+          <h3 className="mt-1 text-2xl font-semibold tracking-tight text-ink dark:text-slate-50">{projectTitle}</h3>
+          <p className="mt-1 text-sm text-muted">{stageLabel}</p>
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-line dark:bg-slate-800" aria-hidden="true">
+            <div className="h-full rounded-full bg-brand-600" style={{ width: `${progress}%` }} />
+          </div>
+          {historyOnly ? (
+            <p className="mt-4 text-sm text-muted">Lớp này đã hoàn thành. Em xem lại bài và báo cáo cũ tại đây.</p>
+          ) : projectWorkspace || FEATURE_DRIVE_SUBMISSION_ENABLED ? (
+            <Link
+              to={projectTo}
+              className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl bg-brand-50 px-4 text-sm font-semibold text-brand-700 dark:bg-brand-500/10 dark:text-brand-200"
+            >
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              {projectWorkspace ? 'Mở không gian dự án' : 'Nộp bài'}
+            </Link>
+          ) : null}
+        </aside>
+      </div>
+    </div>
   );
 }
 
@@ -760,14 +979,6 @@ export function StudentLessonsReviewRoute() {
   );
 }
 
-function studentHeaderNavClass(isActive) {
-  return `rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
-    isActive
-      ? 'bg-brand-50 text-brand-700 dark:bg-brand-500/15 dark:text-brand-300'
-      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200'
-  }`;
-}
-
 function studentInitial(name = '') {
   const parts = name.trim().split(/\s+/);
   if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
@@ -822,8 +1033,11 @@ function StudentPicker({ students, onPick, classLabel }) {
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-700 dark:bg-brand-500/20 dark:text-brand-300">
               {studentInitial(s.fullName)}
             </span>
-            <span className="min-w-0 flex-1 text-base font-medium text-slate-800 dark:text-slate-100">
-              {s.fullName}
+            <span className="min-w-0 flex-1">
+              <span className="block text-base font-medium text-slate-800 dark:text-slate-100">{s.fullName}</span>
+              {s.enrollmentStatus === 'completed' ? (
+                <span className="block text-xs text-slate-500">Xem lại lớp cũ</span>
+              ) : null}
             </span>
             <ArrowRight className="h-5 w-5 shrink-0 text-brand-500" />
           </button>

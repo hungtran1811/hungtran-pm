@@ -45,9 +45,11 @@ export function ReportsHubPage() {
   selectedClassRef.current = selectedClass;
 
   const syncFiltersToUrl = useCallback(
-    (classCode, archived, session, filter) => {
+    (classCode, archived, session, filter, { clearLesson = false } = {}) => {
       setSearchParams(() => {
         const next = new URLSearchParams(window.location.search);
+        const lesson = next.get('lesson') || '';
+        const query = next.get('q') || '';
         if (classCode) next.set('class', classCode);
         else next.delete('class');
         if (archived) next.set('archived', '1');
@@ -56,6 +58,10 @@ export function ReportsHubPage() {
         else next.delete('session');
         if (filter === 'missing' || filter === 'done') next.set('filter', filter);
         else if (filter === 'all') next.delete('filter');
+        if (clearLesson) next.delete('lesson');
+        else if (lesson) next.set('lesson', lesson);
+        if (query) next.set('q', query);
+        else next.delete('q');
         if (!next.get('tab')) next.set('tab', tab);
         return next;
       }, { replace: true });
@@ -87,16 +93,16 @@ export function ReportsHubPage() {
       if (code === selectedClassRef.current) return;
       setSelectedClass(code);
       setSessionFilter(ALL_SESSIONS_VALUE);
-      syncFiltersToUrl(code, showArchived, ALL_SESSIONS_VALUE);
+      syncFiltersToUrl(code, showArchived, ALL_SESSIONS_VALUE, completionFilter, { clearLesson: true });
     },
-    [showArchived, syncFiltersToUrl],
+    [completionFilter, showArchived, syncFiltersToUrl],
   );
 
   const handleArchivedChange = (checked) => {
     setShowArchived(checked);
     const nextClass = checked ? '' : selectedClass;
     if (checked) setSelectedClass('');
-    syncFiltersToUrl(nextClass, checked, sessionFilter);
+    syncFiltersToUrl(nextClass, checked, sessionFilter, completionFilter, { clearLesson: !nextClass });
   };
 
   const handleSessionChange = (value) => {

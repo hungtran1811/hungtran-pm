@@ -1,23 +1,20 @@
-import { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  School,
-  Users,
-  TrendingUp,
-  BookOpen,
   BarChart3,
   Gamepad2,
-  Menu,
-  Settings,
-  Upload,
-  X,
+  LayoutDashboard,
   LogOut,
+  School,
+  Settings,
+  TrendingUp,
+  Upload,
+  Users,
 } from 'lucide-react';
 import { useAuth } from '../../state/auth.store.jsx';
+import { BrandLogo } from './BrandLogo.jsx';
 import { ThemeToggle } from './ThemeToggle.jsx';
 import { Button } from './Button.jsx';
-import { BrandLogo } from './BrandLogo.jsx';
 import {
   FEATURE_DRIVE_SUBMISSION_ENABLED,
   FEATURE_PROGRESS_REPORTS_ENABLED,
@@ -25,60 +22,66 @@ import {
 
 const NAV_ITEMS = [
   { to: '/admin', label: 'Tổng quan', icon: LayoutDashboard, end: true },
-  { to: '/admin/classes', label: 'Lớp học', icon: School },
+  { to: '/admin/classes', label: 'Lớp & bài giảng', icon: School, match: ['/admin/lessons'] },
   { to: '/admin/students', label: 'Học sinh', icon: Users },
   FEATURE_PROGRESS_REPORTS_ENABLED
-    ? {
-        to: '/admin/reports',
-        label: FEATURE_DRIVE_SUBMISSION_ENABLED ? 'Báo cáo & nộp bài' : 'Báo cáo học sinh',
-        icon: TrendingUp,
-      }
+    ? { to: '/admin/reports', label: 'Báo cáo', icon: TrendingUp }
     : FEATURE_DRIVE_SUBMISSION_ENABLED
       ? { to: '/admin/submissions', label: 'Bài nộp Drive', icon: Upload }
       : null,
-  { to: '/admin/analytics', label: 'Thống kê', icon: BarChart3 },
-  { to: '/admin/lessons', label: 'Bài giảng', icon: BookOpen },
   { to: '/admin/games', label: 'Mini game', icon: Gamepad2 },
-  { to: '/admin/settings', label: 'Cài đặt', icon: Settings },
 ].filter(Boolean);
 
-function navLinkClass(isActive) {
-  return [
-    'group flex cursor-pointer items-center gap-3 rounded-xl px-3.5 py-2.5 text-[15px] font-medium transition-all',
-    isActive
-      ? 'bg-brand-600 text-white shadow-md shadow-brand-600/25 ring-1 ring-brand-500/40'
-      : 'text-slate-700 hover:bg-white hover:text-brand-700 hover:shadow-sm dark:text-slate-200 dark:hover:bg-slate-800/90 dark:hover:text-white',
-  ].join(' ');
+function pathMatches(pathname, path, end = false) {
+  if (end) return pathname === path;
+  return pathname === path || pathname.startsWith(`${path}/`);
 }
 
-function NavItems({ onNavigate }) {
+function itemIsActive(item, pathname) {
+  if (pathMatches(pathname, item.to, item.end)) return true;
+  return (item.match || []).some((path) => pathMatches(pathname, path));
+}
+
+function accountInitials(email = '') {
+  const local = String(email).split('@')[0] || '';
+  const parts = local.split(/[.\-_]/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return (local.slice(0, 2) || 'HT').toUpperCase();
+}
+
+function ShellNav({ onNavigate, variant = 'bar' }) {
+  const { pathname } = useLocation();
   return (
-    <nav className="space-y-1">
-      <p className="mb-2 px-3.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">
-        Quản lý
-      </p>
+    <nav
+      className={
+        variant === 'bottom'
+          ? 'fixed inset-x-0 bottom-0 z-40 flex border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md min-[701px]:hidden dark:border-slate-800 dark:bg-slate-950/95'
+          : 'hidden min-w-0 items-center gap-1 min-[701px]:flex'
+      }
+      aria-label={variant === 'bottom' ? 'Điều hướng trên điện thoại' : 'Điều hướng chính'}
+    >
       {NAV_ITEMS.map((item) => {
         const Icon = item.icon;
+        const active = itemIsActive(item, pathname);
+        const className =
+          variant === 'bottom'
+            ? `flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-[10px] font-medium leading-tight ${
+                active ? 'text-brand-600' : 'text-muted'
+              }`
+            : `inline-flex min-h-10 items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium ${
+                active ? 'bg-brand-50 text-brand-600' : 'text-muted hover:bg-brand-50/70 hover:text-ink'
+              }`;
         return (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.end}
             onClick={onNavigate}
-            className={({ isActive }) => navLinkClass(isActive)}
+            className={className}
+            aria-current={active ? 'page' : undefined}
           >
-            {({ isActive }) => (
-              <>
-                <Icon
-                  className={`h-5 w-5 shrink-0 ${
-                    isActive
-                      ? 'text-white'
-                      : 'text-slate-500 group-hover:text-brand-600 dark:text-slate-400 dark:group-hover:text-brand-300'
-                  }`}
-                />
-                {item.label}
-              </>
-            )}
+            <Icon className={variant === 'bottom' ? 'h-5 w-5' : 'h-4 w-4'} aria-hidden="true" />
+            <span className="max-w-full truncate">{item.label}</span>
           </NavLink>
         );
       })}
@@ -89,7 +92,26 @@ function NavItems({ onNavigate }) {
 export function AppShell({ title, actions, children }) {
   const { admin, logout } = useAuth();
   const navigate = useNavigate();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const { pathname } = useLocation();
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef(null);
+  const showClassLinks = pathname.startsWith('/admin/classes') || pathname.startsWith('/admin/lessons');
+
+  useEffect(() => {
+    if (!accountOpen) return undefined;
+    const onPointerDown = (event) => {
+      if (!accountRef.current?.contains(event.target)) setAccountOpen(false);
+    };
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setAccountOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [accountOpen]);
 
   const handleLogout = async () => {
     await logout();
@@ -97,73 +119,93 @@ export function AppShell({ title, actions, children }) {
   };
 
   return (
-    <div className="admin-app min-h-screen lg:flex">
-      <aside className="admin-sidebar hidden w-[17rem] shrink-0 flex-col border-r border-slate-200/90 bg-gradient-to-b from-white via-brand-50/40 to-slate-100/80 px-3 py-6 shadow-[inset_-1px_0_0_rgba(27,80,242,0.06)] lg:flex dark:border-slate-800 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 dark:shadow-none">
-        <div className="rounded-2xl border border-white/80 bg-white/70 px-3 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900/80">
-          <BrandLogo size="sm" showWordmark subtitle="Quản trị lớp học" />
-        </div>
-        <div className="mt-6 flex-1">
-          <NavItems />
-        </div>
-        <div className="mt-4 rounded-2xl border border-slate-200/80 bg-white/80 p-3 shadow-sm dark:border-slate-700 dark:bg-slate-900/80">
-          <p className="truncate text-xs font-normal text-slate-600 dark:text-slate-300">
-            {admin?.email}
-          </p>
-          <Button variant="ghost" size="sm" className="mt-2 w-full" onClick={handleLogout}>
-            <LogOut className="h-4 w-4" />
-            Đăng xuất
-          </Button>
-        </div>
-      </aside>
-
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-slate-200/90 bg-white/90 px-4 py-3.5 backdrop-blur-md lg:px-8 dark:border-slate-800 dark:bg-slate-950/90">
-          <div className="flex items-center gap-3">
+    <div className="admin-app min-h-screen bg-canvas text-ink dark:bg-slate-950 dark:text-slate-100">
+      <header className="sticky top-0 z-30 border-b border-line bg-white/95 backdrop-blur-md dark:border-slate-800 dark:bg-slate-950/95">
+        <div className="mx-auto flex min-h-[4.5rem] max-w-[1480px] items-center gap-3 px-4 min-[701px]:gap-5 min-[701px]:px-7">
+          <NavLink to="/admin" end className="flex min-w-0 shrink-0 items-center gap-2.5" aria-label="hungtranPM">
+            <BrandLogo size="sm" />
+            <span className="block text-[15px] font-semibold leading-none tracking-tight">
+              hungtran<span className="text-brand-600">PM</span>
+            </span>
+          </NavLink>
+          <ShellNav />
+          <div className="ml-auto flex items-center gap-2" ref={accountRef}>
             <button
               type="button"
-              className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden dark:text-slate-300 dark:hover:bg-slate-800"
-              onClick={() => setMobileOpen(true)}
-              aria-label="Mở menu"
+              className="grid h-10 w-10 place-items-center rounded-full bg-navy text-xs font-semibold text-white"
+              aria-label="Không gian riêng của giáo viên"
+              aria-expanded={accountOpen}
+              onClick={() => setAccountOpen((open) => !open)}
             >
-              <Menu className="h-6 w-6" />
+              {accountInitials(admin?.email)}
             </button>
-            <h1 className="text-xl font-semibold tracking-tight text-slate-900 lg:text-2xl dark:text-slate-50">
-              {title}
-            </h1>
+            {accountOpen ? (
+              <div className="absolute right-4 top-[4.25rem] z-40 w-64 rounded-[17px] border border-line bg-white p-2 shadow-[0_12px_32px_rgba(28,32,78,0.08)] dark:border-slate-700 dark:bg-slate-900">
+                <p className="truncate px-2 py-1.5 text-xs text-muted">{admin?.email}</p>
+                <NavLink
+                  to="/admin/analytics"
+                  className="flex min-h-10 items-center gap-2 rounded-xl px-2 text-sm hover:bg-brand-50 dark:hover:bg-slate-800"
+                  onClick={() => setAccountOpen(false)}
+                >
+                  <BarChart3 className="h-4 w-4" aria-hidden="true" />
+                  Thống kê
+                </NavLink>
+                <NavLink
+                  to="/admin/settings"
+                  className="flex min-h-10 items-center gap-2 rounded-xl px-2 text-sm hover:bg-brand-50 dark:hover:bg-slate-800"
+                  onClick={() => setAccountOpen(false)}
+                >
+                  <Settings className="h-4 w-4" aria-hidden="true" />
+                  Cài đặt
+                </NavLink>
+                <div className="px-2 py-1">
+                  <ThemeToggle />
+                </div>
+                <Button variant="ghost" size="sm" className="w-full" onClick={handleLogout}>
+                  <LogOut className="h-4 w-4" />
+                  Đăng xuất
+                </Button>
+              </div>
+            ) : null}
           </div>
-          <div className="flex items-center gap-2">
-            {actions}
-            <ThemeToggle />
-          </div>
-        </header>
-
-        <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-6 lg:px-8">{children}</main>
-      </div>
-
-      {mobileOpen && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 cursor-pointer bg-slate-900/50" onClick={() => setMobileOpen(false)} />
-          <aside className="admin-sidebar relative flex h-full w-72 max-w-[85%] flex-col bg-gradient-to-b from-white to-slate-50 px-3 py-6 dark:from-slate-900 dark:to-slate-950">
-            <div className="flex items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
-              <BrandLogo size="sm" showWordmark />
-              <button
-                type="button"
-                onClick={() => setMobileOpen(false)}
-                className="rounded-lg p-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
-                aria-label="Đóng menu"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="mt-6 flex-1">
-              <NavItems onNavigate={() => setMobileOpen(false)} />
-            </div>
-            <Button variant="ghost" size="sm" className="w-full" onClick={handleLogout}>
-              Đăng xuất
-            </Button>
-          </aside>
         </div>
-      )}
+      </header>
+
+      <main className="mx-auto min-w-0 max-w-[1480px] overflow-x-hidden px-4 py-6 pb-24 min-[701px]:px-7 min-[701px]:pb-8">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <h1 className="text-[1.45rem] font-semibold tracking-tight text-ink min-[701px]:text-[1.9rem] dark:text-slate-50">
+            {title}
+          </h1>
+          {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+        </div>
+        {showClassLinks ? (
+          <div className="mb-4 flex gap-2" aria-label="Lớp và bài giảng">
+            <NavLink
+              to="/admin/classes"
+              className={({ isActive }) =>
+                `inline-flex min-h-10 items-center rounded-xl px-3 text-sm font-medium ${
+                  isActive ? 'bg-brand-50 text-brand-600' : 'text-muted hover:bg-white'
+                }`
+              }
+            >
+              Lớp
+            </NavLink>
+            <NavLink
+              to="/admin/lessons"
+              className={({ isActive }) =>
+                `inline-flex min-h-10 items-center rounded-xl px-3 text-sm font-medium ${
+                  isActive ? 'bg-brand-50 text-brand-600' : 'text-muted hover:bg-white'
+                }`
+              }
+            >
+              Bài giảng
+            </NavLink>
+          </div>
+        ) : null}
+        {children}
+      </main>
+
+      <ShellNav variant="bottom" />
     </div>
   );
 }

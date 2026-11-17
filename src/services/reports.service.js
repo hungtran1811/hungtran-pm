@@ -14,17 +14,19 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { nextLatestReport, resolveDifficulties } from '../lib/progressReports.js';
-import { db } from '../config/firebase.js';
+import { appDb } from '../config/activeFirestore.js';
 import { toReportModel } from '../models/index.js';
 import { dateKey } from '../lib/firestore.js';
 import { validateProjectLinks } from '../lib/projectLinks.js';
 import { isValidLessonKey, normalizeLessonKey } from '../lib/submissionFileName.js';
 
-const reportsRef = collection(db, 'reports');
+function reportsRef() {
+  return collection(appDb(), 'reports');
+}
 
 export async function getReport(reportId) {
   if (!reportId) return null;
-  const snapshot = await getDoc(doc(db, 'reports', reportId));
+  const snapshot = await getDoc(doc(appDb(), 'reports', reportId));
   return snapshot.exists() ? toReportModel(snapshot) : null;
 }
 
@@ -39,7 +41,7 @@ export async function loadLatestReportsForStudents(students) {
   }
 
   const snapshots = await Promise.all(
-    chunks.map((ids) => getDocs(query(reportsRef, where(documentId(), 'in', ids)))),
+    chunks.map((ids) => getDocs(query(reportsRef(), where(documentId(), 'in', ids)))),
   );
   const byStudentId = new Map();
   snapshots.forEach((snapshot) => {
@@ -81,14 +83,14 @@ export function reportFromStudentSnapshot(student) {
 
 export async function listReportsByClass(classCode, max = 200) {
   const snapshot = await getDocs(
-    query(reportsRef, where('classId', '==', classCode), orderBy('submittedAt', 'desc'), limit(max)),
+    query(reportsRef(), where('classId', '==', classCode), orderBy('submittedAt', 'desc'), limit(max)),
   );
   return snapshot.docs.map(toReportModel);
 }
 
 export function subscribeReportsByClass(classCode, onData, onError, max = 200) {
   const q = query(
-    reportsRef,
+    reportsRef(),
     where('classId', '==', classCode),
     orderBy('submittedAt', 'desc'),
     limit(max),
@@ -103,7 +105,7 @@ export function subscribeReportsByClass(classCode, onData, onError, max = 200) {
 export function subscribeReportsByStudent(studentId, onData, onError, max = 20) {
   if (!studentId) return () => {};
   const q = query(
-    reportsRef,
+    reportsRef(),
     where('studentId', '==', studentId),
     orderBy('submittedAt', 'desc'),
     limit(max),
@@ -117,7 +119,7 @@ export function subscribeReportsByStudent(studentId, onData, onError, max = 20) 
 
 export async function listReportsByStudent(studentId, max = 50) {
   const snapshot = await getDocs(
-    query(reportsRef, where('studentId', '==', studentId), orderBy('submittedAt', 'desc'), limit(max)),
+    query(reportsRef(), where('studentId', '==', studentId), orderBy('submittedAt', 'desc'), limit(max)),
   );
   return snapshot.docs.map(toReportModel);
 }
@@ -141,9 +143,9 @@ export async function submitProgressReport({ student, classDoc, form }) {
 }
 
 async function writeProgressReport({ student, classDoc, form }) {
-  const batch = writeBatch(db);
-  const reportRef = doc(collection(db, 'reports'));
-  const studentRef = doc(db, 'students', student.id);
+  const batch = writeBatch(appDb());
+  const reportRef = doc(collection(appDb(), 'reports'));
+  const studentRef = doc(appDb(), 'students', student.id);
 
   const lessonKey = normalizeLessonKey(form.lessonKey);
   if (!isValidLessonKey(lessonKey)) {
@@ -213,15 +215,15 @@ export async function deleteProgressReportsAsAdmin(reports = [], { student, rema
   const rows = reports.filter((row) => row?.id);
   if (!rows.length) return;
   const deletedIds = new Set(rows.map((row) => row.id));
-  const batch = writeBatch(db);
-  rows.forEach((row) => batch.delete(doc(db, 'reports', row.id)));
+  const batch = writeBatch(appDb());
+  rows.forEach((row) => batch.delete(doc(appDb(), 'reports', row.id)));
 
   const studentId = student?.id || rows[0].studentId;
   if (studentId && student?.latestReportId && deletedIds.has(student.latestReportId)) {
     const next = nextLatestReport(
       remainingReports.filter((row) => row.studentId === studentId && !deletedIds.has(row.id)),
     );
-    const studentRef = doc(db, 'students', studentId);
+    const studentRef = doc(appDb(), 'students', studentId);
     if (next) {
       batch.update(studentRef, {
         latestReportId: next.id,
