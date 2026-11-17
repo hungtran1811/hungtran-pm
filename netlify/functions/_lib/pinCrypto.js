@@ -66,3 +66,11 @@ export async function verifyPinHash(pin, stored, { pepper = pinPepper() } = {}) 
   if (actual.length !== expected.length) return false;
   return timingSafeEqual(actual, expected);
 }
+
+export async function pinMatchesStored(pin, stored, options = {}) {
+  if (await verifyPinHash(pin, stored, options)) return true;
+  if (!Number(stored?.scryptN) && stored?.salt && stored?.hash) {
+    if (await verifyPinHash(pin, { ...stored, scryptN: SCRYPT_COST }, options)) return true;
+  }
+  return Boolean(stored?.pinCipher) && decryptPin(stored.pinCipher, options) === String(pin);
+}

@@ -1,7 +1,6 @@
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
-import { getAuth } from 'firebase-admin/auth';
-import { getAdminDb } from './firebaseAdmin.js';
-import { hashPin, verifyPinHash } from './pinCrypto.js';
+import { createCustomToken } from './firebaseAdmin.js';
+import { hashPin, pinMatchesStored } from './pinCrypto.js';
 import {
   PIN_GENERIC_MESSAGE,
   PIN_LOCKED_MESSAGE,
@@ -63,9 +62,8 @@ async function latestRequest(db, studentId) {
   return rows[0] || null;
 }
 
-async function issueToken(studentId, credentialVersion) {
-  getAdminDb();
-  return getAuth().createCustomToken(`stu_${studentId}`, { studentId, credentialVersion });
+function issueToken(studentId, credentialVersion) {
+  return createCustomToken(`stu_${studentId}`, { studentId, credentialVersion });
 }
 
 async function audit(db, type, studentId, classCode) {
@@ -154,7 +152,7 @@ export async function verifyStudentPin(db, { classCode, studentId, pin }) {
   if (isCredentialLocked(credential, now)) {
     return { ok: false, status: 429, error: PIN_LOCKED_MESSAGE };
   }
-  const matches = await verifyPinHash(pin, credential);
+  const matches = await pinMatchesStored(pin, credential);
   if (!matches) {
     const next = nextVerifyFailure(credential, now);
     await ref.update({
