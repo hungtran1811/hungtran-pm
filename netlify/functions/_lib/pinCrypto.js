@@ -11,8 +11,12 @@ import { promisify } from 'node:util';
 const scrypt = promisify(scryptCallback);
 const KEY_LENGTH = 32;
 
+function readServerEnv(name) {
+  return process.env[name];
+}
+
 export function pinPepper() {
-  const pepper = String(process.env.PIN_PEPPER || '');
+  const pepper = String(readServerEnv('PIN_PEPPER') || '');
   if (pepper.length < 16) {
     const error = new Error('Thiếu PIN_PEPPER trên máy chủ.');
     error.code = 'PIN_PEPPER_MISSING';

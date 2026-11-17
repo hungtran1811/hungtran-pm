@@ -154,7 +154,7 @@ export function ClassFilterBar({
   };
 
   return (
-    <div className={`space-y-2 ${className}`}>
+    <div className={`relative z-20 space-y-2 ${className}`}>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         {showSubjectFilter ? (
           <SubjectFilterSelect options={subjectOptions} value={subjectId} onChange={setSubjectId} />
@@ -177,7 +177,7 @@ export function ClassFilterBar({
           </button>
 
           {open && (
-            <div className="absolute z-50 mt-1.5 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
+            <div className="absolute left-0 top-full z-50 mt-1.5 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900">
               <div className="border-b border-slate-100 p-2 dark:border-slate-800">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />

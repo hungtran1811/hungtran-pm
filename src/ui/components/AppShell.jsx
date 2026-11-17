@@ -171,7 +171,7 @@ export function AppShell({ title, actions, children }) {
         </div>
       </header>
 
-      <main className="mx-auto min-w-0 max-w-[1480px] overflow-x-hidden px-4 py-6 pb-24 min-[701px]:px-7 min-[701px]:pb-8">
+      <main className="mx-auto min-w-0 max-w-[1480px] overflow-x-clip px-4 py-6 pb-24 min-[701px]:px-7 min-[701px]:pb-8">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <h1 className="text-[1.45rem] font-semibold tracking-tight text-ink min-[701px]:text-[1.9rem] dark:text-slate-50">
             {title}

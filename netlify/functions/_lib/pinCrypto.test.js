@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decryptPin, encryptPin, hashPin, pinMatchesStored, verifyPinHash } from './pinCrypto.js';
+import { decryptPin, encryptPin, hashPin, pinMatchesStored, pinPepper, verifyPinHash } from './pinCrypto.js';
 
 const pepper = 'test-pepper-value';
 
@@ -22,6 +22,14 @@ describe('pin hash', () => {
     const stored = await hashPin('9999', { pepper });
     stored.pinCipher = encryptPin('1234', { pepper });
     expect(await pinMatchesStored('1234', stored, { pepper })).toBe(true);
+  });
+
+  it('reads the pepper when the request runs', () => {
+    const previous = process.env.PIN_PEPPER;
+    process.env.PIN_PEPPER = 'runtime-pepper-value-ok';
+    expect(pinPepper()).toBe('runtime-pepper-value-ok');
+    if (previous === undefined) delete process.env.PIN_PEPPER;
+    else process.env.PIN_PEPPER = previous;
   });
 
   it('refuses to hash when the pepper is missing', async () => {
