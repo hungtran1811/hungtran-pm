@@ -62,7 +62,11 @@ service cloud.firestore {
 
     function isClassReadableByPortal(data) {
       return data.hidden != true
-        && (data.status == 'active' || data.status == 'completed');
+        && (
+          data.status == 'active'
+          || data.status == 'completed'
+          || data.status == 'archived'
+        );
     }
 
     function isOpenClass(classId) {
@@ -875,15 +879,7 @@ service cloud.firestore {
     }
 
     match /classes/{classId} {
-      allow read: if isAdmin()
-        || isClassReadableByPortal(resource.data)
-        || (
-          resource.data.status == 'archived'
-          && resource.data.hidden != true
-          && isSignedIn()
-          && request.auth.token.studentId is string
-          && enrolledForRead(request.auth.token.studentId, classId)
-        );
+      allow read: if isAdmin() || isClassReadableByPortal(resource.data);
       allow write: if isAdmin();
     }
 

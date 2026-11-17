@@ -10,6 +10,7 @@ import { handler as completeLessonHtml } from '../netlify/functions/drive-comple
 import { handler as getLessonHtml } from '../netlify/functions/drive-get-lesson-html.js';
 import { handler as deleteLessonHtml } from '../netlify/functions/drive-delete-lesson-html.js';
 import { handler as classResolve } from '../netlify/functions/class-resolve.js';
+import { handler as classRoster } from '../netlify/functions/class-roster.js';
 import { handler as pinGate } from '../netlify/functions/pin-gate.js';
 import { handler as pinClaim } from '../netlify/functions/pin-claim.js';
 import { handler as pinVerify } from '../netlify/functions/pin-verify.js';
@@ -43,6 +44,7 @@ const handlers = new Map([
   ['/.netlify/functions/drive-get-lesson-html', getLessonHtml],
   ['/.netlify/functions/drive-delete-lesson-html', deleteLessonHtml],
   ['/class-resolve', classResolve],
+  ['/class-roster', classRoster],
   ['/pin-gate', pinGate],
   ['/pin-claim', pinClaim],
   ['/pin-verify', pinVerify],
@@ -54,6 +56,7 @@ const handlers = new Map([
   ['/class-access-audit', classAccessAudit],
   ['/up-level', upLevel],
   ['/.netlify/functions/class-resolve', classResolve],
+  ['/.netlify/functions/class-roster', classRoster],
   ['/.netlify/functions/pin-gate', pinGate],
   ['/.netlify/functions/pin-claim', pinClaim],
   ['/.netlify/functions/pin-verify', pinVerify],

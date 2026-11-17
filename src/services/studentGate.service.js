@@ -31,6 +31,10 @@ export function resolveClassCode(input) {
   return postGate('class-resolve', { input });
 }
 
+export function fetchClassRoster(classCode) {
+  return postGate('class-roster', { classCode });
+}
+
 export function fetchPinGate({ classCode, studentId }) {
   return postGate('pin-gate', { classCode, studentId });
 }

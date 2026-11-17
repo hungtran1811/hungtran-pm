@@ -70,6 +70,12 @@ export async function listRosterForClass(classCode, { includeHistory = false } =
     .sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi'));
 }
 
+export async function loadOwnClassState(classCode, studentId) {
+  if (!classCode || !studentId) return null;
+  const snap = await getDoc(doc(appDb(), 'classStudentStates', `${classCode}__${studentId}`));
+  return snap.exists() ? snap.data() : null;
+}
+
 export async function listAllStudents(max = 500) {
   const snapshot = await getDocs(query(studentsRef(), orderBy('fullNameKey', 'asc'), limit(max)));
   return snapshot.docs.map(toStudentModel);

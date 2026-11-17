@@ -11,11 +11,12 @@ import { EmptyState } from '../../ui/components/EmptyState.jsx';
 import { FullPageLoader } from '../../ui/components/Spinner.jsx';
 import { useToast } from '../../ui/components/Toast.jsx';
 import { subscribeClass } from '../../services/classes.service.js';
-import { listRosterForClass, subscribeStudent } from '../../services/students.service.js';
+import { listRosterForClass, loadOwnClassState, subscribeStudent } from '../../services/students.service.js';
 import { subscribeCurriculumProgram } from '../../services/curriculum.service.js';
 import { getStudentFeedbackLessonIds } from '../../services/knowledgeReports.service.js';
 import { getErrorMessage } from '../../lib/firestore.js';
-import { resolveClassCode } from '../../services/studentGate.service.js';
+import { resolveClassCode, fetchClassRoster } from '../../services/studentGate.service.js';
+import { overlayHistoricalState } from '../../lib/upLevel.js';
 import { getStudentAuth } from '../../config/studentFirebase.js';
 import { setStudentFirestoreActive } from '../../config/activeFirestore.js';
 import { StudentPinGate } from '../../ui/components/StudentPinGate.jsx';
@@ -131,7 +132,7 @@ export function StudentPortalPage() {
             });
           return;
         }
-        if (cls.hidden || (cls.status !== 'active' && cls.status !== 'completed')) {
+        if (cls.hidden || !['active', 'completed', 'archived'].includes(cls.status)) {
           setError('Lớp học này hiện không mở. Vui lòng liên hệ giáo viên.');
           setClassDoc(null);
           setStudents([]);
@@ -140,7 +141,11 @@ export function StudentPortalPage() {
         }
         setClassDoc(cls);
         setLoading(false);
-        listRosterForClass(cls.classCode, { includeHistory: cls.status === 'completed' })
+        const history = cls.status === 'completed' || cls.status === 'archived';
+        const roster = history
+          ? fetchClassRoster(cls.classCode).then((result) => result.students || [])
+          : listRosterForClass(cls.classCode);
+        roster
           .then((rows) => {
             if (!cancelled) setStudents(rows);
           })
@@ -207,6 +212,8 @@ export function StudentPortalPage() {
 
   useEffect(() => {
     if (!selectedStudentId) return undefined;
+    const history = classDoc?.status === 'completed' || classDoc?.status === 'archived';
+    if (history) return undefined;
     const unsubscribe = subscribeStudent(
       selectedStudentId,
       (student) => {
@@ -215,7 +222,22 @@ export function StudentPortalPage() {
       () => {},
     );
     return unsubscribe;
-  }, [selectedStudentId]);
+  }, [selectedStudentId, classDoc?.status]);
+
+  useEffect(() => {
+    const history = classDoc?.status === 'completed' || classDoc?.status === 'archived';
+    if (!history || !pinReady || !selectedStudentId || !classDoc?.classCode) return undefined;
+    let cancelled = false;
+    loadOwnClassState(classDoc.classCode, selectedStudentId)
+      .then((state) => {
+        if (cancelled || !state) return;
+        setSelectedStudent((current) => (current ? overlayHistoricalState(current, state) : current));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [classDoc?.status, classDoc?.classCode, pinReady, selectedStudentId]);
 
   useEffect(() => {
     if (!FEATURE_CODING_SHOWDOWN_ENABLED || !showdownParam || !classCode) return;
@@ -636,7 +658,7 @@ export function StudentPhaseHome() {
   const projectTitle = projectNameDisplay(student) || 'Chưa có dự án';
   const stageLabel = projectWorkspace ? student?.currentStage || 'Chưa có giai đoạn' : 'Học kiến thức';
   const sessions = classRoadmapSessions(classDoc, program);
-  const historyOnly = classDoc?.status === 'completed';
+  const historyOnly = classDoc?.status === 'completed' || classDoc?.status === 'archived';
   const tasks = [
     {
       id: 'lessons',

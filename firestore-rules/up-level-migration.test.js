@@ -2,6 +2,7 @@ import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { commitUpLevel, rollbackUpLevel } from '../netlify/functions/_lib/upLevelStore.js';
+import { listPublicRoster } from '../netlify/functions/_lib/classRoster.js';
 
 if (!process.env.FIRESTORE_EMULATOR_HOST) {
   throw new Error('Refusing Up Level migration tests outside the Firestore emulator.');
@@ -205,5 +206,16 @@ describe('Up Level emulator migration', () => {
     expect((await db.collection('reports').doc('rep-chain-a').get()).data().classCode).toBe('LVL-A');
     expect((await db.collection('reports').doc('rep-chain-b').get()).data().classCode).toBe('LVL-B');
     expect((await db.collection('classes').doc('LVL-C').get()).data().curriculumCurrentSession).toBe(0);
+  });
+
+  it('returns historical names for a completed class without progress or PIN fields', async () => {
+    await seedLevel({
+      source: 'SRC05',
+      students: [{ id: 'stu-f', name: 'Học sinh F', projectName: 'Không lộ', progress: 90 }],
+    });
+    expect((await commitUpLevel(db, request('SRC05', 'DST05', ['stu-f']))).ok).toBe(true);
+    const roster = await listPublicRoster(db, 'SRC05');
+    expect(roster.ok).toBe(true);
+    expect(roster.body.students).toEqual([{ id: 'stu-f', fullName: 'Học sinh F', active: true }]);
   });
 });
