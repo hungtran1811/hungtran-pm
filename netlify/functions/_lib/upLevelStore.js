@@ -1,5 +1,5 @@
 import { FieldValue } from 'firebase-admin/firestore';
-import { planUpLevel, progressionId } from '../../../src/lib/upLevel.js';
+import { planUpLevel, preserveClassCode, progressionId } from '../../../src/lib/upLevel.js';
 import { normalizeClassLookupInput } from '../../../src/lib/classAccessCode.js';
 
 function plainStudent(snapshot) {
@@ -38,7 +38,7 @@ async function acquireLock(db, { operationId, sourceCode, targetCode, requestHas
     const snap = await tx.get(ref);
     const existing = snap.exists ? snap.data() : null;
     if (existing?.state === 'committed') {
-      const sameTarget = normalizeClassLookupInput(existing.targetClassCode) === targetCode;
+      const sameTarget = normalizeClassLookupInput(existing.targetClassCode) === normalizeClassLookupInput(targetCode);
       const sameHash = !existing.requestHash || existing.requestHash === requestHash;
       if (sameTarget && sameHash) {
         return { ok: true, already: true, targetClassCode: existing.targetClassCode, operationId };
@@ -96,6 +96,24 @@ function previewBody(plan, aliasStatus) {
   };
 }
 
+async function loadClassByCode(db, raw) {
+  const exact = preserveClassCode(raw);
+  const folded = normalizeClassLookupInput(exact);
+  if (!folded) return null;
+  const direct = await db.collection('classes').doc(exact).get();
+  if (direct.exists) return direct;
+  if (folded !== exact) {
+    const upper = await db.collection('classes').doc(folded).get();
+    if (upper.exists) return upper;
+  }
+  const all = await db.collection('classes').get();
+  return all.docs.find((doc) => {
+    const data = doc.data() || {};
+    return normalizeClassLookupInput(doc.id) === folded
+      || normalizeClassLookupInput(data.classCode) === folded;
+  }) || null;
+}
+
 export async function readUpLevelStatus(db, { sourceClassCode, operationId }) {
   const sourceCode = normalizeClassLookupInput(sourceClassCode);
   const id = operationId || (sourceCode ? progressionId(sourceCode) : '');
@@ -132,13 +150,14 @@ export async function rollbackUpLevel(db, { sourceClassCode, operationId }) {
   if (data.state === 'committed') {
     return { ok: false, status: 409, error: 'Lớp mới đã công bố. Không tự xóa dữ liệu đã phát sinh.' };
   }
-  const target = normalizeClassLookupInput(data.targetClassCode);
-  const targetSnap = target ? await db.collection('classes').doc(target).get() : null;
+  const target = preserveClassCode(data.targetClassCode);
+  const targetSnap = target ? await loadClassByCode(db, target) : null;
+  const targetId = targetSnap?.id || target;
   if (targetSnap?.exists && targetSnap.data()?.hidden === false) {
     return { ok: false, status: 409, error: 'Lớp mới đã công bố. Không tự xóa dữ liệu đã phát sinh.' };
   }
-  const reports = target
-    ? await db.collection('reports').where('classCode', '==', target).limit(1).get()
+  const reports = targetId
+    ? await db.collection('reports').where('classCode', '==', targetId).limit(1).get()
     : { empty: true };
   if (!reports.empty) {
     return { ok: false, status: 409, error: 'Lớp mới đã có báo cáo. Không tự hoàn tác.' };
@@ -147,8 +166,8 @@ export async function rollbackUpLevel(db, { sourceClassCode, operationId }) {
   const batch = db.batch();
   if (targetSnap?.exists) batch.delete(targetSnap.ref);
   for (const studentId of studentIds) {
-    batch.delete(db.collection('classEnrollments').doc(`${target}__${studentId}`));
-    batch.delete(db.collection('classStudentStates').doc(`${target}__${studentId}`));
+    batch.delete(db.collection('classEnrollments').doc(`${targetId}__${studentId}`));
+    batch.delete(db.collection('classStudentStates').doc(`${targetId}__${studentId}`));
     const sourceEnrollment = db.collection('classEnrollments').doc(`${data.sourceClassCode}__${studentId}`);
     batch.set(sourceEnrollment, {
       classCode: data.sourceClassCode,
@@ -164,32 +183,32 @@ export async function rollbackUpLevel(db, { sourceClassCode, operationId }) {
     updatedAt: FieldValue.serverTimestamp(),
   }, { merge: true });
   await batch.commit();
-  return { ok: true, body: { operationId: id, state: 'rolled_back', targetClassCode: target } };
+  return { ok: true, body: { operationId: id, state: 'rolled_back', targetClassCode: targetId } };
 }
 
 export async function commitUpLevel(db, body, options = {}) {
   if (body?.action === 'status') return readUpLevelStatus(db, body);
   if (body?.action === 'rollback') return rollbackUpLevel(db, body);
 
-  const sourceCode = normalizeClassLookupInput(body.sourceClassCode);
-  const targetCode = normalizeClassLookupInput(body.targetClassCode);
-  if (!sourceCode) return { ok: false, status: 400, error: 'Không tìm thấy lớp nguồn.' };
-
-  const sourceSnap = await db.collection('classes').doc(sourceCode).get();
-  if (!sourceSnap.exists) return { ok: false, status: 404, error: 'Không tìm thấy lớp nguồn.' };
-  const source = { id: sourceSnap.id, ...sourceSnap.data(), classCode: sourceSnap.data()?.classCode || sourceSnap.id };
-
+  const sourceSnap = await loadClassByCode(db, body.sourceClassCode);
+  if (!sourceSnap) return { ok: false, status: 404, error: 'Không tìm thấy lớp nguồn.' };
+  const source = {
+    id: sourceSnap.id,
+    ...sourceSnap.data(),
+    classCode: sourceSnap.data()?.classCode || sourceSnap.id,
+  };
   const operationId = progressionId(source.classCode);
+  const targetCode = preserveClassCode(body.targetClassCode);
+  const targetSnap = await loadClassByCode(db, targetCode);
   const progressionRef = db.collection('classProgressions').doc(operationId);
   const progressionSnap = await progressionRef.get();
   const existingProgression = progressionSnap.exists ? progressionSnap.data() : null;
 
   const targetProgramId = String(body.programId || '').trim();
   const sourceProgramId = String(source.curriculumProgramId || '').trim();
-  const [programSnap, sourceProgramSnap, targetSnap, studentSnap, uploadSnap] = await Promise.all([
+  const [programSnap, sourceProgramSnap, studentSnap, uploadSnap] = await Promise.all([
     targetProgramId ? db.collection('curriculumPrograms').doc(targetProgramId).get() : Promise.resolve({ exists: false }),
     sourceProgramId ? db.collection('curriculumPrograms').doc(sourceProgramId).get() : Promise.resolve({ exists: false }),
-    targetCode ? db.collection('classes').doc(targetCode).get() : Promise.resolve({ exists: false }),
     db.collection('students').where('classId', '==', source.classCode).where('active', '==', true).get(),
     db.collection('submissionUploadSessions').where('classCode', '==', source.classCode).limit(20).get(),
   ]);
@@ -203,8 +222,8 @@ export async function commitUpLevel(db, body, options = {}) {
   const students = [...studentSnap.docs, ...extraSnaps.filter((snap) => snap.exists)].map(plainStudent);
   const now = Date.now();
   const uploadOpen = uploadSnap.docs.some((doc) => (doc.data()?.expiresAt?.toMillis?.() || 0) > now);
-  const targetReports = targetSnap.exists
-    ? await db.collection('reports').where('classCode', '==', targetCode).limit(1).get()
+  const targetReports = targetSnap
+    ? await db.collection('reports').where('classCode', '==', targetSnap.id).limit(1).get()
     : { empty: true };
   const selectedIds = Array.isArray(body.selectedIds) ? body.selectedIds.filter(Boolean) : [];
   const credentialSnaps = selectedIds.length
@@ -217,7 +236,7 @@ export async function commitUpLevel(db, body, options = {}) {
     : { docs: [] };
   const aliasConflicts = aliasSnap.docs.filter((doc) => {
     const data = doc.data() || {};
-    return data.status === 'active' && data.hidden !== true && normalizeClassLookupInput(data.classCode || doc.id) !== targetCode;
+    return data.status === 'active' && data.hidden !== true && normalizeClassLookupInput(data.classCode || doc.id) !== normalizeClassLookupInput(targetCode);
   });
 
   const plan = planUpLevel({
@@ -234,7 +253,7 @@ export async function commitUpLevel(db, body, options = {}) {
     overrideReason: body.overrideReason,
     actor: body.email || '',
     existingProgression,
-    targetClass: targetSnap.exists ? { id: targetSnap.id, ...targetSnap.data() } : null,
+    targetClass: targetSnap ? { id: targetSnap.id, ...targetSnap.data() } : null,
     targetHasReports: !targetReports.empty,
     gameOpen: Boolean(source.activeSpySessionId || source.activeShowdownSessionId),
     uploadOpen,

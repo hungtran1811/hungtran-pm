@@ -1,13 +1,34 @@
 import { normalizeClassLookupInput } from '../../../src/lib/classAccessCode.js';
+import { preserveClassCode } from '../../../src/lib/upLevel.js';
 
 const OPEN_HISTORY = new Set(['active', 'completed', 'archived']);
 
+async function loadClass(db, raw) {
+  const exact = preserveClassCode(raw);
+  const folded = normalizeClassLookupInput(exact);
+  if (!folded) return null;
+  const direct = await db.collection('classes').doc(exact).get();
+  if (direct.exists) return direct;
+  if (folded !== exact) {
+    const upper = await db.collection('classes').doc(folded).get();
+    if (upper.exists) return upper;
+  }
+  const all = await db.collection('classes').get();
+  return all.docs.find((doc) => {
+    const data = doc.data() || {};
+    return normalizeClassLookupInput(doc.id) === folded
+      || normalizeClassLookupInput(data.classCode) === folded;
+  }) || null;
+}
+
 export async function listPublicRoster(db, classCode) {
-  const code = normalizeClassLookupInput(classCode);
-  if (!code) return { ok: false, status: 400, error: 'Hãy nhập mã lớp đầy đủ.' };
-  const classSnap = await db.collection('classes').doc(code).get();
-  if (!classSnap.exists) return { ok: false, status: 404, error: 'Không tìm thấy lớp.' };
+  if (!normalizeClassLookupInput(classCode)) {
+    return { ok: false, status: 400, error: 'Hãy nhập mã lớp đầy đủ.' };
+  }
+  const classSnap = await loadClass(db, classCode);
+  if (!classSnap) return { ok: false, status: 404, error: 'Không tìm thấy lớp.' };
   const data = classSnap.data() || {};
+  const code = data.classCode || classSnap.id;
   if (data.hidden === true || !OPEN_HISTORY.has(data.status)) {
     return { ok: false, status: 403, error: 'Lớp này không mở.' };
   }

@@ -167,6 +167,22 @@ describe('planUpLevel', () => {
     expect(result.writes.some((write) => write.collection === 'pinResetRequests')).toBe(false);
   });
 
+  it('keeps a mixed-case source code instead of looking up the uppercased id', () => {
+    const result = plan({
+      source: { ...source, classCode: 'Test' },
+      students: [{ ...student('a', 70), classId: 'Test', classCode: 'Test' }],
+      targetClassCode: 'test-next',
+      confirmCode: 'TEST-NEXT',
+      studentAccessCode: '',
+    });
+    expect(result.ok).toBe(true);
+    const sourceWrite = result.writes.find((write) => write.collection === 'classes' && write.id === 'Test');
+    expect(sourceWrite.data.status).toBe('completed');
+    expect(result.targetClassCode).toBe('test-next');
+    expect(result.writes.some((write) => write.id === 'TEST')).toBe(false);
+    expect(result.writes.find((write) => write.id === 'Test__a').data.classCode).toBe('Test');
+  });
+
   it('blocks a different in-flight payload for the same source', () => {
     const conflict = plan({
       targetClassCode: 'PVĐ-JSB07',

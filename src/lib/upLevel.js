@@ -1,12 +1,21 @@
 import { DEFAULT_STAGE, DEFAULT_STATUS } from '../constants/index.js';
 import { normalizeClassLookupInput, suggestStudentAccessCode } from './classAccessCode.js';
 
+export function preserveClassCode(value) {
+  return String(value ?? '')
+    .normalize('NFKC')
+    .trim()
+    .replace(/\s*-\s*/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export function progressionId(sourceClassCode) {
   return `uplevel_${normalizeClassLookupInput(sourceClassCode)}`;
 }
 
 export function enrollmentDocId(classCode, studentId) {
-  return `${normalizeClassLookupInput(classCode)}__${studentId}`;
+  return `${preserveClassCode(classCode)}__${studentId}`;
 }
 
 export function upLevelGate(currentSession, totalSessions) {
@@ -217,9 +226,10 @@ export function planUpLevel({
 } = {}) {
   if (!source?.classCode) return { ok: false, error: 'Không tìm thấy lớp nguồn.' };
 
-  const sourceCode = normalizeClassLookupInput(source.classCode);
-  const target = normalizeClassLookupInput(targetClassCode);
-  const confirm = normalizeClassLookupInput(confirmCode);
+  const sourceCode = preserveClassCode(source.classCode);
+  const target = preserveClassCode(targetClassCode);
+  const confirm = preserveClassCode(confirmCode);
+  const sameCode = (left, right) => normalizeClassLookupInput(left) === normalizeClassLookupInput(right);
   const access = normalizeClassLookupInput(studentAccessCode);
   const name = String(className || '').trim();
   const ids = Array.isArray(selectedIds) ? selectedIds.filter(Boolean) : [];
@@ -235,9 +245,9 @@ export function planUpLevel({
   });
 
   if (existingProgression?.state === 'committed' && existingProgression.targetClassCode) {
-    const committedTarget = normalizeClassLookupInput(existingProgression.targetClassCode);
+    const committedTarget = preserveClassCode(existingProgression.targetClassCode);
     const sameRequest = !existingProgression.requestHash || existingProgression.requestHash === requestHash;
-    if (committedTarget === target && sameRequest) {
+    if (sameCode(committedTarget, target) && sameRequest) {
       return {
         ok: true,
         already: true,
@@ -257,10 +267,10 @@ export function planUpLevel({
     return { ok: false, status: 409, error: 'Đang có một Up Level khác cho lớp này.' };
   }
 
-  if (!target || target === sourceCode) {
+  if (!target || sameCode(target, sourceCode)) {
     return { ok: false, error: 'Mã lớp đích phải khác mã lớp nguồn.' };
   }
-  if (confirm !== target) return { ok: false, error: 'Hãy gõ lại đúng mã lớp đích.' };
+  if (!sameCode(confirm, target)) return { ok: false, error: 'Hãy gõ lại đúng mã lớp đích.' };
   if (!program?.id) return { ok: false, error: 'Hãy chọn một chương trình đã có.' };
   if (!name) return { ok: false, error: 'Hãy nhập tên lớp đích.' };
 
@@ -274,13 +284,13 @@ export function planUpLevel({
   if (gameOpen || uploadOpen) {
     return { ok: false, error: 'Hãy đóng phiên Spy, Showdown hoặc bài nộp đang mở trước khi chuyển lớp.' };
   }
-  if (existingProgression?.targetClassCode && normalizeClassLookupInput(existingProgression.targetClassCode) !== target) {
+  if (existingProgression?.targetClassCode && !sameCode(existingProgression.targetClassCode, target)) {
     return { ok: false, status: 409, error: 'Đang có một Up Level khác cho lớp này.' };
   }
 
   const sameOperation = Boolean(
     targetClass &&
-      (targetClass.previousClassCode === sourceCode || existingProgression?.targetClassCode === target),
+      (sameCode(targetClass.previousClassCode, sourceCode) || sameCode(existingProgression?.targetClassCode, target)),
   );
   if (targetClass && !sameOperation) return { ok: false, error: 'Mã lớp đã tồn tại.' };
   if (targetHasReports && !sameOperation) return { ok: false, error: 'Mã lớp đã tồn tại.' };
@@ -293,8 +303,8 @@ export function planUpLevel({
   const selected = [];
   for (const id of ids) {
     const student = students.find((item) => item.id === id);
-    const home = student ? normalizeClassLookupInput(homeClass(student)) : '';
-    if (!student?.active || (home !== sourceCode && home !== target)) {
+    const home = student ? homeClass(student) : '';
+    if (!student?.active || (!sameCode(home, sourceCode) && !sameCode(home, target))) {
       return { ok: false, error: 'Học sinh không thuộc lớp nguồn.' };
     }
     selected.push(student);
@@ -303,7 +313,7 @@ export function planUpLevel({
 
   const selectedSet = new Set(selected.map((student) => student.id));
   const excluded = students.filter(
-    (student) => student.active && normalizeClassLookupInput(homeClass(student)) === sourceCode && !selectedSet.has(student.id),
+    (student) => student.active && sameCode(homeClass(student), sourceCode) && !selectedSet.has(student.id),
   );
   const operationId = progressionId(sourceCode);
   const cohortId = source.cohortId || `cohort_${sourceCode}`;
