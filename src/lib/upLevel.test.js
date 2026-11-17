@@ -183,6 +183,35 @@ describe('planUpLevel', () => {
     expect(result.writes.find((write) => write.id === 'Test__a').data.classCode).toBe('Test');
   });
 
+  it('writes the source snapshot when the class code is mixed case', () => {
+    const result = plan({
+      source: { ...source, classCode: 'Test' },
+      students: [{ ...student('a', 70), classId: 'Test', classCode: 'Test' }],
+      targetClassCode: 't',
+      confirmCode: 't',
+      className: 't',
+      studentAccessCode: 'T',
+    });
+    expect(result.ok).toBe(true);
+    expect(result.writes.some((write) => write.collection === 'classStudentStates' && write.id === 'Test__a')).toBe(true);
+  });
+
+  it('resumes a failed up level for the same target', () => {
+    const result = plan({
+      targetClassCode: 'PVĐ-JSB06',
+      confirmCode: 'PVĐ-JSB06',
+      studentAccessCode: 'JSB06',
+      existingProgression: {
+        state: 'failed',
+        targetClassCode: 'PVĐ-JSB06',
+        requestHash: 'other-hash',
+      },
+      targetClass: { classCode: 'PVĐ-JSB06', previousClassCode: 'PVĐ-JSB05', hidden: true, status: 'preparing' },
+    });
+    expect(result.ok).toBe(true);
+    expect(result.writes.find((write) => write.collection === 'classes' && write.id === 'PVĐ-JSB06' && write.step === 'commit').data.status).toBe('active');
+  });
+
   it('blocks a different in-flight payload for the same source', () => {
     const conflict = plan({
       targetClassCode: 'PVĐ-JSB07',

@@ -45,7 +45,12 @@ async function acquireLock(db, { operationId, sourceCode, targetCode, requestHas
       }
       return { ok: false, status: 409, error: 'Lớp nguồn đã có một chuyển cấp khác.' };
     }
-    if (existing?.requestHash && existing.requestHash !== requestHash && existing.state !== 'rolled_back') {
+    const resumable = existing?.state === 'failed' || existing?.state === 'prepared' || existing?.state === 'preparing';
+    const sameTarget = normalizeClassLookupInput(existing?.targetClassCode) === normalizeClassLookupInput(targetCode);
+    if (existing?.targetClassCode && !sameTarget && existing.state !== 'rolled_back') {
+      return { ok: false, status: 409, error: 'Đang có một Up Level khác cho lớp này.' };
+    }
+    if (existing?.requestHash && existing.requestHash !== requestHash && existing.state !== 'rolled_back' && !(resumable && sameTarget)) {
       return { ok: false, status: 409, error: 'Đang có một Up Level khác cho lớp này.' };
     }
     tx.set(ref, {

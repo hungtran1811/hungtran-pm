@@ -259,10 +259,14 @@ export function planUpLevel({
     }
     return { ok: false, status: 409, error: 'Lớp nguồn đã có một chuyển cấp khác.' };
   }
+  const resumable = existingProgression?.state === 'failed'
+    || existingProgression?.state === 'prepared'
+    || existingProgression?.state === 'preparing';
   if (
     existingProgression?.requestHash
     && existingProgression.requestHash !== requestHash
     && existingProgression.state !== 'rolled_back'
+    && !(resumable && sameCode(existingProgression.targetClassCode, target))
   ) {
     return { ok: false, status: 409, error: 'Đang có một Up Level khác cho lớp này.' };
   }
@@ -375,7 +379,7 @@ export function planUpLevel({
         targetClassCode: target,
       },
     });
-    if (normalizeClassLookupInput(homeClass(student)) === sourceCode) {
+    if (sameCode(homeClass(student), sourceCode)) {
       writes.push({
         collection: 'classStudentStates',
         id: enrollmentDocId(sourceCode, student.id),
