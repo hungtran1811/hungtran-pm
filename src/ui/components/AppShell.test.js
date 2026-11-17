@@ -41,4 +41,27 @@ describe('AppShell V11 navigation', () => {
     expect(container.querySelector('header img')?.getAttribute('src')).toBe('/logo-wordmark.svg');
     expect(container.textContent).not.toContain('Personal Teaching Workspace');
   });
+
+  it('anchors the account menu to the avatar instead of the viewport edge', async () => {
+    await act(async () => {
+      root.render(
+        createElement(
+          MemoryRouter,
+          { initialEntries: ['/admin'] },
+          createElement(AppShell, { title: 'Tổng quan' }, 'Nội dung'),
+        ),
+      );
+    });
+
+    const button = container.querySelector('button[aria-label="Không gian riêng của giáo viên"]');
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(button.parentElement.className).toContain('relative');
+    const menu = button.parentElement.querySelector('[class*="absolute"]');
+    expect(menu.className).toContain('right-0');
+    expect(menu.className).toContain('top-full');
+    expect(menu.textContent).toContain('Đăng xuất');
+  });
 });

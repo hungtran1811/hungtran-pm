@@ -129,7 +129,7 @@ export function AppShell({ title, actions, children }) {
             </span>
           </NavLink>
           <ShellNav />
-          <div className="ml-auto flex items-center gap-2" ref={accountRef}>
+          <div className="relative ml-auto flex items-center gap-2" ref={accountRef}>
             <button
               type="button"
               className="grid h-10 w-10 place-items-center rounded-full bg-navy text-xs font-semibold text-white"
@@ -140,7 +140,7 @@ export function AppShell({ title, actions, children }) {
               {accountInitials(admin?.email)}
             </button>
             {accountOpen ? (
-              <div className="absolute right-4 top-[4.25rem] z-40 w-64 rounded-[17px] border border-line bg-white p-2 shadow-[0_12px_32px_rgba(28,32,78,0.08)] dark:border-slate-700 dark:bg-slate-900">
+              <div className="absolute right-0 top-full z-40 mt-2 w-64 rounded-[17px] border border-line bg-white p-2 shadow-[0_12px_32px_rgba(28,32,78,0.08)] dark:border-slate-700 dark:bg-slate-900">
                 <p className="truncate px-2 py-1.5 text-xs text-muted">{admin?.email}</p>
                 <NavLink
                   to="/admin/analytics"
