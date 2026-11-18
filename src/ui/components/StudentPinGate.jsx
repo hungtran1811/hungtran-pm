@@ -6,8 +6,6 @@ import { Spinner } from './Spinner.jsx';
 import {
   claimPin,
   fetchPinGate,
-  requestPinReset,
-  setResetPin,
   verifyPin,
 } from '../../services/studentGate.service.js';
 import { PIN_MISMATCH_MESSAGE, pinConfirmDiverged } from '../../lib/pinFlow.js';
@@ -18,7 +16,6 @@ export function StudentPinGate({ classCode, student, onSuccess, onBack }) {
   const [confirmPin, setConfirmPin] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -26,7 +23,7 @@ export function StudentPinGate({ classCode, student, onSuccess, onBack }) {
     setError('');
     fetchPinGate({ classCode, studentId: student.id })
       .then((result) => {
-        if (!cancelled) setMode(result.mode || 'needsVerify');
+        if (!cancelled) setMode(result.mode === 'needsClaim' ? 'needsClaim' : (result.mode === 'locked' ? 'locked' : 'needsVerify'));
       })
       .catch((loadError) => {
         if (!cancelled) {
@@ -39,40 +36,15 @@ export function StudentPinGate({ classCode, student, onSuccess, onBack }) {
     };
   }, [classCode, student.id]);
 
-  useEffect(() => {
-    if (mode !== 'pendingReset') return undefined;
-    let cancelled = false;
-    const timer = setInterval(() => {
-      fetchPinGate({ classCode, studentId: student.id })
-        .then((result) => {
-          if (cancelled) return;
-          const next = result.mode || 'needsVerify';
-          if (next === 'pendingReset') return;
-          setPin('');
-          setConfirmPin('');
-          setNotice('');
-          setMode(next);
-        })
-        .catch(() => {});
-    }, 3000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [mode, classCode, student.id]);
-
   const submit = async (event) => {
     event.preventDefault();
     if (needsPair && pinConfirmDiverged(pin, confirmPin)) return;
     setBusy(true);
     setError('');
     try {
-      const payload =
-        mode === 'needsClaim'
-          ? await claimPin({ classCode, studentId: student.id, pin, confirmPin })
-          : mode === 'needsResetPin'
-            ? await setResetPin({ classCode, studentId: student.id, pin, confirmPin })
-            : await verifyPin({ classCode, studentId: student.id, pin });
+      const payload = mode === 'needsClaim'
+        ? await claimPin({ classCode, studentId: student.id, pin, confirmPin })
+        : await verifyPin({ classCode, studentId: student.id, pin });
       await onSuccess(payload.token);
     } catch (submitError) {
       setError(submitError.message);
@@ -81,22 +53,8 @@ export function StudentPinGate({ classCode, student, onSuccess, onBack }) {
     }
   };
 
-  const askReset = async () => {
-    setBusy(true);
-    setError('');
-    try {
-      await requestPinReset({ classCode, studentId: student.id });
-      setMode('pendingReset');
-      setNotice('Đã gửi yêu cầu. Đợi giáo viên duyệt rồi đặt mã mới.');
-    } catch (resetError) {
-      setError(resetError.message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const confirmRef = useRef(null);
-  const needsPair = mode === 'needsClaim' || mode === 'needsResetPin';
+  const needsPair = mode === 'needsClaim';
   const pinMismatch = needsPair && pinConfirmDiverged(pin, confirmPin);
 
   if (mode === 'loading') {
@@ -127,12 +85,7 @@ export function StudentPinGate({ classCode, student, onSuccess, onBack }) {
         </p>
       </div>
       {mode === 'locked' ? (
-        <p className="text-sm text-slate-600">Mã đang tạm khóa. Thử lại sau ít phút hoặc nhờ giáo viên.</p>
-      ) : null}
-      {mode === 'pendingReset' ? (
-        <p className="text-sm text-slate-600">
-          {notice || 'Yêu cầu đang chờ giáo viên duyệt. Ô đặt mã mới sẽ hiện khi được duyệt.'}
-        </p>
+        <p className="text-sm text-slate-600">Mã đang tạm khóa. Thử lại sau ít phút hoặc nhờ giáo viên đổi PIN.</p>
       ) : null}
       {needsPair || mode === 'needsVerify' ? (
         <>
@@ -154,11 +107,6 @@ export function StudentPinGate({ classCode, student, onSuccess, onBack }) {
             {needsPair ? 'Xác nhận' : 'Vào lớp'}
           </Button>
         </>
-      ) : null}
-      {mode === 'needsVerify' ? (
-        <Button type="button" variant="secondary" className="w-full" disabled={busy} onClick={askReset}>
-          Quên PIN
-        </Button>
       ) : null}
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       <Button type="button" variant="ghost" className="w-full" onClick={onBack}>

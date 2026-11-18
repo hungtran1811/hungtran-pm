@@ -1,8 +1,11 @@
+import { generateKeyPairSync } from 'node:crypto';
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { commitUpLevel, rollbackUpLevel } from '../netlify/functions/_lib/upLevelStore.js';
 import { listPublicRoster } from '../netlify/functions/_lib/classRoster.js';
+import { encryptPin, hashPin } from '../netlify/functions/_lib/pinCrypto.js';
+import { readPinGate, verifyStudentPin } from '../netlify/functions/_lib/pinStore.js';
 
 if (!process.env.FIRESTORE_EMULATOR_HOST) {
   throw new Error('Refusing Up Level migration tests outside the Firestore emulator.');
@@ -217,5 +220,74 @@ describe('Up Level emulator migration', () => {
     const roster = await listPublicRoster(db, 'SRC05');
     expect(roster.ok).toBe(true);
     expect(roster.body.students).toEqual([{ id: 'stu-f', fullName: 'Học sinh F', active: true }]);
+  });
+
+  it('lets the same student verify the old PIN on the new class', async () => {
+    const previousPepper = process.env.PIN_PEPPER;
+    const previousAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
+    const pin = '2468';
+    process.env.PIN_PEPPER = 'emulator-pepper-value';
+    const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    process.env.FIREBASE_SERVICE_ACCOUNT = JSON.stringify({
+      project_id: 'demo-hungtran-pm-rules',
+      client_email: 'demo@demo.iam.gserviceaccount.com',
+      private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }),
+    });
+    try {
+      const hashed = await hashPin(pin);
+      const stored = { ...hashed, credentialVersion: 2, failedCount: 0, locked: false };
+      delete stored.scryptN;
+      stored.pinCipher = encryptPin(pin);
+      await seedLevel({
+        source: 'PINSRC',
+        students: [{ id: 's01', name: 'Học sinh S01', progress: 70, projectName: 'Đồ án cũ' }],
+      });
+      await db.collection('studentCredentials').doc('s01').set(stored);
+      await db.collection('studentSessions').doc('s01').set({ credentialVersion: 2 });
+
+      const before = await verifyStudentPin(db, { classCode: 'PINSRC', studentId: 's01', pin });
+      expect(before).toMatchObject({ ok: true, body: { credentialVersion: 2 } });
+      const hashBefore = (await db.collection('studentCredentials').doc('s01').get()).data().hash;
+
+      const moved = await commitUpLevel(db, request('PINSRC', 'PINDST', ['s01']));
+      expect(moved.ok).toBe(true);
+      const credential = (await db.collection('studentCredentials').doc('s01').get()).data();
+      const session = (await db.collection('studentSessions').doc('s01').get()).data();
+      expect((await db.collection('students').doc('s01').get()).id).toBe('s01');
+      expect(credential.hash).toBe(hashBefore);
+      expect(credential.credentialVersion).toBe(2);
+      expect(session.credentialVersion).toBe(2);
+      expect((await db.collection('classEnrollments').doc('PINSRC__s01').get()).data().status).toBe('completed');
+      expect((await db.collection('classEnrollments').doc('PINDST__s01').get()).data().status).toBe('active');
+
+      const gate = await readPinGate(db, { classCode: 'PINDST', studentId: 's01' });
+      expect(gate).toMatchObject({ ok: true, body: { mode: 'needsVerify' } });
+      const after = await verifyStudentPin(db, { classCode: 'PINDST', studentId: 's01', pin });
+      expect(after.ok).toBe(true);
+      expect(after.status).toBeUndefined();
+      const payload = JSON.parse(Buffer.from(after.body.token.split('.')[1], 'base64url').toString());
+      expect(payload).toMatchObject({
+        uid: 'stu_s01',
+        aud: 'https://identitytoolkit.googleapis.com/google.identity.identitytoolkit.v1.IdentityToolkit',
+        claims: { studentId: 's01', credentialVersion: 2 },
+      });
+      expect(after.body.token.split('.').length).toBe(3);
+      expect(publicKey).toBeTruthy();
+
+      const wrong = await verifyStudentPin(db, { classCode: 'PINDST', studentId: 's01', pin: '0000' });
+      expect(wrong).toMatchObject({ ok: false, status: 401 });
+      const outsider = await verifyStudentPin(db, { classCode: 'PINDST', studentId: 'missing-student', pin });
+      expect(outsider).toMatchObject({ ok: false, status: 403 });
+
+      delete process.env.PIN_PEPPER;
+      await expect(verifyStudentPin(db, { classCode: 'PINDST', studentId: 's01', pin })).rejects.toMatchObject({
+        code: 'PIN_PEPPER_MISSING',
+      });
+    } finally {
+      if (previousPepper === undefined) delete process.env.PIN_PEPPER;
+      else process.env.PIN_PEPPER = previousPepper;
+      if (previousAccount === undefined) delete process.env.FIREBASE_SERVICE_ACCOUNT;
+      else process.env.FIREBASE_SERVICE_ACCOUNT = previousAccount;
+    }
   });
 });

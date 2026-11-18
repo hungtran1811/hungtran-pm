@@ -140,32 +140,76 @@ export function subscribeActiveStudentsByClass(classCode, onData, onError) {
 
 export function subscribeRosterForClass(classCode, onData, onError, { includeHistory = true } = {}) {
   if (!classCode) return () => {};
-  const q = query(collection(appDb(), 'classEnrollments'), where('classCode', '==', classCode));
-  return onSnapshot(
-    q,
+  let currentStudents = [];
+  let enrolledStudents = [];
+  let currentReady = false;
+  let enrolledReady = false;
+  let enrollGeneration = 0;
+
+  const publish = () => {
+    if (!currentReady || !enrolledReady) return;
+    const byId = new Map();
+    for (const student of currentStudents) {
+      if (!student.active) continue;
+      byId.set(student.id, { ...student, enrollmentStatus: 'active', classCode, classId: classCode });
+    }
+    for (const student of enrolledStudents) {
+      if (!student?.active) continue;
+      if (student.enrollmentStatus === 'completed' && !includeHistory) continue;
+      if (!byId.has(student.id)) byId.set(student.id, student);
+    }
+    onData([...byId.values()].sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi')));
+  };
+
+  const unsubscribeStudents = onSnapshot(
+    query(studentsRef(), where('classId', '==', classCode)),
     (snapshot) => {
-      if (snapshot.empty) {
-        listActiveStudentsByClass(classCode).then(onData).catch(onError);
-        return;
-      }
+      currentStudents = snapshot.docs.map(toStudentModel);
+      currentReady = true;
+      publish();
+    },
+    onError,
+  );
+
+  const unsubscribeEnrollments = onSnapshot(
+    query(collection(appDb(), 'classEnrollments'), where('classCode', '==', classCode)),
+    (snapshot) => {
+      const generation = ++enrollGeneration;
       const rows = snapshot.docs
         .map((item) => ({ id: item.id, ...item.data() }))
         .filter((row) => row.status === 'active' || (includeHistory && row.status === 'completed'));
+      if (!rows.length) {
+        if (generation !== enrollGeneration) return;
+        enrolledStudents = [];
+        enrolledReady = true;
+        publish();
+        return;
+      }
       Promise.all(rows.map(async (row) => {
-        const snapshot = await getDoc(doc(appDb(), 'students', row.studentId));
-        if (!snapshot.exists()) return null;
+        const studentSnap = await getDoc(doc(appDb(), 'students', row.studentId));
+        if (!studentSnap.exists()) return null;
         const stateSnap = await getDoc(doc(appDb(), 'classStudentStates', row.id));
         const model = overlayHistoricalState(
-          toStudentModel(snapshot),
+          toStudentModel(studentSnap),
           stateSnap.exists() ? stateSnap.data() : null,
         );
         return { ...model, enrollmentStatus: row.status, classCode, classId: classCode };
       }))
-        .then((list) => onData(list.filter((student) => student?.active).sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi'))))
+        .then((list) => {
+          if (generation !== enrollGeneration) return;
+          enrolledStudents = list.filter(Boolean);
+          enrolledReady = true;
+          publish();
+        })
         .catch(onError);
     },
     onError,
   );
+
+  return () => {
+    unsubscribeStudents();
+    unsubscribeEnrollments();
+  };
 }
 
 export function subscribeStudent(studentId, onData, onError) {

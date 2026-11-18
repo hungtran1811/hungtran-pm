@@ -64,11 +64,9 @@ export function derivePinStatus({ credential, request, now = Date.now() } = {}) 
   return { status: 'Đang dùng', lastResetAt: credential.lastResetAt || null };
 }
 
-export function gateMode({ credential, request, now = Date.now() } = {}) {
+export function gateMode({ credential, now = Date.now() } = {}) {
   if (!credential) return 'needsClaim';
   if (isCredentialLocked(credential, now)) return 'locked';
-  if (request?.status === 'pending') return 'pendingReset';
-  if (canSetResetPin(request, now)) return 'needsResetPin';
   return 'needsVerify';
 }
 

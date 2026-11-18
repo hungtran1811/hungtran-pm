@@ -71,6 +71,10 @@ export function approvePinReset(requestId) {
   return postGate('pin-reset-approve', { requestId }, { admin: true });
 }
 
+export function setStudentPin({ studentId, pin, confirmPin }) {
+  return postGate('pin-admin-set', { studentId, pin, confirmPin }, { admin: true });
+}
+
 export function lockStudentPin(studentId) {
   return postGate('pin-lock', { studentId }, { admin: true });
 }
@@ -81,4 +85,12 @@ export function auditClassAccessCode({ classCode, studentAccessCode }) {
 
 export function commitUpLevel(body) {
   return postGate('up-level', body, { admin: true });
+}
+
+export function archiveClassLessons({ classCode }) {
+  return postGate('archive-class-lessons', { classCode }, { admin: true });
+}
+
+export function readArchivedLesson({ classCode, lessonId }) {
+  return postGate('archive-class-lesson', { classCode, lessonId }, { admin: true });
 }

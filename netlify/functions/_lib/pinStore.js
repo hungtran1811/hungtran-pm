@@ -1,6 +1,6 @@
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { createCustomToken } from './firebaseAdmin.js';
-import { hashPin, pinMatchesStored } from './pinCrypto.js';
+import { decryptPin, encryptPin, hashPin, pinMatchesStored } from './pinCrypto.js';
 import {
   PIN_GENERIC_MESSAGE,
   PIN_LOCKED_MESSAGE,
@@ -35,6 +35,16 @@ function credentialView(data) {
     lockedUntil: millis(data.lockedUntil),
     lastResetAt: millis(data.lastResetAt) || null,
   };
+}
+
+function readablePin(credential) {
+  if (!credential?.pinCipher) return '';
+  try {
+    const pin = decryptPin(credential.pinCipher);
+    return isFourDigitPin(pin) ? pin : '';
+  } catch {
+    return '';
+  }
 }
 
 async function loadMembership(db, classCode, studentId) {
@@ -114,6 +124,7 @@ export async function claimStudentPin(db, { classCode, studentId, pin, confirmPi
         salt: hashed.salt,
         hash: hashed.hash,
         scryptN: hashed.scryptN,
+        pinCipher: encryptPin(pin),
         credentialVersion: 1,
         failedCount: 0,
         locked: false,
@@ -167,28 +178,21 @@ export async function verifyStudentPin(db, { classCode, studentId, pin }) {
     };
   }
   const version = Number(credential.credentialVersion || 1);
+  const updates = { failedCount: 0, lockedUntil: null };
+  if (!credential.pinCipher) updates.pinCipher = encryptPin(pin);
   const [, token] = await Promise.all([
-    ref.update({ failedCount: 0, lockedUntil: null }),
+    ref.update(updates),
     issueToken(studentId, version),
   ]);
   return { ok: true, body: { token, credentialVersion: version } };
 }
 
-export async function requestPinReset(db, { classCode, studentId }) {
-  const membership = await loadMembership(db, classCode, studentId);
-  if (!membership.ok) return membership;
-  const cred = await db.collection('studentCredentials').doc(studentId).get();
-  if (!cred.exists) return { ok: false, status: 400, error: PIN_GENERIC_MESSAGE };
-  const current = await latestRequest(db, studentId);
-  if (current?.status === 'pending') return { ok: true, body: { requestId: current.id, status: 'pending' } };
-  const ref = await db.collection('pinResetRequests').add({
-    studentId,
-    classCode,
-    status: 'pending',
-    createdAt: FieldValue.serverTimestamp(),
-  });
-  await audit(db, 'reset-request', studentId, classCode);
-  return { ok: true, body: { requestId: ref.id, status: 'pending' } };
+export async function requestPinReset() {
+  return {
+    ok: false,
+    status: 410,
+    error: 'Học sinh không tự đặt lại PIN. Nhờ giáo viên đổi mã.',
+  };
 }
 
 export async function approvePinReset(db, { requestId }) {
@@ -228,6 +232,7 @@ export async function setResetPin(db, { classCode, studentId, pin, confirmPin })
       salt: hashed.salt,
       hash: hashed.hash,
       scryptN: hashed.scryptN,
+      pinCipher: encryptPin(pin),
       credentialVersion: version,
       failedCount: 0,
       locked: false,
@@ -259,6 +264,46 @@ export async function lockStudentPin(db, { studentId, reason = '' }) {
   return { ok: true, body: { status: 'Tạm khóa' } };
 }
 
+export async function setAdminPin(db, { studentId, pin, confirmPin }) {
+  const decision = evaluateClaim({ pin, confirmPin });
+  if (!decision.ok) return { ok: false, status: 400, error: decision.error };
+  const studentSnap = await db.collection('students').doc(String(studentId || '')).get();
+  if (!studentSnap.exists) return { ok: false, status: 404, error: 'Không tìm thấy học sinh.' };
+  const student = studentSnap.data() || {};
+  const classCode = student.classId || student.classCode || '';
+  const classSnap = classCode ? await db.collection('classes').doc(classCode).get() : null;
+  if (classSnap?.data()?.pinRequired !== true) {
+    return { ok: false, status: 403, error: 'Lớp này không dùng mã PIN.' };
+  }
+  const hashed = await hashPin(pin);
+  const pinCipher = encryptPin(pin);
+  const credRef = db.collection('studentCredentials').doc(studentSnap.id);
+  let version = 1;
+  await db.runTransaction(async (tx) => {
+    const cred = await tx.get(credRef);
+    version = cred.exists ? Number(cred.data()?.credentialVersion || 1) + 1 : 1;
+    tx.set(credRef, {
+      salt: hashed.salt,
+      hash: hashed.hash,
+      scryptN: hashed.scryptN,
+      pinCipher,
+      credentialVersion: version,
+      failedCount: 0,
+      locked: false,
+      lockedUntil: null,
+      lastResetAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(cred.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+    }, { merge: true });
+    tx.set(db.collection('studentSessions').doc(studentSnap.id), {
+      credentialVersion: version,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  });
+  await audit(db, 'admin-set', studentSnap.id, classCode);
+  return { ok: true, body: { status: 'Đang dùng', credentialVersion: version } };
+}
+
 export async function readPinStatus(db, { studentId }) {
   const studentSnap = await db.collection('students').doc(studentId).get();
   if (!studentSnap.exists) return { ok: false, status: 404, error: 'Không tìm thấy học sinh.' };
@@ -267,16 +312,16 @@ export async function readPinStatus(db, { studentId }) {
   const classSnap = classCode ? await db.collection('classes').doc(classCode).get() : null;
   if (classSnap?.data()?.pinRequired !== true) return { ok: true, body: { enabled: false } };
   const credSnap = await db.collection('studentCredentials').doc(studentId).get();
-  const request = await latestRequest(db, studentId);
-  const derived = derivePinStatus({ credential: credentialView(credSnap.data()), request });
+  const credential = credentialView(credSnap.data());
+  const derived = derivePinStatus({ credential });
   return {
     ok: true,
     body: {
       enabled: true,
       status: derived.status,
       lastResetAt: derived.lastResetAt,
-      requestId: request?.status === 'pending' ? request.id : '',
       hasCredential: credSnap.exists,
+      pin: readablePin(credential),
     },
   };
 }
@@ -301,16 +346,16 @@ async function studentName(db, studentId, cache) {
   return name;
 }
 
-function boardRow(student, classCode, credential, request) {
-  const derived = derivePinStatus({ credential, request });
+function boardRow(student, classCode, credential) {
+  const derived = derivePinStatus({ credential });
   return {
     studentId: student.id,
     fullName: student.fullName,
     classCode,
     status: derived.status,
     lastResetAt: derived.lastResetAt,
-    requestId: request?.status === 'pending' ? request.id : '',
     hasCredential: Boolean(credential),
+    pin: readablePin(credential),
   };
 }
 
@@ -375,38 +420,12 @@ export async function listPinBoard(db, { classCode = '' } = {}) {
     ...students.map((student) => db.collection('studentCredentials').doc(student.id)),
   );
   const credById = new Map(credSnaps.map((snap) => [snap.id, credentialView(snap.data())]));
-  const requestsByStudent = new Map();
-  const chunks = [];
-  for (let index = 0; index < students.length; index += 30) {
-    chunks.push(students.slice(index, index + 30).map((student) => student.id));
-  }
-  const requestSnaps = await Promise.all(
-    chunks.map((chunk) => db.collection('pinResetRequests').where('studentId', 'in', chunk).get()),
-  );
-  for (const reqSnap of requestSnaps) {
-    for (const doc of reqSnap.docs) {
-      const row = requestView(doc);
-      const current = requestsByStudent.get(row.studentId);
-      if (!current || row.createdAt >= current.createdAt) requestsByStudent.set(row.studentId, row);
-    }
-  }
-
   const rows = students.map((student) => boardRow(
     student,
     code,
     credById.get(student.id) || null,
-    requestsByStudent.get(student.id) || null,
   ));
-  const pending = rows
-    .filter((row) => row.status === 'Chờ reset' && row.requestId)
-    .map((row) => ({
-      requestId: row.requestId,
-      studentId: row.studentId,
-      classCode: code,
-      fullName: row.fullName,
-      createdAt: requestsByStudent.get(row.studentId)?.createdAt || 0,
-      hasCredential: row.hasCredential,
-    }));
+  const pending = [];
 
   return { ok: true, body: { enabled: true, scope: 'class', rows, pending } };
 }

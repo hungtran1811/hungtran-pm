@@ -88,13 +88,15 @@ describe('pin decisions', () => {
     expect(JSON.stringify(after)).not.toContain('same-hash');
   });
 
-  it('blocks a new pin until the teacher approves the reset', () => {
+  it('lets a student with a credential sign in even if an old reset request exists', () => {
     const now = 5_000;
     expect(canSetResetPin({ status: 'pending', expiresAt: now + 1000 }, now)).toBe(false);
     expect(canSetResetPin({ status: 'approved', expiresAt: now + 1000 }, now)).toBe(true);
-    expect(gateMode({ credential: { credentialVersion: 1 }, request: { status: 'pending' }, now })).toBe(
-      'pendingReset',
-    );
+    expect(gateMode({
+      credential: { credentialVersion: 1 },
+      request: { status: 'pending' },
+      now,
+    })).toBe('needsVerify');
     expect(PIN_RESET_BLOCKED_MESSAGE).not.toContain('1234');
     expect(derivePinStatus({ credential: null }).status).toBe('Chưa tạo');
   });

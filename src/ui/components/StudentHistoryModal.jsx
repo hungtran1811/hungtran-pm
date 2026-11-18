@@ -13,7 +13,8 @@ import { listKnowledgeReportsByStudent } from '../../services/knowledgeReports.s
 import { listCodeSubmissionsByStudent } from '../../services/codeSubmissions.service.js';
 import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
 import { formatLessonKey } from '../../lib/submissionFileName.js';
-import { approvePinReset, fetchPinStatus, lockStudentPin } from '../../services/studentGate.service.js';
+import { fetchPinStatus, lockStudentPin } from '../../services/studentGate.service.js';
+import { AdminPinEditor } from './AdminPinEditor.jsx';
 import { Button } from './Button.jsx';
 import {
   FEATURE_CODE_UPLOAD_ENABLED,
@@ -161,30 +162,21 @@ export function StudentHistoryModal({ student, onClose, onPinChanged, feedbackOn
             )}
             {pinStatus ? (
               <div className="mt-4 border-t border-slate-200 pt-3 dark:border-slate-700">
-                <p className="text-sm text-slate-700 dark:text-slate-200">PIN · {pinStatus.status}</p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <AdminPinEditor
+                    studentId={student.id}
+                    studentName={student.fullName}
+                    pin={pinStatus.pin || ''}
+                    hasCredential={Boolean(pinStatus.hasCredential)}
+                    status={pinStatus.status || ''}
+                    onChanged={async () => {
+                      await refreshPin();
+                      onPinChanged?.();
+                    }}
+                  />
+                  <span className="text-sm text-slate-500">{pinStatus.status}</span>
+                </div>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {pinStatus.status === 'Chờ reset' && pinStatus.requestId ? (
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      loading={pinBusy}
-                      onClick={async () => {
-                        setPinBusy(true);
-                        try {
-                          await approvePinReset(pinStatus.requestId);
-                          await refreshPin();
-                          onPinChanged?.();
-                          toast.success('Đã duyệt đặt lại PIN.');
-                        } catch (pinError) {
-                          toast.error(getErrorMessage(pinError));
-                        } finally {
-                          setPinBusy(false);
-                        }
-                      }}
-                    >
-                      Duyệt đặt lại
-                    </Button>
-                  ) : null}
                   {pinStatus.status !== 'Chưa tạo' && pinStatus.status !== 'Tạm khóa' ? (
                     <Button
                       size="sm"

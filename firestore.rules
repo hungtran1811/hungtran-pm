@@ -1493,6 +1493,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    match /classLessonArchives/{classCode} {
+      allow read, write: if false;
+      match /lessons/{lessonId} {
+        allow read, write: if false;
+      }
+    }
+
     match /studentCredentials/{studentId} {
       allow read, write: if false;
     }

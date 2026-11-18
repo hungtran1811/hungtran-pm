@@ -31,7 +31,6 @@ import {
 } from '../../lib/dashboardStats.js';
 import { getErrorMessage } from '../../lib/firestore.js';
 import { FEATURE_DRIVE_SUBMISSION_ENABLED } from '../../config/features.js';
-import { countPendingPinResets } from '../../services/studentGate.service.js';
 
 function formatLoadedAt(date) {
   if (!date) return '';
@@ -197,7 +196,6 @@ export function DashboardPage() {
   const [students, setStudents] = useState([]);
   const [submissionsByClass, setSubmissionsByClass] = useState({});
   const [loading, setLoading] = useState(true);
-  const [pendingPinResets, setPendingPinResets] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [loadedAt, setLoadedAt] = useState(null);
   const [fromCache, setFromCache] = useState(false);
@@ -228,20 +226,6 @@ export function DashboardPage() {
   useEffect(() => {
     loadDashboard();
   }, [loadDashboard]);
-
-  useEffect(() => {
-    let cancelled = false;
-    countPendingPinResets()
-      .then((result) => {
-        if (!cancelled) setPendingPinResets(Number(result?.pending || 0));
-      })
-      .catch(() => {
-        if (!cancelled) setPendingPinResets(0);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [loadedAt]);
 
   const stats = useMemo(
     () => computeDashboardStats(classes, students),
@@ -315,13 +299,6 @@ export function DashboardPage() {
                 ? `Không tải được Drive: ${failedClassCodes.join(', ')}. `
                 : ''}
               Bấm Làm mới để lấy bản mới.
-            </p>
-          ) : null}
-          {pendingPinResets > 0 ? (
-            <p className="text-sm text-slate-600 dark:text-slate-300">
-              <Link to="/admin/students?pin=1" className="font-medium text-brand-700 dark:text-brand-300">
-                {pendingPinResets} yêu cầu đặt lại PIN đang chờ duyệt.
-              </Link>
             </p>
           ) : null}
           <div className="space-y-3">

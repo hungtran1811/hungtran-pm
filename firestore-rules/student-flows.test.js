@@ -859,6 +859,8 @@ describe('up level enrollment history', () => {
     await assertFails(other.doc('reports/lvl-source-a').get());
     await assertFails(publicDb().doc('reports/lvl-source-a').get());
     await assertFails(owner.doc('classProgressions/uplevel_LVL-SRC').get());
+    await assertFails(owner.doc('classLessonArchives/LVL-SRC').get());
+    await assertFails(owner.doc('classLessonArchives/LVL-SRC/lessons/lesson-1').get());
     await assertSucceeds(owner.doc('classEnrollments/LVL-SRC__lvl-a').get());
     await assertFails(other.doc('classEnrollments/LVL-SRC__lvl-a').get());
     await assertFails(owner.collection('classEnrollments').where('classCode', '==', 'LVL-SRC').get());

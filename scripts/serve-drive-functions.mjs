@@ -19,8 +19,11 @@ import { handler as pinResetApprove } from '../netlify/functions/pin-reset-appro
 import { handler as pinResetSet } from '../netlify/functions/pin-reset-set.js';
 import { handler as pinLock } from '../netlify/functions/pin-lock.js';
 import { handler as pinStatus } from '../netlify/functions/pin-status.js';
+import { handler as pinAdminSet } from '../netlify/functions/pin-admin-set.js';
 import { handler as classAccessAudit } from '../netlify/functions/class-access-audit.js';
 import { handler as upLevel } from '../netlify/functions/up-level.js';
+import { handler as archiveClassLessons } from '../netlify/functions/archive-class-lessons.js';
+import { handler as archiveClassLesson } from '../netlify/functions/archive-class-lesson.js';
 
 const handlers = new Map([
   ['/drive-create-upload-session', createUploadSession],
@@ -53,8 +56,11 @@ const handlers = new Map([
   ['/pin-reset-set', pinResetSet],
   ['/pin-lock', pinLock],
   ['/pin-status', pinStatus],
+  ['/pin-admin-set', pinAdminSet],
   ['/class-access-audit', classAccessAudit],
   ['/up-level', upLevel],
+  ['/archive-class-lessons', archiveClassLessons],
+  ['/archive-class-lesson', archiveClassLesson],
   ['/.netlify/functions/class-resolve', classResolve],
   ['/.netlify/functions/class-roster', classRoster],
   ['/.netlify/functions/pin-gate', pinGate],
@@ -65,8 +71,11 @@ const handlers = new Map([
   ['/.netlify/functions/pin-reset-set', pinResetSet],
   ['/.netlify/functions/pin-lock', pinLock],
   ['/.netlify/functions/pin-status', pinStatus],
+  ['/.netlify/functions/pin-admin-set', pinAdminSet],
   ['/.netlify/functions/class-access-audit', classAccessAudit],
   ['/.netlify/functions/up-level', upLevel],
+  ['/.netlify/functions/archive-class-lessons', archiveClassLessons],
+  ['/.netlify/functions/archive-class-lesson', archiveClassLesson],
 ]);
 
 const port = Number(process.env.FUNCTIONS_PORT || 8888);

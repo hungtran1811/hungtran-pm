@@ -8,5 +8,5 @@ export const handler = pinHandler(
     if (body.listBoard) return listPinBoard(db, { classCode: body.classCode });
     return readPinStatus(db, { studentId: body.studentId });
   },
-  { admin: true },
+  { admin: true, max: 180 },
 );

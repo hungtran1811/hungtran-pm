@@ -75,7 +75,6 @@ export function ClassesPage() {
   const [subjectFilter, setSubjectFilter] = useState('all');
   const [classSearch, setClassSearch] = useState('');
   const [feedbacksByClass, setFeedbacksByClass] = useState({});
-  const [selectedClassCode, setSelectedClassCode] = useState('');
 
   const reloadPrograms = async () => {
     try {
@@ -165,11 +164,6 @@ export function ClassesPage() {
     return list;
   }, [tabClasses, subjectFilter, programsById, classSearch]);
 
-  const selectedClass = useMemo(
-    () => visibleClasses.find((cls) => cls.classCode === selectedClassCode) || null,
-    [visibleClasses, selectedClassCode],
-  );
-
   const visibleClassCodes = useMemo(
     () => visibleClasses.map((c) => c.classCode).join('|'),
     [visibleClasses],
@@ -235,15 +229,6 @@ export function ClassesPage() {
         </div>
       </div>
 
-      {selectedClass ? (
-        <ClassProgressPanel
-          cls={selectedClass}
-          program={programsById[selectedClass.curriculumProgramId]}
-          programs={programs}
-          classes={classes}
-        />
-      ) : null}
-
       {FEATURE_CODE_UPLOAD_ENABLED && tab === 'archived' && (
         <CodeSubmissionsPurgePanel classes={classes} />
       )}
@@ -284,8 +269,6 @@ export function ClassesPage() {
                     )
                   : null
               }
-              selected={cls.classCode === selectedClassCode}
-              onSelect={() => setSelectedClassCode(cls.classCode)}
               onEdit={() => openEdit(cls)}
               onDelete={() => setDeleteTarget(cls)}
               onArchive={() => handleStatusChange(cls, 'completed')}
@@ -334,37 +317,59 @@ function TabButton({ active, onClick, children }) {
   );
 }
 
-function ClassProgressPanel({ cls, program, programs, classes }) {
-  const [upLevelOpen, setUpLevelOpen] = useState(false);
-  const [upLevelEarly, setUpLevelEarly] = useState(false);
-  const gate = upLevelGate(cls.curriculumCurrentSession, program?.totalSessionCount);
+function ClassDetailModal({ cls, program, onClose, onEdit, onDelete }) {
+  const toast = useToast();
   const sessions = classRoadmapSessions(cls, program);
   const lessonKey = defaultLessonKey(cls, program);
   const reportHref = lessonKey
     ? `/admin/reports?class=${encodeURIComponent(cls.classCode)}&lesson=${encodeURIComponent(lessonKey)}`
     : `/admin/reports?class=${encodeURIComponent(cls.classCode)}`;
+  const studentLink = `${getPublicBaseUrl()}/c/${encodeURIComponent(cls.classCode)}`;
   const phaseLabel = cls.curriculumPhase === 'final' ? 'Sản phẩm' : 'Đang học kiến thức';
 
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(studentLink);
+      toast.success('Đã sao chép link lớp cho học sinh.');
+    } catch {
+      toast.error('Không sao chép được. Vui lòng thử lại.');
+    }
+  };
+
   return (
-    <section className="card mb-5 p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-            {cls.classCode} · {cls.className || 'Chưa có tên'}
-          </h2>
-          <p className="mt-1 text-sm text-slate-500">
-            {program?.name || 'Chưa gắn chương trình'}
-            {' · '}
-            {sessions.length ? `${sessions.length} buổi` : 'Chưa có số buổi'}
-            {' · hiện tại buổi '}
-            {Number(cls.curriculumCurrentSession) || 0}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Badge tone="brand">{program?.name || 'Chương trình'}</Badge>
-          <Badge tone={cls.curriculumPhase === 'final' ? 'blue' : 'green'}>{phaseLabel}</Badge>
-        </div>
+    <Modal
+      open
+      onClose={onClose}
+      title={`${cls.classCode} · ${cls.className || 'Chưa có tên'}`}
+      size="lg"
+      footer={(
+        <>
+          <Button variant="ghost" className="mr-auto text-red-600" onClick={() => { onClose(); onDelete(); }}>
+            Xoá
+          </Button>
+          <Button variant="secondary" onClick={copyLink}>Copy link</Button>
+          <Button variant="secondary" onClick={() => { onClose(); onEdit(); }}>Sửa</Button>
+          <Link to={`/c/${encodeURIComponent(cls.classCode)}`} target="_blank" rel="noreferrer">
+            <Button>Xem</Button>
+          </Link>
+        </>
+      )}
+    >
+      <div className="flex flex-wrap gap-2">
+        <Badge tone="brand">{program?.name || 'Chưa gắn chương trình'}</Badge>
+        <Badge tone={cls.curriculumPhase === 'final' ? 'blue' : 'green'}>{phaseLabel}</Badge>
+        <Badge tone={STATUS_TONES[cls.status]}>{CLASS_STATUS_LABELS[cls.status] || cls.status}</Badge>
       </div>
+      <p className="mt-3 text-sm text-slate-500">
+        {sessions.length ? `${sessions.length} buổi` : 'Chưa có số buổi'}
+        {' · hiện tại buổi '}
+        {Number(cls.curriculumCurrentSession) || 0}
+        {' · '}
+        {cls.studentCount || 0} học sinh
+      </p>
+      {cls.nextClassCode ? (
+        <p className="mt-2 text-sm text-slate-500">Đã chuyển sang {cls.nextClassCode}. Đường dẫn cũ vẫn là lớp này.</p>
+      ) : null}
       {sessions.length ? (
         <div className="mt-4 flex flex-wrap gap-1.5" aria-label="Lộ trình buổi">
           {sessions.map((session) => (
@@ -392,35 +397,12 @@ function ClassProgressPanel({ cls, program, programs, classes }) {
       ) : (
         <p className="mt-4 text-sm text-slate-500">Chương trình này chưa có tổng số buổi.</p>
       )}
-      <div className="mt-4 flex flex-wrap items-center gap-2">
+      <div className="mt-4">
         <Link to={reportHref}>
           <Button size="sm" variant="secondary">Kiểm tra bài nộp</Button>
         </Link>
-        {cls.nextClassCode ? (
-          <p className="text-sm text-slate-500">Đã chuyển sang {cls.nextClassCode}. Đường dẫn cũ vẫn là lớp này.</p>
-        ) : (
-          <Button
-            size="sm"
-            onClick={() => {
-              setUpLevelEarly(!gate.ready);
-              setUpLevelOpen(true);
-            }}
-          >
-            Up Level
-          </Button>
-        )}
       </div>
-      {upLevelOpen ? (
-        <UpLevelWizard
-          cls={cls}
-          program={program}
-          programs={programs}
-          classes={classes}
-          requireOverride={upLevelEarly}
-          onClose={() => setUpLevelOpen(false)}
-        />
-      ) : null}
-    </section>
+    </Modal>
   );
 }
 
@@ -430,8 +412,6 @@ function ClassCard({
   classes = [],
   avgUnderstanding,
   sessionAvgUnderstanding,
-  selected = false,
-  onSelect,
   onEdit,
   onDelete,
   onArchive,
@@ -439,30 +419,26 @@ function ClassCard({
 }) {
   const archived = cls.status !== 'active';
   const [upLevelOpen, setUpLevelOpen] = useState(false);
-  const toast = useToast();
+  const [detailOpen, setDetailOpen] = useState(false);
   const { understandingTone } = useSettings();
   const program = programs.find((p) => p.id === cls.curriculumProgramId);
   const gate = upLevelGate(cls.curriculumCurrentSession, program?.totalSessionCount);
-  const studentLink = `${getPublicBaseUrl()}/c/${encodeURIComponent(cls.classCode)}`;
-
-  const copyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(studentLink);
-      toast.success('Đã sao chép link lớp cho học sinh.');
-    } catch {
-      toast.error('Không sao chép được. Vui lòng thử lại.');
-    }
-  };
 
   return (
-    <div className={`card flex flex-col p-5 ${selected ? 'ring-2 ring-brand-500' : ''}`}>
+    <div className="card flex flex-col p-5">
+      <button
+        type="button"
+        onClick={() => setDetailOpen(true)}
+        className="rounded-xl text-left outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
+        aria-label={`Chi tiết lớp ${cls.classCode}`}
+      >
       <div className="flex items-start justify-between gap-2">
-        <button type="button" onClick={onSelect} className="min-w-0 text-left">
+        <div className="min-w-0">
           <h3 className="truncate text-base font-semibold text-slate-800 dark:text-slate-100">
             {cls.classCode}
           </h3>
           <p className="truncate text-xs text-slate-400">{cls.className || 'Chưa có khóa học'}</p>
-        </button>
+        </div>
         <div className="flex flex-col items-end gap-1">
           <Badge tone={STATUS_TONES[cls.status]}>{CLASS_STATUS_LABELS[cls.status] || cls.status}</Badge>
           {cls.hidden && <Badge tone="amber">Đang ẩn</Badge>}
@@ -534,6 +510,7 @@ function ClassCard({
           </dd>
         </div>
       </dl>
+      </button>
 
       <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
         {!cls.nextClassCode ? (
@@ -543,30 +520,25 @@ function ClassCard({
         ) : (
           <span className="inline-flex min-h-8 items-center text-xs text-slate-500">Đã sang {cls.nextClassCode}</span>
         )}
-        <Button size="sm" variant="secondary" onClick={onEdit}>
-          Sửa
-        </Button>
-        <Button size="sm" variant="ghost" onClick={copyLink}>
-          Copy link
-        </Button>
-        <Link to={`/c/${encodeURIComponent(cls.classCode)}`} target="_blank" rel="noreferrer">
-          <Button size="sm" variant="ghost">
-            Xem
-          </Button>
-        </Link>
         {archived ? (
-          <Button size="sm" variant="ghost" className="ml-auto text-green-600" onClick={onRestore}>
+          <Button size="sm" variant="ghost" className="text-green-600" onClick={onRestore}>
             Khôi phục
           </Button>
         ) : (
-          <Button size="sm" variant="ghost" className="ml-auto text-amber-600" onClick={onArchive}>
+          <Button size="sm" variant="ghost" className="text-amber-600" onClick={onArchive}>
             Hoàn thành
           </Button>
         )}
-        <Button size="sm" variant="ghost" className="text-red-600" onClick={onDelete}>
-          Xoá
-        </Button>
       </div>
+      {detailOpen ? (
+        <ClassDetailModal
+          cls={cls}
+          program={program}
+          onClose={() => setDetailOpen(false)}
+          onEdit={onEdit}
+          onDelete={onDelete}
+        />
+      ) : null}
       {upLevelOpen ? (
         <UpLevelWizard
           cls={cls}

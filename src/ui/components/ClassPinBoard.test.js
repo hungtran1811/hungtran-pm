@@ -44,11 +44,8 @@ describe('MaskedPin', () => {
 });
 
 describe('StudentPinGate', () => {
-  it('opens the new pin form after the teacher approves', async () => {
-    vi.useFakeTimers();
-    fetchPinGate
-      .mockResolvedValueOnce({ mode: 'pendingReset' })
-      .mockResolvedValue({ mode: 'needsResetPin' });
+  it('asks for the existing PIN and has no forgot-PIN action', async () => {
+    fetchPinGate.mockResolvedValue({ mode: 'needsVerify' });
 
     await act(async () => {
       root.render(createElement(StudentPinGate, {
@@ -62,10 +59,8 @@ describe('StudentPinGate', () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain('chờ giáo viên duyệt');
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(3000);
-    });
-    expect(container.textContent).toContain('PIN mới');
+    expect(container.textContent).toContain('Nhập 4 chữ số của em.');
+    expect(container.textContent).not.toContain('Quên PIN');
+    expect(container.textContent).not.toContain('chờ giáo viên duyệt');
   });
 });

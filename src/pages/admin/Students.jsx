@@ -28,7 +28,8 @@ import { ALL_CLASSES_VALUE, buildClassesByCode, resolveScopedClasses } from '../
 import { invalidateAdminSnapshots } from '../../lib/adminPanelData.js';
 import { subscribeManyByClass } from '../../lib/multiClassSubscribe.js';
 import { formatDateTime, getErrorMessage } from '../../lib/firestore.js';
-import { approvePinReset, fetchPinBoard, lockStudentPin } from '../../services/studentGate.service.js';
+import { fetchPinBoard } from '../../services/studentGate.service.js';
+import { AdminPinEditor } from '../../ui/components/AdminPinEditor.jsx';
 import {
   canReviewStudentProjectName,
   classUsesProjectNames,
@@ -66,7 +67,7 @@ function pinMapsEqual(left, right) {
     const b = right[key];
     return a?.status === b?.status
       && a?.hasCredential === b?.hasCredential
-      && a?.requestId === b?.requestId;
+      && a?.pin === b?.pin;
   });
 }
 
@@ -84,20 +85,7 @@ function pinMapFromBoard(board) {
     map[row.studentId] = {
       hasCredential: Boolean(row.hasCredential),
       status: row.status || '',
-      requestId: row.requestId || '',
-    };
-  }
-  for (const item of board.pending || []) {
-    const current = map[item.studentId] || {
-      hasCredential: false,
-      status: 'Chờ reset',
-      requestId: '',
-    };
-    map[item.studentId] = {
-      ...current,
-      hasCredential: Boolean(item.hasCredential || current.hasCredential),
-      status: 'Chờ reset',
-      requestId: item.requestId || current.requestId,
+      pin: row.pin || '',
     };
   }
   return map;
@@ -174,8 +162,7 @@ export function StudentsPage() {
       return undefined;
     }
     let cancelled = false;
-    let warned = false;
-    const pull = () => fetchPinBoard(code)
+    fetchPinBoard(code)
       .then((board) => {
         if (cancelled) return;
         setPinEnabled(board?.enabled === true);
@@ -183,18 +170,11 @@ export function StudentsPage() {
         setPinByStudent((current) => (pinMapsEqual(current, next) ? current : next));
       })
       .catch((error) => {
-        if (cancelled || warned) return;
-        warned = true;
+        if (cancelled) return;
         toast.error(getErrorMessage(error));
       });
-    pull();
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'hidden') return;
-      pull();
-    }, 2500);
     return () => {
       cancelled = true;
-      clearInterval(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClass, pinReload]);
@@ -523,7 +503,6 @@ function StudentRow({ student, showClass, showPin = false, studentClassDoc, onEd
   const [reviewOpen, setReviewOpen] = useState(false);
   const [rejectNote, setRejectNote] = useState('');
   const [reviewing, setReviewing] = useState(false);
-  const [pinBusy, setPinBusy] = useState(false);
 
   const closeReview = () => {
     setReviewOpen(false);
@@ -555,19 +534,6 @@ function StudentRow({ student, showClass, showPin = false, studentClassDoc, onEd
       toast.error(getErrorMessage(error));
     } finally {
       setReviewing(false);
-    }
-  };
-
-  const changePin = async (action, success) => {
-    setPinBusy(true);
-    try {
-      await action();
-      toast.success(success);
-      onPinsChanged?.();
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setPinBusy(false);
     }
   };
 
@@ -616,15 +582,14 @@ function StudentRow({ student, showClass, showPin = false, studentClassDoc, onEd
       {showPin ? (
         <div className={`${COLUMN_SPAN[columns.pin]} flex justify-center`}>
           <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400 md:hidden">PIN</p>
-          {pinInfo ? (
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              <span className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                {pinInfo.status || (pinInfo.hasCredential ? 'Đang dùng' : 'Chưa tạo')}
-              </span>
-            </div>
-          ) : (
-            <span className="text-sm text-slate-400">—</span>
-          )}
+          <AdminPinEditor
+            studentId={student.id}
+            studentName={student.fullName}
+            pin={pinInfo?.pin || ''}
+            hasCredential={Boolean(pinInfo?.hasCredential)}
+            status={pinInfo?.status || ''}
+            onChanged={onPinsChanged}
+          />
         </div>
       ) : null}
       <div className={`hidden min-w-0 text-sm md:block ${COLUMN_SPAN[columns.project]}`}>
@@ -660,15 +625,6 @@ function StudentRow({ student, showClass, showPin = false, studentClassDoc, onEd
             {canReview ? 'Đọc & duyệt' : 'Xem'}
           </Button>
         )}
-        {pinInfo?.requestId ? (
-          <Button
-            size="sm"
-            loading={pinBusy}
-            onClick={() => changePin(() => approvePinReset(pinInfo.requestId), 'Đã duyệt đặt lại PIN.')}
-          >
-            Duyệt đặt lại
-          </Button>
-        ) : null}
         <Button size="sm" variant="ghost" onClick={onView} title="Xem lịch sử">
           <History className="h-4 w-4" />
         </Button>

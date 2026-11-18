@@ -2,19 +2,29 @@ import { useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
 
 const FOCUSABLE =
-  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  'a[href], button:not([disabled]):not([data-dialog-close]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const FIELD = 'input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), select:not([disabled])';
+
+function focusInitialField(panel) {
+  if (!panel) return;
+  const field = panel.querySelector(FIELD);
+  const fallback = panel.querySelector(FOCUSABLE);
+  (field || fallback)?.focus?.();
+}
 
 export function Modal({ open, onClose, title, children, footer, size = 'md' }) {
   const titleId = useId();
   const panelRef = useRef(null);
   const previousFocusRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return undefined;
     previousFocusRef.current = document.activeElement;
     const onKey = (e) => {
       if (e.key === 'Escape') {
-        onClose?.();
+        onCloseRef.current?.();
         return;
       }
       if (e.key !== 'Tab' || !panelRef.current) return;
@@ -32,17 +42,14 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }) {
     };
     document.addEventListener('keydown', onKey);
     document.body.style.overflow = 'hidden';
-    const focusTimer = setTimeout(() => {
-      const first = panelRef.current?.querySelector(FOCUSABLE);
-      first?.focus?.();
-    }, 0);
+    const focusTimer = setTimeout(() => focusInitialField(panelRef.current), 0);
     return () => {
       clearTimeout(focusTimer);
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = '';
       previousFocusRef.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -76,6 +83,8 @@ export function Modal({ open, onClose, title, children, footer, size = 'md' }) {
             </h3>
             <button
               type="button"
+              data-dialog-close=""
+              tabIndex={-1}
               onClick={onClose}
               className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
               aria-label="Đóng"
